@@ -11,32 +11,53 @@ const MB_BASE_URL = "https://musicbrainz.org/ws/2";
 const CAA_BASE_URL = "https://coverartarchive.org";
 const USER_AGENT = "nex-media/1.0 (https://github.com/nex-media)";
 
-/** 简单的速率限制：每次请求间隔至少 1100ms */
-let lastRequestTime = 0;
+/** 请求之间最小间隔 (ms) */
+const MIN_INTERVAL = 1200;
+/** 503 重试次数上限 */
+const MAX_RETRIES = 3;
 
-const throttle = async () => {
-  const now = Date.now();
-  const wait = Math.max(0, lastRequestTime + 1100 - now);
-  if (wait > 0) {
-    await new Promise((r) => setTimeout(r, wait));
-  }
-  lastRequestTime = Date.now();
+/**
+ * 串行队列式限速器：确保并发调用也严格按顺序排队，
+ * 每两次请求之间至少间隔 MIN_INTERVAL ms。
+ */
+let queueTail: Promise<void> = Promise.resolve();
+
+const enqueue = (): Promise<void> => {
+  let resolve: () => void;
+  const gate = new Promise<void>((r) => {
+    resolve = r;
+  });
+  const prev = queueTail;
+  queueTail = gate;
+  return prev.then(() => {
+    // 留出间隔后才释放下一个
+    setTimeout(resolve!, MIN_INTERVAL);
+  });
 };
 
 const mbFetch = async (path: string, params: Record<string, string> = {}) => {
-  await throttle();
   const url = new URL(`${MB_BASE_URL}${path}`);
   url.searchParams.set("fmt", "json");
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v);
   }
-  const res = await fetch(url.toString(), {
-    headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-  });
-  if (!res.ok) {
-    throw new Error(`MusicBrainz API error: ${res.status} ${res.statusText}`);
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    await enqueue();
+    const res = await fetch(url.toString(), {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    });
+    if (res.status === 503 && attempt < MAX_RETRIES) {
+      // 服务暂时不可用，等待后重试（指数退避）
+      await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt));
+      continue;
+    }
+    if (!res.ok) {
+      throw new Error(`MusicBrainz API error: ${res.status} ${res.statusText}`);
+    }
+    return res.json();
   }
-  return res.json();
+  throw new Error("MusicBrainz API error: max retries exceeded");
 };
 
 /** 从 artist-credit 中提取主艺术家名 */
