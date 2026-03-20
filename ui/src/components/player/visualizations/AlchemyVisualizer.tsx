@@ -586,11 +586,16 @@ export function AlchemyVisualizer({
         ctx.globalAlpha = 1;
 
         if (fadePct >= 1) {
-          // Swap: buffer B becomes the new "current" buffer
-          // Copy B content into A for the next steady-state phase
-          ctxA.clearRect(0, 0, w, h);
+          // Swap: copy B → A in raw pixel space (bypass DPR transform)
+          ctxA.save();
+          ctxA.setTransform(1, 0, 0, 1, 0, 0);
+          ctxA.clearRect(0, 0, bufA.width, bufA.height);
           ctxA.drawImage(bufB, 0, 0);
-          ctxB.clearRect(0, 0, w, h);
+          ctxA.restore();
+          ctxB.save();
+          ctxB.setTransform(1, 0, 0, 1, 0, 0);
+          ctxB.clearRect(0, 0, bufB.width, bufB.height);
+          ctxB.restore();
           currentScene = nextScene;
           nextScene = -1;
           sceneTimer = 0;
