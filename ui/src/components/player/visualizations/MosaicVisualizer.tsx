@@ -96,6 +96,14 @@ export function MosaicVisualizer({
   const gridRef = useRef<HexCell[]>([]);
   const smoothedRef = useRef<Float32Array | null>(null);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -114,7 +122,7 @@ export function MosaicVisualizer({
       canvas.height = cssH * dpr;
       ctx.scale(dpr, dpr);
 
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const bins = analyser ? analyser.frequencyBinCount : 128;
       gridRef.current = buildHexGrid(cssW, cssH, bins);
     };
@@ -123,7 +131,7 @@ export function MosaicVisualizer({
     resizeObserver.observe(canvas);
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const freqBinCount = analyser ? analyser.frequencyBinCount : 128;
 
       if (!dataRef.current || dataRef.current.length !== freqBinCount) {
@@ -138,7 +146,7 @@ export function MosaicVisualizer({
       const data = dataRef.current;
       const smoothed = smoothedRef.current;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         analyser.getByteFrequencyData(data);
         for (let i = 0; i < freqBinCount; i++) {
           const raw = data[i] / 255;
@@ -157,7 +165,7 @@ export function MosaicVisualizer({
 
       ctx.clearRect(0, 0, cssW, cssH);
 
-      const [r, g, bl] = hexToRgb(accentColor);
+      const [r, g, bl] = hexToRgb(accentColorRef.current);
       const grid = gridRef.current;
 
       for (const cell of grid) {
@@ -217,7 +225,7 @@ export function MosaicVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

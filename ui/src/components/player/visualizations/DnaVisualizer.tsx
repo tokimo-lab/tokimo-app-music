@@ -31,6 +31,14 @@ export function DnaVisualizer({
   const speedRef = useRef(BASE_ROTATION_SPEED);
   const smoothedRef = useRef(new Float32Array(NODE_PAIRS));
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -54,12 +62,12 @@ export function DnaVisualizer({
     resizeObserver.observe(canvas);
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const smoothed = smoothedRef.current;
 
       let totalEnergy = 0;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         const bufLen = analyser.frequencyBinCount;
         if (!dataRef.current || dataRef.current.length !== bufLen) {
           dataRef.current = new Uint8Array(bufLen) as Uint8Array<ArrayBuffer>;
@@ -88,7 +96,7 @@ export function DnaVisualizer({
       }
 
       // Update rotation speed
-      const targetSpeed = isPlaying
+      const targetSpeed = isPlayingRef.current
         ? BASE_ROTATION_SPEED + totalEnergy * 0.03
         : speedRef.current * 0.95;
       speedRef.current += (targetSpeed - speedRef.current) * 0.1;
@@ -100,7 +108,7 @@ export function DnaVisualizer({
       const radius = cssW * 0.25;
       const rotation = rotationRef.current;
       const twoPiTurns = HELIX_TURNS * 2 * Math.PI;
-      const [r, g, bl] = hexToRgb(accentColor);
+      const [r, g, bl] = hexToRgb(accentColorRef.current);
       // Lighter strand color
       const r2 = Math.min(255, r + 80);
       const g2 = Math.min(255, g + 80);
@@ -264,7 +272,7 @@ export function DnaVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

@@ -85,6 +85,14 @@ export function StarfieldVisualizer({
   const smoothEnergyRef = useRef(0);
   const auroraOpacityRef = useRef(0);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -117,7 +125,7 @@ export function StarfieldVisualizer({
     let time = 0;
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       let energy = 0;
       let bassEnergy = 0;
       let midEnergy = 0;
@@ -148,16 +156,16 @@ export function StarfieldVisualizer({
         midEnergy = midTotal / ((midEnd - bassEnd) * 255);
       }
 
-      const targetEnergy = isPlaying ? energy : 0;
+      const targetEnergy = isPlayingRef.current ? energy : 0;
       smoothEnergyRef.current +=
         (targetEnergy - smoothEnergyRef.current) * 0.08;
 
-      const targetAurora = isPlaying ? 0.12 + energy * 0.1 : 0;
+      const targetAurora = isPlayingRef.current ? 0.12 + energy * 0.1 : 0;
       auroraOpacityRef.current +=
         (targetAurora - auroraOpacityRef.current) * 0.04;
 
       time += 1;
-      const rgb = hexToRgb(accentColor);
+      const rgb = hexToRgb(accentColorRef.current);
 
       ctx.clearRect(0, 0, cssW, cssH);
 
@@ -167,7 +175,9 @@ export function StarfieldVisualizer({
         const band = auroras[b];
         band.phase += band.speed;
         const waveAmp =
-          band.amplitude * (1 + bassEnergy * 2) * (isPlaying ? 1 : 0.3);
+          band.amplitude *
+          (1 + bassEnergy * 2) *
+          (isPlayingRef.current ? 1 : 0.3);
 
         ctx.beginPath();
         ctx.moveTo(0, band.yBase + Math.sin(band.phase) * waveAmp);
@@ -211,7 +221,7 @@ export function StarfieldVisualizer({
             ((Math.sin(time * 0.02 * s.twinkleSpeed + s.twinklePhase) + 1) /
               2) *
             twinkleBoost;
-        const opacity = Math.min(1, twinkle * (isPlaying ? 1 : 0.5));
+        const opacity = Math.min(1, twinkle * (isPlayingRef.current ? 1 : 0.5));
         const radius = s.baseRadius * (0.8 + smoothEnergyRef.current * 0.5);
 
         // Glow
@@ -232,7 +242,7 @@ export function StarfieldVisualizer({
 
       // Shooting star spawn
       const shooting = shootingRef.current;
-      if (isPlaying && analyser) {
+      if (isPlayingRef.current && analyser) {
         const currentBass = bassEnergy * 255;
         const prevBass = prevBassRef.current;
         if (
@@ -327,7 +337,7 @@ export function StarfieldVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

@@ -79,6 +79,14 @@ export function FlameVisualizer({
   const particlesRef = useRef<FlameParticle[]>([]);
   const smoothEnergyRef = useRef(0);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -102,10 +110,10 @@ export function FlameVisualizer({
     resizeObserver.observe(canvas);
 
     const particles = particlesRef.current;
-    const accentRgb = hexToRgb(accentColor);
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const accentRgb = hexToRgb(accentColorRef.current);
+      const analyser = getAnalyserRef.current();
       let energy = 0;
       let bassEnergy = 0;
       const binEnergies: number[] = [];
@@ -143,12 +151,12 @@ export function FlameVisualizer({
         }
       }
 
-      const targetEnergy = isPlaying ? energy : 0;
+      const targetEnergy = isPlayingRef.current ? energy : 0;
       smoothEnergyRef.current += (targetEnergy - smoothEnergyRef.current) * 0.1;
       const sEnergy = smoothEnergyRef.current;
 
       // Spawn particles
-      if (isPlaying && cssW > 0) {
+      if (isPlayingRef.current && cssW > 0) {
         const spawnCount = Math.floor(
           MIN_SPAWN + (MAX_SPAWN - MIN_SPAWN) * sEnergy,
         );
@@ -281,7 +289,7 @@ export function FlameVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

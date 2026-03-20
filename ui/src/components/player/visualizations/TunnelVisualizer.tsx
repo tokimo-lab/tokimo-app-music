@@ -118,6 +118,14 @@ export function TunnelVisualizer({
     }[]
   >([]);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -149,7 +157,7 @@ export function TunnelVisualizer({
     resizeObserver.observe(canvas);
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const freqBinCount = analyser ? analyser.frequencyBinCount : 128;
 
       if (!dataRef.current || dataRef.current.length !== freqBinCount) {
@@ -168,7 +176,7 @@ export function TunnelVisualizer({
       let bassEnergy = 0;
       const bassEnd = Math.floor(freqBinCount / 6);
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         analyser.getByteFrequencyData(data);
         for (let i = 0; i < freqBinCount; i++) {
           const raw = data[i] / 255;
@@ -198,7 +206,7 @@ export function TunnelVisualizer({
       if (bassBurstRef.current > 0) bassBurstRef.current--;
 
       // Morphing
-      if (isPlaying) {
+      if (isPlayingRef.current) {
         morphFrameRef.current++;
       }
       const morphT = morphFrameRef.current / MORPH_DURATION;
@@ -224,7 +232,7 @@ export function TunnelVisualizer({
 
       // Tunnel speed
       const burstMult = bassBurstRef.current > 0 ? 1.5 : 1.0;
-      const speedMult = isPlaying
+      const speedMult = isPlayingRef.current
         ? (1.0 + totalEnergyRef.current * 2.0) * burstMult
         : 0.15;
       const tunnelSpeed = BASE_TUNNEL_SPEED * speedMult;
@@ -246,7 +254,7 @@ export function TunnelVisualizer({
       const cx = cssW / 2;
       const cy = cssH / 2;
       const maxRadius = Math.min(cssW, cssH) * 0.48;
-      const [r, g, bl] = hexToRgb(accentColor);
+      const [r, g, bl] = hexToRgb(accentColorRef.current);
 
       // Sort rings by depth (far first, near on top)
       const sortedIndices: number[] = [];
@@ -256,7 +264,7 @@ export function TunnelVisualizer({
       // Cloud wisps
       const wisps = wispsRef.current;
       const isCloudish = params.blurriness > 1;
-      if (isCloudish && isPlaying && wisps.length < 15) {
+      if (isCloudish && isPlayingRef.current && wisps.length < 15) {
         const angle = Math.random() * Math.PI * 2;
         const dist = Math.random() * maxRadius * 0.6;
         wisps.push({
@@ -398,7 +406,7 @@ export function TunnelVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

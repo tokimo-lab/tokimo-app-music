@@ -59,6 +59,14 @@ export function RippleVisualizer({
   const bassAvgRef = useRef(0);
   const midAvgRef = useRef(0);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -83,7 +91,7 @@ export function RippleVisualizer({
     resizeObserver.observe(canvas);
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       let bassEnergy = 0;
       let midEnergy = 0;
 
@@ -113,10 +121,10 @@ export function RippleVisualizer({
       midAvgRef.current += (midEnergy - midAvgRef.current) * 0.05;
 
       const ripples = ripplesRef.current;
-      const rgb = hexToRgb(accentColor);
+      const rgb = hexToRgb(accentColorRef.current);
 
       // Beat detection & spawning
-      if (isPlaying) {
+      if (isPlayingRef.current) {
         if (
           bassEnergy > bassAvgRef.current * BASS_TRIGGER_FACTOR &&
           bassEnergy > 60 &&
@@ -212,7 +220,7 @@ export function RippleVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

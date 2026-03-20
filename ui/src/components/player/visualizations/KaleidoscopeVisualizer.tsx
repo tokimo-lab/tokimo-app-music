@@ -21,6 +21,14 @@ export function KaleidoscopeVisualizer({
   const smoothRef = useRef<Float32Array | null>(null);
   const rotationRef = useRef(0);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -57,7 +65,7 @@ export function KaleidoscopeVisualizer({
     };
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const freqBinCount = analyser ? analyser.frequencyBinCount : 128;
 
       if (!dataRef.current || dataRef.current.length !== freqBinCount) {
@@ -69,7 +77,7 @@ export function KaleidoscopeVisualizer({
       const data = dataRef.current;
       const smooth = smoothRef.current!;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         analyser.getByteFrequencyData(data);
       }
 
@@ -83,22 +91,22 @@ export function KaleidoscopeVisualizer({
           sum += data[j];
         }
         const raw = sum / binsPerBand / 255;
-        const target = isPlaying ? raw : 0;
-        const alpha = isPlaying ? SMOOTH_ALPHA : 0.05;
+        const target = isPlayingRef.current ? raw : 0;
+        const alpha = isPlayingRef.current ? SMOOTH_ALPHA : 0.05;
         smooth[i] += (target - smooth[i]) * alpha;
         totalEnergy += smooth[i];
       }
       totalEnergy /= BAND_COUNT;
 
       // When paused, shrink
-      if (!isPlaying) {
+      if (!isPlayingRef.current) {
         for (let i = 0; i < BAND_COUNT; i++) {
           smooth[i] *= 0.95;
         }
       }
 
       // Rotation
-      const spinSpeed = isPlaying
+      const spinSpeed = isPlayingRef.current
         ? BASE_SPIN + totalEnergy * MAX_EXTRA_SPIN
         : BASE_SPIN * 0.2;
       rotationRef.current += spinSpeed;
@@ -108,7 +116,7 @@ export function KaleidoscopeVisualizer({
       const cx = cssW / 2;
       const cy = cssH / 2;
       const radius = Math.min(cssW, cssH) * 0.45;
-      const { r, g, b } = hexToRgb(accentColor);
+      const { r, g, b } = hexToRgb(accentColorRef.current);
 
       // Frequency bands: bass (0-3), mid (4-7), high (8-11)
       const bassAvg = (smooth[0] + smooth[1] + smooth[2] + smooth[3]) / 4;
@@ -243,7 +251,7 @@ export function KaleidoscopeVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas
