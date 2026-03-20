@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { MusicAudioEngine } from "../components/player/MusicAudioEngine";
+import { WasmAudioEngine } from "../components/player/WasmAudioEngine";
 import { usePlayer } from "./PlayerContext";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -90,13 +90,45 @@ const API_BASE =
     (import.meta.env as Record<string, string>).VITE_API_URL) ||
   "";
 
+const MEDIAFS_BASE =
+  (typeof window !== "undefined" &&
+    (import.meta.env as Record<string, string>).RUST_SERVER) ||
+  "";
+
+/**
+ * Normalise a stream URL returned by the backend so that `/api/media-files/*`
+ * paths are routed to the Rust media-fs server (same logic as the video player).
+ */
+function normalizeStreamUrl(raw: string): string {
+  if (typeof window === "undefined") return raw;
+  try {
+    const resolved = new URL(raw, window.location.origin);
+    const isMediafsPath =
+      resolved.pathname.startsWith("/api/media-files/") ||
+      resolved.pathname.startsWith("/api/media-sources/") ||
+      resolved.pathname.startsWith("/api/hls/");
+
+    if (!isMediafsPath) return resolved.toString();
+
+    if (MEDIAFS_BASE) {
+      const rustBase = new URL(MEDIAFS_BASE, window.location.origin)
+        .toString()
+        .replace(/\/$/, "");
+      return `${rustBase}${resolved.pathname}${resolved.search}`;
+    }
+    return resolved.toString();
+  } catch {
+    return raw;
+  }
+}
+
 async function resolveStreamUrl(fileId: string): Promise<string> {
   const res = await fetch(`${API_BASE}/media/stream-url/${fileId}`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error(`stream-url ${res.status}`);
   const data = (await res.json()) as { url: string };
-  return data.url;
+  return normalizeStreamUrl(data.url);
 }
 
 /** Build a shuffled index order using Fisher-Yates, keeping `currentIdx` first. */
@@ -123,6 +155,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(loadVolume);
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -132,15 +166,15 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   // Current position within the shuffle order
   const shufflePosRef = useRef(0);
 
-  const engineRef = useRef<MusicAudioEngine | null>(null);
+  const engineRef = useRef<WasmAudioEngine | null>(null);
 
-  const getEngine = useCallback((): MusicAudioEngine => {
+  const getEngine = useCallback((): WasmAudioEngine => {
     if (!engineRef.current) {
-      engineRef.current = new MusicAudioEngine();
-      engineRef.current.setVolume(volume);
+      engineRef.current = new WasmAudioEngine();
+      engineRef.current.setVolume(volumeRef.current);
     }
     return engineRef.current;
-  }, [volume]);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -164,7 +198,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
         const url = await resolveStreamUrl(track.fileId);
         const engine = getEngine();
-        await engine.loadAndPlay(url);
+        await engine.loadAndPlay(url, track.codec);
         setIsPlaying(true);
         setDuration(engine.audioDuration);
       } catch (err) {
