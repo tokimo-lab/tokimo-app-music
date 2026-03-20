@@ -20,8 +20,6 @@ export interface MusicPlayerState {
   queue: MusicTrackOutput[];
   currentIndex: number;
   isPlaying: boolean;
-  currentTime: number;
-  duration: number;
   volume: number;
   repeatMode: RepeatMode;
   shuffleEnabled: boolean;
@@ -157,8 +155,6 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<MusicTrackOutput[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(loadVolume);
   const volumeRef = useRef(volume);
   volumeRef.current = volume;
@@ -211,7 +207,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         const engine = getEngine();
         await engine.loadAndPlay(url, track.codec);
         setIsPlaying(true);
-        setDuration(engine.audioDuration);
+        durationRef.current = engine.audioDuration;
       } catch (err) {
         console.error("[MusicPlayer] playback error:", err);
         setIsPlaying(false);
@@ -240,27 +236,15 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const engine = getEngine();
 
-    let lastTimeUpdate = 0;
     engine.onTimeUpdate((t) => {
-      // Always keep refs up-to-date (zero-cost, no re-render)
       currentTimeRef.current = t;
       const d = engine.audioDuration;
       if (d > 0) durationRef.current = d;
-
-      // Throttle React state updates to ~2/s (only for non-critical UI text)
-      const now = performance.now();
-      if (now - lastTimeUpdate > 500) {
-        lastTimeUpdate = now;
-        setCurrentTime(t);
-        if (d > 0) setDuration(d);
-      }
     });
 
     engine.onCanPlay(() => {
       setIsLoading(false);
-      const d = engine.audioDuration;
-      durationRef.current = d;
-      setDuration(d);
+      durationRef.current = engine.audioDuration;
     });
 
     engine.onLoadStart(() => {
@@ -332,7 +316,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       const nextTrack = q[nextIdx];
       if (nextTrack) {
         setCurrentIndex(nextIdx);
-        setCurrentTime(0);
+        currentTimeRef.current = 0;
         startPlayback(nextTrack);
       } else {
         setIsPlaying(false);
@@ -351,7 +335,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     (track: MusicTrackOutput) => {
       setQueue([track]);
       setCurrentIndex(0);
-      setCurrentTime(0);
+      currentTimeRef.current = 0;
       shuffleOrderRef.current = [0];
       shufflePosRef.current = 0;
       startPlayback(track);
@@ -365,7 +349,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       const idx = Math.max(0, Math.min(startIndex, tracks.length - 1));
       setQueue(tracks);
       setCurrentIndex(idx);
-      setCurrentTime(0);
+      currentTimeRef.current = 0;
       shuffleOrderRef.current = buildShuffleOrder(tracks.length, idx);
       shufflePosRef.current = 0;
       const track = tracks[idx];
@@ -449,8 +433,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     setQueue([]);
     setCurrentIndex(-1);
     setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
+    currentTimeRef.current = 0;
+    durationRef.current = 0;
     shuffleOrderRef.current = [];
     shufflePosRef.current = 0;
   }, []);
@@ -459,7 +443,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     (index: number) => {
       if (index < 0 || index >= queueRef.current.length) return;
       setCurrentIndex(index);
-      setCurrentTime(0);
+      currentTimeRef.current = 0;
       const track = queueRef.current[index];
       if (track) startPlayback(track);
     },
@@ -487,7 +471,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     }
 
     setCurrentIndex(nextIdx);
-    setCurrentTime(0);
+    currentTimeRef.current = 0;
     const track = q[nextIdx];
     if (track) startPlayback(track);
   }, [startPlayback]);
@@ -500,7 +484,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     // If more than 3s in, restart current track
     if (engineRef.current && engineRef.current.currentTime > 3) {
       engineRef.current.seek(0);
-      setCurrentTime(0);
+      currentTimeRef.current = 0;
       return;
     }
 
@@ -518,7 +502,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     }
 
     setCurrentIndex(prevIdx);
-    setCurrentTime(0);
+    currentTimeRef.current = 0;
     const track = q[prevIdx];
     if (track) startPlayback(track);
   }, [startPlayback]);
@@ -542,7 +526,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   const seek = useCallback((time: number) => {
     engineRef.current?.seek(time);
-    setCurrentTime(time);
+    currentTimeRef.current = time;
   }, []);
 
   const setVolume = useCallback((v: number) => {
@@ -583,8 +567,6 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       queue,
       currentIndex,
       isPlaying,
-      currentTime,
-      duration,
       volume,
       repeatMode,
       shuffleEnabled,
@@ -612,8 +594,6 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       queue,
       currentIndex,
       isPlaying,
-      currentTime,
-      duration,
       volume,
       repeatMode,
       shuffleEnabled,

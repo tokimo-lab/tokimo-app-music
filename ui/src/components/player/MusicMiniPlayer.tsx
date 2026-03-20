@@ -87,59 +87,100 @@ function MiniKaraokeText({
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
-function ProgressBar({
-  currentTime,
-  duration,
+function LiveProgressBar({
+  getCurrentTime,
+  getDuration,
   onSeek,
 }: {
-  currentTime: number;
-  duration: number;
+  getCurrentTime: () => number;
+  getDuration: () => number;
   onSeek(time: number): void;
 }) {
   const barRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const rect = barRef.current?.getBoundingClientRect();
-      if (!rect || duration <= 0) return;
+      const d = getDuration();
+      if (!rect || d <= 0) return;
       const ratio = Math.max(
         0,
         Math.min(1, (e.clientX - rect.left) / rect.width),
       );
-      onSeek(ratio * duration);
+      onSeek(ratio * d);
     },
-    [duration, onSeek],
+    [getDuration, onSeek],
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (duration <= 0) return;
-      const step = duration * 0.02;
-      if (e.key === "ArrowRight")
-        onSeek(Math.min(duration, currentTime + step));
-      else if (e.key === "ArrowLeft") onSeek(Math.max(0, currentTime - step));
-    },
-    [duration, currentTime, onSeek],
-  );
-
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  useEffect(() => {
+    let raf: number;
+    const tick = () => {
+      const d = getDuration();
+      const pct = d > 0 ? (getCurrentTime() / d) * 100 : 0;
+      if (fillRef.current) fillRef.current.style.width = `${pct}%`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [getCurrentTime, getDuration]);
 
   return (
     <div
       ref={barRef}
       role="slider"
       tabIndex={0}
-      aria-valuenow={Math.round(currentTime)}
+      aria-valuenow={0}
       aria-valuemin={0}
-      aria-valuemax={Math.round(duration)}
+      aria-valuemax={100}
       className="group/progress relative h-1 w-full cursor-pointer bg-neutral-200 transition-[height] hover:h-1.5 dark:bg-neutral-700"
       onClick={handleClick}
-      onKeyDown={handleKeyDown}
+      onKeyDown={(e) => {
+        const d = getDuration();
+        if (d <= 0) return;
+        const step = d * 0.02;
+        const t = getCurrentTime();
+        if (e.key === "ArrowRight") onSeek(Math.min(d, t + step));
+        else if (e.key === "ArrowLeft") onSeek(Math.max(0, t - step));
+      }}
     >
       <div
+        ref={fillRef}
         className="absolute inset-y-0 left-0 bg-[var(--accent)] transition-[width]"
-        style={{ width: `${progress}%` }}
+        style={{ width: "0%" }}
       />
+    </div>
+  );
+}
+
+function LiveTimeDisplay({
+  getCurrentTime,
+  getDuration,
+}: {
+  getCurrentTime: () => number;
+  getDuration: () => number;
+}) {
+  const elapsedRef = useRef<HTMLSpanElement>(null);
+  const totalRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    let raf: number;
+    const tick = () => {
+      if (elapsedRef.current)
+        elapsedRef.current.textContent = formatTime(getCurrentTime());
+      if (totalRef.current)
+        totalRef.current.textContent = formatTime(getDuration());
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [getCurrentTime, getDuration]);
+
+  return (
+    <div className="hidden items-center gap-1 text-xs tabular-nums text-neutral-500 dark:text-neutral-400 md:flex">
+      <span ref={elapsedRef}>0:00</span>
+      <span>/</span>
+      <span ref={totalRef}>0:00</span>
     </div>
   );
 }
@@ -205,8 +246,6 @@ export function MusicMiniPlayer() {
     currentIndex,
     isPlaying,
     isLoading,
-    currentTime,
-    duration,
     volume,
     repeatMode,
     shuffleEnabled,
@@ -219,6 +258,7 @@ export function MusicMiniPlayer() {
     toggleShuffle,
     clearQueue,
     getCurrentTime,
+    getDuration,
   } = useMusicPlayer();
 
   const [queueOpen, setQueueOpen] = useState(false);
@@ -249,9 +289,9 @@ export function MusicMiniPlayer() {
         style={{ height: `${MUSIC_MINI_PLAYER_HEIGHT_PX}px` }}
       >
         {/* Top progress bar */}
-        <ProgressBar
-          currentTime={currentTime}
-          duration={duration}
+        <LiveProgressBar
+          getCurrentTime={getCurrentTime}
+          getDuration={getDuration}
           onSeek={seek}
         />
 
@@ -349,11 +389,10 @@ export function MusicMiniPlayer() {
           </div>
 
           {/* Time display (hidden on small screens) */}
-          <div className="hidden items-center gap-1 text-xs tabular-nums text-neutral-500 dark:text-neutral-400 md:flex">
-            <span>{formatTime(currentTime)}</span>
-            <span>/</span>
-            <span>{formatTime(duration)}</span>
-          </div>
+          <LiveTimeDisplay
+            getCurrentTime={getCurrentTime}
+            getDuration={getDuration}
+          />
 
           {/* Right side controls */}
           <div className="hidden items-center gap-0.5 lg:flex">
