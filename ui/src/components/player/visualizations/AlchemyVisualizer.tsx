@@ -56,35 +56,120 @@ function randomFreq(): number {
 }
 
 // ── Shared ambient glow layer ─────────────────────────────────────────────
-// Orbiting radial gradient blobs that provide color atmosphere behind all scenes
+// Soft bubbles scattered across viewport, breathing in/out independently
 
-const AMBIENT_BLOBS = 5;
+const AMBIENT_BLOBS = 12;
+const BUBBLE_LIFETIME = 480; // frames per bubble cycle (~8s at 60fps)
+
+interface AmbientBubble {
+  x: number; // 0–1 normalized position
+  y: number;
+  hue: number;
+  birth: number; // frame when spawned
+  lifetime: number; // frames until respawn
+  cell: number; // grid cell index for spatial distribution
+}
+
+// Distribute bubbles across a grid to avoid clustering.
+// Viewport is divided into cells; each bubble picks a cell that no
+// other living bubble currently occupies (or the least-used one).
+function pickScatteredPosition(
+  bubbles: AmbientBubble[],
+  selfIdx: number,
+): { x: number; y: number; cell: number } {
+  const cols = 4;
+  const rows = 3;
+  const totalCells = cols * rows;
+
+  // Count how many living bubbles are in each cell
+  const usage = new Uint8Array(totalCells);
+  for (let i = 0; i < bubbles.length; i++) {
+    if (i !== selfIdx && bubbles[i].cell >= 0) {
+      usage[bubbles[i].cell]++;
+    }
+  }
+
+  // Pick least-used cell (random among ties)
+  let minUse = 255;
+  for (let c = 0; c < totalCells; c++) {
+    if (usage[c] < minUse) minUse = usage[c];
+  }
+  const candidates: number[] = [];
+  for (let c = 0; c < totalCells; c++) {
+    if (usage[c] === minUse) candidates.push(c);
+  }
+  const cell = candidates[Math.floor(Math.random() * candidates.length)];
+
+  const col = cell % cols;
+  const row = Math.floor(cell / cols);
+  // Jitter within cell (20% padding from cell edges)
+  const x = (col + 0.2 + Math.random() * 0.6) / cols;
+  const y = (row + 0.2 + Math.random() * 0.6) / rows;
+  return { x, y, cell };
+}
+
+function spawnBubble(
+  frame: number,
+  bubbles: AmbientBubble[],
+  selfIdx: number,
+): AmbientBubble {
+  const pos = pickScatteredPosition(bubbles, selfIdx);
+  return {
+    ...pos,
+    hue: Math.random() * 360,
+    birth: frame,
+    lifetime: BUBBLE_LIFETIME * (0.7 + Math.random() * 0.6),
+  };
+}
+
+function initAmbientBubbles(count: number): AmbientBubble[] {
+  const bubbles: AmbientBubble[] = [];
+  for (let i = 0; i < count; i++) {
+    const pos = pickScatteredPosition(bubbles, -1);
+    bubbles.push({
+      ...pos,
+      hue: Math.random() * 360,
+      birth: -Math.floor((i / count) * BUBBLE_LIFETIME),
+      lifetime: BUBBLE_LIFETIME * (0.7 + Math.random() * 0.6),
+    });
+  }
+  return bubbles;
+}
 
 function drawAmbient(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  time: number,
+  frame: number,
   audio: AudioBands,
+  bubbles: AmbientBubble[],
 ) {
-  const cx = w / 2;
-  const cy = h / 2;
-  // Large radius that overflows viewport — only partial blobs visible
-  const radius = Math.max(w, h) * 0.7;
+  const radius = Math.max(w, h) * 0.4;
 
   ctx.save();
   ctx.globalCompositeOperation = "screen";
-  for (let i = 0; i < AMBIENT_BLOBS; i++) {
-    const angle = (i / AMBIENT_BLOBS) * Math.PI * 2 + time * (0.15 + i * 0.05);
-    // Orbit far enough that blobs extend well beyond edges
-    const dist = Math.max(w, h) * 0.3 * (1 + audio.bass * 0.3);
-    const bx = cx + Math.cos(angle) * dist;
-    const by = cy + Math.sin(angle) * dist;
-    const hue = (time * 25 + i * 72) % 360;
-    const alpha = 0.025 + audio.energy * 0.02;
+  for (let i = 0; i < bubbles.length; i++) {
+    const b = bubbles[i];
+    const age = frame - b.birth;
+
+    // Respawn when lifetime exceeded — picks a new scattered position
+    if (age >= b.lifetime) {
+      bubbles[i] = spawnBubble(frame, bubbles, i);
+      continue;
+    }
+
+    // Smooth bell-curve fade: slow breathe in → peak → breathe out
+    const t = age / b.lifetime; // 0→1
+    const alpha = Math.sin(t * Math.PI) * (0.03 + audio.energy * 0.025);
+
+    if (alpha < 0.002) continue;
+
+    const bx = b.x * w;
+    const by = b.y * h;
+    const hue = (b.hue + frame * 0.3) % 360;
     const grad = ctx.createRadialGradient(bx, by, 0, bx, by, radius);
     grad.addColorStop(0, `hsla(${hue}, 50%, 25%, ${alpha})`);
-    grad.addColorStop(0.6, `hsla(${hue}, 40%, 18%, ${alpha * 0.3})`);
+    grad.addColorStop(0.45, `hsla(${hue}, 40%, 18%, ${alpha * 0.3})`);
     grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
@@ -512,6 +597,7 @@ export function AlchemyVisualizer({
 
     let raf = 0;
     let time = 0;
+    let frame = 0;
     let sceneTimer = 0;
     let currentScene = Math.floor(Math.random() * SCENE_COUNT);
     let nextScene = -1;
@@ -523,6 +609,7 @@ export function AlchemyVisualizer({
     const ribbons = Array.from({ length: 5 }, (_, i) => initRibbon(i, 5));
     const spiro = initSpiro();
     const vortexParticles = initVortexParticles(200);
+    const ambientBubbles = initAmbientBubbles(AMBIENT_BLOBS);
 
     function pickNextScene(cur: number): number {
       let n = Math.floor(Math.random() * (SCENE_COUNT - 1));
@@ -562,7 +649,7 @@ export function AlchemyVisualizer({
       audio: AudioBands,
     ) {
       // Shared ambient glow behind all scenes
-      drawAmbient(target, w, h, time, audio);
+      drawAmbient(target, w, h, frame, audio, ambientBubbles);
       switch (scene) {
         case 0:
           drawRibbons(target, w, h, time, audio, ribbons);
@@ -605,6 +692,7 @@ export function AlchemyVisualizer({
       const audio = getAudioBands(analyser, isPlayingRef.current);
 
       time += 0.008 + audio.energy * 0.012;
+      frame++;
       sceneTimer++;
 
       // Start crossfade
