@@ -40,6 +40,7 @@ export const MusicTrackOutputSchema = z.object({
   sampleRate: z.number().nullable().optional(),
   codec: z.string().nullable().optional(),
   genre: z.string().nullable().optional(),
+  lyricsPath: z.string().nullable().optional(),
   coverPath: z.string().nullable().optional(),
   fileId: z.string().nullable().optional(),
   file: MediaFileOutputSchema.nullable().optional(),
@@ -81,6 +82,15 @@ export const MusicArtistDetailOutputSchema = MusicArtistOutputSchema.extend({
 export type MusicArtistDetailOutput = z.infer<
   typeof MusicArtistDetailOutputSchema
 >;
+
+// ==================== 歌词输出 ====================
+
+/** 歌词查询结果 */
+export const TrackLyricsOutputSchema = z.object({
+  syncedLyrics: z.string().nullable(),
+  plainLyrics: z.string().nullable(),
+});
+export type TrackLyricsOutput = z.infer<typeof TrackLyricsOutputSchema>;
 
 // ==================== 查询输入 ====================
 

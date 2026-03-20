@@ -1,5 +1,6 @@
 import { cn, Tooltip } from "@acme/components";
 import {
+  Disc3,
   ListMusic,
   Music,
   Pause,
@@ -18,6 +19,8 @@ import {
   type RepeatMode,
   useMusicPlayer,
 } from "../../contexts/MusicPlayerContext";
+import { useLyrics } from "../../hooks/useLyrics";
+import { FullScreenPlayer } from "./FullScreenPlayer";
 import { NowPlayingPanel } from "./NowPlayingPanel";
 
 export const MUSIC_MINI_PLAYER_HEIGHT_PX = 76;
@@ -176,6 +179,13 @@ export function MusicMiniPlayer() {
   } = useMusicPlayer();
 
   const [queueOpen, setQueueOpen] = useState(false);
+  const [fullScreen, setFullScreen] = useState(false);
+
+  const { lines, currentIdx, progress } = useLyrics(
+    currentTrack?.id,
+    currentTime,
+  );
+  const lyricText = currentIdx >= 0 ? lines[currentIdx]?.text : null;
 
   const cycleRepeat = useCallback(() => {
     const modes: RepeatMode[] = ["off", "all", "one"];
@@ -204,19 +214,33 @@ export function MusicMiniPlayer() {
 
         {/* Controls row */}
         <div className="flex flex-1 items-center gap-2 px-3 lg:px-4">
-          {/* Album art + track info */}
+          {/* Album art (click to open full-screen) + track info */}
           <div className="flex min-w-0 flex-1 items-center gap-3 lg:flex-[2]">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-neutral-100 dark:bg-neutral-800">
+            <button
+              type="button"
+              onClick={() => setFullScreen(true)}
+              className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-neutral-100 transition-transform hover:scale-105 dark:bg-neutral-800"
+              title="全屏播放器"
+            >
               {coverUrl ? (
                 <img
                   src={coverUrl}
                   alt={currentTrack.title}
-                  className="h-full w-full object-cover"
+                  className={cn(
+                    "h-full w-full object-cover",
+                    isPlaying && "animate-[spin_8s_linear_infinite]",
+                  )}
+                  style={{ borderRadius: "50%" }}
                 />
               ) : (
-                <Music className="h-5 w-5 text-neutral-400 dark:text-neutral-500" />
+                <Disc3
+                  className={cn(
+                    "h-6 w-6 text-neutral-400 dark:text-neutral-500",
+                    isPlaying && "animate-[spin_3s_linear_infinite]",
+                  )}
+                />
               )}
-            </div>
+            </button>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100">
                 {currentTrack.title}
@@ -226,6 +250,26 @@ export function MusicMiniPlayer() {
               </p>
             </div>
           </div>
+
+          {/* Center: single-line lyrics with karaoke progress */}
+          {lyricText && (
+            <div className="hidden flex-1 items-center justify-center overflow-hidden lg:flex">
+              <span className="relative inline-block max-w-full truncate text-sm text-neutral-500 dark:text-neutral-400">
+                <span aria-hidden className="invisible">
+                  {lyricText}
+                </span>
+                <span className="absolute inset-0 truncate text-neutral-400 dark:text-neutral-500">
+                  {lyricText}
+                </span>
+                <span
+                  className="absolute inset-0 truncate text-[var(--accent)]"
+                  style={{ clipPath: `inset(0 ${(1 - progress) * 100}% 0 0)` }}
+                >
+                  {lyricText}
+                </span>
+              </span>
+            </div>
+          )}
 
           {/* Playback controls */}
           <div className="flex items-center gap-1">
@@ -359,6 +403,11 @@ export function MusicMiniPlayer() {
       </div>
 
       <NowPlayingPanel open={queueOpen} onClose={() => setQueueOpen(false)} />
+
+      <FullScreenPlayer
+        open={fullScreen}
+        onClose={() => setFullScreen(false)}
+      />
     </>
   );
 }

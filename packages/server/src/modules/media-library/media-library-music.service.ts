@@ -197,6 +197,7 @@ function toTrackOutput(
     sampleRate: track.sampleRate,
     codec: track.codec,
     genre: track.genre,
+    lyricsPath: track.lyricsPath,
     coverPath: safeCoverPath(album?.coverPath ?? null),
     fileId: firstFile?.id ?? null,
     file: firstFile
@@ -504,6 +505,99 @@ export class MediaLibraryMusicService {
     });
 
     return { isFavorite: !album.isFavorite };
+  }
+
+  /**
+   * Get lyrics for a track. Strategy:
+   * 1. If lyricsPath exists, read the .lrc file from disk
+   * 2. Otherwise, fetch from LRCLIB on-demand and cache to DB
+   */
+  async getTrackLyrics(
+    trackId: string,
+  ): Promise<{ syncedLyrics: string | null; plainLyrics: string | null }> {
+    const track = await prisma.musicTrack.findUnique({
+      where: { id: trackId },
+      select: {
+        id: true,
+        title: true,
+        duration: true,
+        lyricsPath: true,
+        album: {
+          select: {
+            title: true,
+            credits: {
+              where: { role: { in: ARTIST_ROLES } },
+              select: { personRef: { select: { name: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!track) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Track not found" });
+    }
+
+    // 1) Try reading an existing .lrc file
+    if (track.lyricsPath) {
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const content = await readFile(track.lyricsPath, "utf-8");
+        const isSynced = /\[\d{1,2}:\d{2}/.test(content);
+        return {
+          syncedLyrics: isSynced ? content : null,
+          plainLyrics: isSynced ? null : content,
+        };
+      } catch {
+        // File missing — fall through to LRCLIB
+      }
+    }
+
+    // 2) Fetch on-demand from LRCLIB
+    const artistName = track.album?.credits?.[0]?.personRef?.name ?? null;
+    if (!artistName) {
+      return { syncedLyrics: null, plainLyrics: null };
+    }
+
+    try {
+      const { fetchLyrics } = await import("../../lib/lrclib-client.js");
+      const result = await fetchLyrics(
+        artistName,
+        track.title,
+        track.album?.title ?? undefined,
+        track.duration ?? undefined,
+      );
+      if (!result) {
+        return { syncedLyrics: null, plainLyrics: null };
+      }
+
+      // Cache: write .lrc next to the first audio file if possible
+      const firstFile = await prisma.mediaFile.findFirst({
+        where: { trackId },
+        select: { path: true },
+      });
+      if (firstFile?.path && result.syncedLyrics) {
+        try {
+          const { saveLrcFile } = await import("../../lib/lrclib-client.js");
+          const savedPath = await saveLrcFile(firstFile.path, result);
+          if (savedPath) {
+            await prisma.musicTrack.update({
+              where: { id: trackId },
+              data: { lyricsPath: savedPath },
+            });
+          }
+        } catch {
+          // Non-critical — caching failure is OK
+        }
+      }
+
+      return {
+        syncedLyrics: result.syncedLyrics,
+        plainLyrics: result.plainLyrics,
+      };
+    } catch (err) {
+      console.error("[lyrics] Failed to fetch from LRCLIB:", err);
+      return { syncedLyrics: null, plainLyrics: null };
+    }
   }
 }
 
