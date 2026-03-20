@@ -422,25 +422,43 @@ function drawVortex(
 // ── Main component ───────────────────────────────────────────────────────────
 
 const SCENE_COUNT = 5;
+const SCENE_NAMES = [
+  "Ribbons",
+  "Spirograph",
+  "Plasma",
+  "Starburst",
+  "Vortex",
+] as const;
+
+export type AlchemySceneInfo = {
+  scene: string;
+  nextScene: string | null;
+  fadePct: number;
+  sceneTimer: number;
+};
 
 interface Props {
   getAnalyser: () => AnalyserNode | null;
   isPlaying: boolean;
   accentColor: string;
+  onSceneInfo?: (info: AlchemySceneInfo) => void;
 }
 
 export function AlchemyVisualizer({
   getAnalyser,
   isPlaying,
   accentColor,
+  onSceneInfo,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getAnalyserRef = useRef(getAnalyser);
   const isPlayingRef = useRef(isPlaying);
   const accentColorRef = useRef(accentColor);
+  const onSceneInfoRef = useRef(onSceneInfo);
   getAnalyserRef.current = getAnalyser;
   isPlayingRef.current = isPlaying;
   accentColorRef.current = accentColor;
+  onSceneInfoRef.current = onSceneInfo;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -605,6 +623,15 @@ export function AlchemyVisualizer({
         drawSceneTo(ctxA, currentScene, w, h, audio);
         ctx.drawImage(bufA, 0, 0, w, h);
       }
+
+      // Report scene info for debug overlay
+      onSceneInfoRef.current?.({
+        scene: SCENE_NAMES[currentScene],
+        nextScene: nextScene >= 0 ? SCENE_NAMES[nextScene] : null,
+        fadePct:
+          nextScene >= 0 ? Math.min(1, fadeProgress / CROSSFADE_FRAMES) : 0,
+        sceneTimer,
+      });
 
       raf = requestAnimationFrame(tick);
     };
