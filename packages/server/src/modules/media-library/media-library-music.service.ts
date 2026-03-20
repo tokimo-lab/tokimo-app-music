@@ -9,6 +9,19 @@ import { Prisma } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { prisma } from "../../db/client";
 
+/** Only expose coverPath if it's a safe URL (storage / http), not raw filesystem paths */
+function safeCoverPath(path: string | null): string | null {
+  if (!path) return null;
+  if (
+    path.startsWith("/storage/") ||
+    path.startsWith("http://") ||
+    path.startsWith("https://") ||
+    path.startsWith("/trpc/")
+  )
+    return path;
+  return null;
+}
+
 type MusicListOptions = {
   page?: number;
   pageSize?: number;
@@ -73,7 +86,7 @@ function toAlbumOutput(album: AlbumWithRelations): MusicAlbumOutput {
     artistName: primaryCredit?.personRef.name ?? null,
     year: album.year,
     albumType: album.albumType,
-    coverPath: album.coverPath,
+    coverPath: safeCoverPath(album.coverPath),
     trackCount: album._count.tracks,
     totalDuration,
     genres: genres.length > 0 ? genres : undefined,
@@ -121,7 +134,7 @@ function toAlbumDetailOutput(
     artistName: primaryCredit?.personRef.name ?? null,
     year: album.year,
     albumType: album.albumType,
-    coverPath: album.coverPath,
+    coverPath: safeCoverPath(album.coverPath),
     trackCount: album._count.tracks,
     totalDuration,
     genres: genres.length > 0 ? genres : undefined,
@@ -184,7 +197,7 @@ function toTrackOutput(
     sampleRate: track.sampleRate,
     codec: track.codec,
     genre: track.genre,
-    coverPath: album?.coverPath ?? null,
+    coverPath: safeCoverPath(album?.coverPath ?? null),
     fileId: firstFile?.id ?? null,
     file: firstFile
       ? {

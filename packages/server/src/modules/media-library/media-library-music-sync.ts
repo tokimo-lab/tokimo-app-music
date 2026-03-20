@@ -8,6 +8,7 @@ import type { AudioTagInfo } from "../../lib/audio-tag-reader";
 import { readAudioTags } from "../../lib/audio-tag-reader";
 import { logger } from "../../lib/logger";
 import { parseMusicFilename } from "../../lib/media-parser";
+import { getStorage } from "../../lib/storage";
 import type { AudioFileInfo } from "./media-library-file-walker";
 import type { SyncProgressUpdate } from "./media-library-sync.service";
 
@@ -339,12 +340,27 @@ async function updateAlbumMetadata(
   });
 
   if (isLocal) {
-    const coverPath = await findLocalCoverArt(group.dirPath);
-    if (coverPath) {
-      await prisma.musicAlbum.update({
-        where: { id: albumId },
-        data: { coverPath },
-      });
+    const localCoverPath = await findLocalCoverArt(group.dirPath);
+    if (localCoverPath) {
+      try {
+        const ext = nodePath.extname(localCoverPath).toLowerCase() || ".jpg";
+        const storageKey = `music-covers/${albumId}/cover${ext}`;
+        const storage = getStorage();
+        if (!(await storage.exists(storageKey))) {
+          const buf = await fsNode.readFile(localCoverPath);
+          const contentType = ext === ".png" ? "image/png" : "image/jpeg";
+          await storage.upload(storageKey, buf, { contentType });
+        }
+        await prisma.musicAlbum.update({
+          where: { id: albumId },
+          data: { coverPath: `/storage/${storageKey}` },
+        });
+      } catch (err) {
+        logger.warn(
+          "LibrarySync",
+          `封面上传失败 "${group.albumTitle}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
   }
 }
