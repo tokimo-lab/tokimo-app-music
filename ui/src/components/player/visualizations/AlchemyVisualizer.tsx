@@ -104,47 +104,33 @@ function drawRibbons(
   const cy = h / 2;
   const baseScale = Math.min(w, h) * 0.44;
 
-  // ── Ambient glow pass: enlarged + heavily blurred ribbons fill viewport ──
+  // ── Ambient glow: radial gradients sampled from ribbon positions ────────
+  const ambientRadius = Math.min(w, h) * 0.35;
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
   for (const r of ribbons) {
     const mt = ease(r.morphT / r.morphDur);
     const ax = lerp(r.ax, r.targetAx, mt);
     const ay = lerp(r.ay, r.targetAy, mt);
-    const bx = lerp(r.bx, r.targetBx, mt);
-    const by = lerp(r.by, r.targetBy, mt);
     const hue = lerp(r.hue, r.targetHue, mt);
     const amp = 0.5 + audio.bass * 0.5;
     const po = r.phase + time;
-    const ambientScale = baseScale * 1.6;
-
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = 0.04 + audio.energy * 0.03;
-    ctx.lineWidth = 6 + audio.mid * 6;
-    ctx.beginPath();
-    for (let p = 0; p < POINTS; p++) {
-      const t = (p / POINTS) * Math.PI * 2;
-      const x =
-        cx +
-        ambientScale *
-          amp *
-          (Math.sin(ax * t + po) + 0.3 * Math.sin(bx * t * 2.1 + po * 1.3));
-      const y =
-        cy +
-        ambientScale *
-          amp *
-          (Math.cos(ay * t + po * 0.7) +
-            0.3 * Math.cos(by * t * 1.7 + po * 0.9));
-      if (p === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+    const sampleScale = baseScale * 1.2;
+    // Sample 2 points per ribbon for ambient blobs
+    for (const st of [0.25, 0.75]) {
+      const t = st * Math.PI * 2;
+      const bx = cx + sampleScale * amp * Math.sin(ax * t + po);
+      const by = cy + sampleScale * amp * Math.cos(ay * t + po * 0.7);
+      const alpha = 0.06 + audio.energy * 0.04;
+      const grad = ctx.createRadialGradient(bx, by, 0, bx, by, ambientRadius);
+      grad.addColorStop(0, `hsla(${hue}, 60%, 35%, ${alpha})`);
+      grad.addColorStop(0.5, `hsla(${hue}, 50%, 25%, ${alpha * 0.4})`);
+      grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
     }
-    ctx.closePath();
-    const color = `hsl(${hue}, 60%, 30%)`;
-    ctx.strokeStyle = color;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 120 + audio.energy * 60;
-    ctx.stroke();
-    ctx.restore();
   }
+  ctx.restore();
 
   // ── Main sharp pass ──────────────────────────────────────────────────────
   for (const r of ribbons) {
