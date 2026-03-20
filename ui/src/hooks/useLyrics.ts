@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   currentLineIndex,
   type LrcLine,
@@ -10,7 +10,8 @@ import { trpc } from "../lib/trpc";
 interface UseLyricsResult {
   lines: LrcLine[];
   currentIdx: number;
-  progress: number;
+  /** Ref-based progress (0–1) for karaoke fill — updated every frame, no re-render. */
+  progressRef: RefObject<number>;
   plainText: string | null;
   isLoading: boolean;
   hasSyncedLyrics: boolean;
@@ -18,11 +19,14 @@ interface UseLyricsResult {
 
 /**
  * Fetches lyrics for a track and keeps the active-line index in sync with
- * the player's `currentTime`.
+ * the player's current time via an internal RAF loop.
+ *
+ * `getCurrentTime` should be a stable callback (e.g. from context ref getter)
+ * to avoid restarting the RAF loop.
  */
 export function useLyrics(
   trackId: string | null | undefined,
-  currentTime: number,
+  getCurrentTime: () => number,
 ): UseLyricsResult {
   const { data, isLoading } = trpc.mediaLibrary.getTrackLyrics.useQuery(
     { trackId: trackId! },
@@ -36,24 +40,42 @@ export function useLyrics(
 
   const hasSyncedLyrics = lines.length > 0;
 
-  // Avoid re-rendering on every rAF tick — only update when index changes
   const [currentIdx, setCurrentIdx] = useState(-1);
-  const [progress, setProgress] = useState(0);
+  const progressRef = useRef(0);
   const prevIdxRef = useRef(-1);
 
+  // Store getCurrentTime in a ref so the RAF loop always reads from the latest
+  const getTimeRef = useRef(getCurrentTime);
+  getTimeRef.current = getCurrentTime;
+
+  // Internal RAF loop — only causes React re-render when the active line changes
   useEffect(() => {
-    const idx = currentLineIndex(lines, currentTime);
-    if (idx !== prevIdxRef.current) {
-      prevIdxRef.current = idx;
-      setCurrentIdx(idx);
+    if (lines.length === 0) {
+      prevIdxRef.current = -1;
+      setCurrentIdx(-1);
+      progressRef.current = 0;
+      return;
     }
-    setProgress(lineProgress(lines, idx, currentTime));
-  }, [lines, currentTime]);
+
+    let raf: number;
+    const tick = () => {
+      const t = getTimeRef.current();
+      const idx = currentLineIndex(lines, t);
+      if (idx !== prevIdxRef.current) {
+        prevIdxRef.current = idx;
+        setCurrentIdx(idx);
+      }
+      progressRef.current = lineProgress(lines, idx, t);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [lines]);
 
   return {
     lines,
     currentIdx,
-    progress,
+    progressRef,
     plainText: data?.plainLyrics ?? null,
     isLoading,
     hasSyncedLyrics,

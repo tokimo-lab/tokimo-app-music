@@ -14,7 +14,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type RepeatMode,
   useMusicPlayer,
@@ -41,6 +41,48 @@ function getCoverUrl(coverPath: string | null | undefined): string | null {
   if (!coverPath) return null;
   if (coverPath.startsWith("http")) return coverPath;
   return `${API_BASE}${coverPath.startsWith("/") ? "" : "/"}${coverPath}`;
+}
+
+// ── Karaoke text for mini player — reads progressRef via RAF ─────────────────
+
+function MiniKaraokeText({
+  text,
+  progressRef,
+}: {
+  text: string;
+  progressRef: React.RefObject<number>;
+}) {
+  const clipRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    let raf: number;
+    const tick = () => {
+      if (clipRef.current) {
+        const p = progressRef.current ?? 0;
+        clipRef.current.style.clipPath = `inset(0 ${(1 - p) * 100}% 0 0)`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [progressRef]);
+
+  return (
+    <span className="relative inline-block max-w-full truncate text-sm text-neutral-500 dark:text-neutral-400">
+      <span aria-hidden className="invisible">
+        {text}
+      </span>
+      <span className="absolute inset-0 truncate text-neutral-400 dark:text-neutral-500">
+        {text}
+      </span>
+      <span
+        ref={clipRef}
+        className="absolute inset-0 truncate text-[var(--accent)]"
+      >
+        {text}
+      </span>
+    </span>
+  );
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -176,14 +218,15 @@ export function MusicMiniPlayer() {
     setRepeatMode,
     toggleShuffle,
     clearQueue,
+    getCurrentTime,
   } = useMusicPlayer();
 
   const [queueOpen, setQueueOpen] = useState(false);
   const [fullScreen, setFullScreen] = useState(false);
 
-  const { lines, currentIdx, progress } = useLyrics(
+  const { lines, currentIdx, progressRef } = useLyrics(
     currentTrack?.id,
-    currentTime,
+    getCurrentTime,
   );
   const lyricText = currentIdx >= 0 ? lines[currentIdx]?.text : null;
 
@@ -254,20 +297,7 @@ export function MusicMiniPlayer() {
           {/* Center: single-line lyrics with karaoke progress */}
           {lyricText && (
             <div className="hidden flex-1 items-center justify-center overflow-hidden lg:flex">
-              <span className="relative inline-block max-w-full truncate text-sm text-neutral-500 dark:text-neutral-400">
-                <span aria-hidden className="invisible">
-                  {lyricText}
-                </span>
-                <span className="absolute inset-0 truncate text-neutral-400 dark:text-neutral-500">
-                  {lyricText}
-                </span>
-                <span
-                  className="absolute inset-0 truncate text-[var(--accent)]"
-                  style={{ clipPath: `inset(0 ${(1 - progress) * 100}% 0 0)` }}
-                >
-                  {lyricText}
-                </span>
-              </span>
+              <MiniKaraokeText text={lyricText} progressRef={progressRef} />
             </div>
           )}
 

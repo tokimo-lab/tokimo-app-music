@@ -45,6 +45,10 @@ export interface MusicPlayerContextValue extends MusicPlayerState {
   toggleShuffle(): void;
   currentTrack: MusicTrackOutput | null;
   getAnalyser(): AnalyserNode | null;
+  /** Real-time current time (ref-based, no re-render). */
+  getCurrentTime(): number;
+  /** Real-time duration (ref-based, no re-render). */
+  getDuration(): number;
 }
 
 const MusicPlayerContext = createContext<MusicPlayerContextValue | null>(null);
@@ -158,6 +162,12 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(loadVolume);
   const volumeRef = useRef(volume);
   volumeRef.current = volume;
+
+  // Real-time refs for currentTime / duration — always up-to-date, no re-render
+  const currentTimeRef = useRef(0);
+  const durationRef = useRef(0);
+  const getCurrentTime = useCallback(() => currentTimeRef.current, []);
+  const getDuration = useCallback(() => durationRef.current, []);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -230,15 +240,27 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const engine = getEngine();
 
+    let lastTimeUpdate = 0;
     engine.onTimeUpdate((t) => {
-      setCurrentTime(t);
+      // Always keep refs up-to-date (zero-cost, no re-render)
+      currentTimeRef.current = t;
       const d = engine.audioDuration;
-      if (d > 0) setDuration(d);
+      if (d > 0) durationRef.current = d;
+
+      // Throttle React state updates to ~2/s (only for non-critical UI text)
+      const now = performance.now();
+      if (now - lastTimeUpdate > 500) {
+        lastTimeUpdate = now;
+        setCurrentTime(t);
+        if (d > 0) setDuration(d);
+      }
     });
 
     engine.onCanPlay(() => {
       setIsLoading(false);
-      setDuration(engine.audioDuration);
+      const d = engine.audioDuration;
+      durationRef.current = d;
+      setDuration(d);
     });
 
     engine.onLoadStart(() => {
@@ -583,6 +605,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setRepeatMode: setRepeatModeAction,
       toggleShuffle,
       getAnalyser,
+      getCurrentTime,
+      getDuration,
     }),
     [
       queue,
@@ -610,6 +634,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setRepeatModeAction,
       toggleShuffle,
       getAnalyser,
+      getCurrentTime,
+      getDuration,
     ],
   );
 
