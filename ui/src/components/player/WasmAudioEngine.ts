@@ -123,7 +123,6 @@ export class WasmAudioEngine {
   private playStartCtxTime = 0;
   private seekOffset = 0;
   private _paused = true;
-  private _stoppedManually = false;
 
   // Volume (cached for lazy AudioContext creation)
   private _volume = 1;
@@ -319,21 +318,21 @@ export class WasmAudioEngine {
     source.buffer = this.decodedBuffer;
     source.connect(this.gainNode);
 
+    // Capture `source` in closure so the handler only fires for the CURRENT
+    // source node.  When seeking, the old node is replaced and its async
+    // `ended` event must be ignored.
     source.onended = () => {
-      if (!this._stoppedManually) {
-        // Natural end of playback
+      if (this.sourceNode === source) {
         this.stopTimeTracking();
         this._paused = true;
         this._onEnded?.();
       }
-      this._stoppedManually = false;
     };
 
     this.sourceNode = source;
     this.seekOffset = offset;
     this.playStartCtxTime = ctx.currentTime;
     this._paused = false;
-    this._stoppedManually = false;
 
     source.start(0, offset);
     this.startTimeTracking();
@@ -341,14 +340,14 @@ export class WasmAudioEngine {
 
   private stopSourceInternal(): void {
     if (this.sourceNode) {
-      this._stoppedManually = true;
+      const old = this.sourceNode;
+      this.sourceNode = null; // detach first so old onended is ignored
       try {
-        this.sourceNode.stop();
+        old.stop();
       } catch {
         /* already stopped */
       }
-      this.sourceNode.disconnect();
-      this.sourceNode = null;
+      old.disconnect();
     }
     this.stopTimeTracking();
   }
