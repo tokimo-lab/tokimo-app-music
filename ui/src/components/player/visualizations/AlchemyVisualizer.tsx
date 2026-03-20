@@ -127,11 +127,12 @@ function drawRibbons(
     const by = lerp(r.by, r.targetBy, mt);
     const hue = lerp(r.hue, r.targetHue, mt);
     const amp = 0.4 + audio.bass * 0.6;
-    const lw = 1.5 + audio.mid * 3;
+    const lw = 1 + audio.mid * 2;
     const po = r.phase + time;
 
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 0.55 + audio.energy * 0.15;
     ctx.lineWidth = lw;
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -152,16 +153,12 @@ function drawRibbons(
       else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    const sat = 80 + audio.energy * 20;
-    const lit = 55 + audio.energy * 15;
+    const sat = 80 + audio.energy * 15;
+    const lit = 40 + audio.energy * 12;
     const color = `hsl(${hue}, ${sat}%, ${lit}%)`;
     ctx.strokeStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 12 + audio.energy * 20;
-    ctx.stroke();
-    ctx.lineWidth = Math.max(1, lw * 0.35);
-    ctx.shadowBlur = 4;
-    ctx.strokeStyle = `hsl(${hue}, ${sat}%, ${Math.min(95, lit + 25)}%)`;
+    ctx.shadowBlur = 6 + audio.energy * 8;
     ctx.stroke();
     ctx.restore();
   }
@@ -273,7 +270,7 @@ function drawPlasma(
   const cy = h / 2;
   const blobCount = 5;
   ctx.save();
-  ctx.globalCompositeOperation = "lighter";
+  ctx.globalCompositeOperation = "screen";
 
   for (let i = 0; i < blobCount; i++) {
     const angle = (i / blobCount) * Math.PI * 2 + time * (0.3 + i * 0.1);
@@ -323,7 +320,7 @@ function drawStarburst(
   }
 
   ctx.save();
-  ctx.globalCompositeOperation = "lighter";
+  ctx.globalCompositeOperation = "screen";
   const rotation = time * 0.15;
 
   for (let i = 0; i < rays; i++) {
@@ -335,11 +332,11 @@ function drawStarburst(
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(cx + Math.cos(angle) * len, cy + Math.sin(angle) * len);
-    const color = `hsl(${hue % 360}, ${80 + val * 20}%, ${40 + val * 30}%)`;
+    const color = `hsl(${hue % 360}, ${80 + val * 15}%, ${35 + val * 25}%)`;
     ctx.strokeStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 8 + val * 12;
-    ctx.lineWidth = 1 + val * 2.5;
+    ctx.shadowBlur = 4 + val * 6;
+    ctx.lineWidth = 0.8 + val * 1.8;
     ctx.stroke();
   }
 
@@ -347,7 +344,7 @@ function drawStarburst(
   const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.15);
   coreGrad.addColorStop(
     0,
-    `hsla(${(time * 60) % 360}, 80%, 80%, ${0.4 + audio.bass * 0.4})`,
+    `hsla(${(time * 60) % 360}, 80%, 70%, ${0.3 + audio.bass * 0.3})`,
   );
   coreGrad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
   ctx.fillStyle = coreGrad;
@@ -393,7 +390,7 @@ function drawVortex(
   const maxR = Math.min(w, h) * 0.42;
 
   ctx.save();
-  ctx.globalCompositeOperation = "lighter";
+  ctx.globalCompositeOperation = "screen";
 
   for (const p of particles) {
     p.angle += p.speed * 0.02 * (1 + audio.energy);
