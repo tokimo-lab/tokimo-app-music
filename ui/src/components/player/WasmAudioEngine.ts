@@ -116,6 +116,7 @@ function pcmToAudioBuffer(
 export class WasmAudioEngine {
   private ctx: AudioContext | null = null;
   private gainNode: GainNode | null = null;
+  private analyserNode: AnalyserNode | null = null;
   private sourceNode: AudioBufferSourceNode | null = null;
   private decodedBuffer: AudioBuffer | null = null;
 
@@ -143,7 +144,13 @@ export class WasmAudioEngine {
       this.ctx = new AudioContext();
       this.gainNode = this.ctx.createGain();
       this.gainNode.gain.value = this._volume;
-      this.gainNode.connect(this.ctx.destination);
+
+      this.analyserNode = this.ctx.createAnalyser();
+      this.analyserNode.fftSize = 256;
+      this.analyserNode.smoothingTimeConstant = 0.7;
+
+      this.gainNode.connect(this.analyserNode);
+      this.analyserNode.connect(this.ctx.destination);
     }
     return this.ctx;
   }
@@ -255,6 +262,11 @@ export class WasmAudioEngine {
     this._onError = cb;
   }
 
+  /** Expose the AnalyserNode so visualizer components can read frequency data. */
+  getAnalyser(): AnalyserNode | null {
+    return this.analyserNode;
+  }
+
   destroy(): void {
     this.stopSourceInternal();
     this.stopTimeTracking();
@@ -262,6 +274,7 @@ export class WasmAudioEngine {
     this.ctx = null;
     this.decodedBuffer = null;
     this.gainNode = null;
+    this.analyserNode = null;
     this._onTimeUpdate = null;
     this._onEnded = null;
     this._onLoadStart = null;

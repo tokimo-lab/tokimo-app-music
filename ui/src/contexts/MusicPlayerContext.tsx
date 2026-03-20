@@ -44,6 +44,7 @@ export interface MusicPlayerContextValue extends MusicPlayerState {
   setRepeatMode(mode: RepeatMode): void;
   toggleShuffle(): void;
   currentTrack: MusicTrackOutput | null;
+  getAnalyser(): AnalyserNode | null;
 }
 
 const MusicPlayerContext = createContext<MusicPlayerContextValue | null>(null);
@@ -546,6 +547,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const getAnalyser = useCallback((): AnalyserNode | null => {
+    return engineRef.current?.getAnalyser() ?? null;
+  }, []);
+
   const currentTrack = useMemo(() => {
     if (currentIndex < 0 || currentIndex >= queue.length) return null;
     return queue[currentIndex] ?? null;
@@ -577,6 +582,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setVolume,
       setRepeatMode: setRepeatModeAction,
       toggleShuffle,
+      getAnalyser,
     }),
     [
       queue,
@@ -603,6 +609,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setVolume,
       setRepeatModeAction,
       toggleShuffle,
+      getAnalyser,
     ],
   );
 
