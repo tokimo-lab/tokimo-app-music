@@ -444,6 +444,7 @@ function drawStarburst(
 
   ctx.save();
   ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.45;
   const rotation = time * 0.15;
 
   for (let i = 0; i < rays; i++) {
