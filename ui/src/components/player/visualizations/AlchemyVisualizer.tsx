@@ -102,8 +102,51 @@ function drawRibbons(
 ) {
   const cx = w / 2;
   const cy = h / 2;
-  const scale = Math.min(w, h) * 0.36;
+  const baseScale = Math.min(w, h) * 0.44;
 
+  // ── Ambient glow pass: enlarged + heavily blurred ribbons fill viewport ──
+  for (const r of ribbons) {
+    const mt = ease(r.morphT / r.morphDur);
+    const ax = lerp(r.ax, r.targetAx, mt);
+    const ay = lerp(r.ay, r.targetAy, mt);
+    const bx = lerp(r.bx, r.targetBx, mt);
+    const by = lerp(r.by, r.targetBy, mt);
+    const hue = lerp(r.hue, r.targetHue, mt);
+    const amp = 0.5 + audio.bass * 0.5;
+    const po = r.phase + time;
+    const ambientScale = baseScale * 1.6;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 0.12 + audio.energy * 0.08;
+    ctx.lineWidth = 3 + audio.mid * 4;
+    ctx.beginPath();
+    for (let p = 0; p < POINTS; p++) {
+      const t = (p / POINTS) * Math.PI * 2;
+      const x =
+        cx +
+        ambientScale *
+          amp *
+          (Math.sin(ax * t + po) + 0.3 * Math.sin(bx * t * 2.1 + po * 1.3));
+      const y =
+        cy +
+        ambientScale *
+          amp *
+          (Math.cos(ay * t + po * 0.7) +
+            0.3 * Math.cos(by * t * 1.7 + po * 0.9));
+      if (p === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    const color = `hsl(${hue}, 70%, 35%)`;
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 40 + audio.energy * 30;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── Main sharp pass ──────────────────────────────────────────────────────
   for (const r of ribbons) {
     r.morphT++;
     if (r.morphT >= r.morphDur) {
@@ -126,13 +169,13 @@ function drawRibbons(
     const bx = lerp(r.bx, r.targetBx, mt);
     const by = lerp(r.by, r.targetBy, mt);
     const hue = lerp(r.hue, r.targetHue, mt);
-    const amp = 0.4 + audio.bass * 0.6;
-    const lw = 1 + audio.mid * 2;
+    const amp = 0.5 + audio.bass * 0.5;
+    const lw = 1.2 + audio.mid * 2;
     const po = r.phase + time;
 
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = 0.55 + audio.energy * 0.15;
+    ctx.globalAlpha = 0.6 + audio.energy * 0.15;
     ctx.lineWidth = lw;
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -140,12 +183,12 @@ function drawRibbons(
       const t = (p / POINTS) * Math.PI * 2;
       const x =
         cx +
-        scale *
+        baseScale *
           amp *
           (Math.sin(ax * t + po) + 0.3 * Math.sin(bx * t * 2.1 + po * 1.3));
       const y =
         cy +
-        scale *
+        baseScale *
           amp *
           (Math.cos(ay * t + po * 0.7) +
             0.3 * Math.cos(by * t * 1.7 + po * 0.9));
@@ -154,11 +197,11 @@ function drawRibbons(
     }
     ctx.closePath();
     const sat = 80 + audio.energy * 15;
-    const lit = 40 + audio.energy * 12;
+    const lit = 42 + audio.energy * 13;
     const color = `hsl(${hue}, ${sat}%, ${lit}%)`;
     ctx.strokeStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 6 + audio.energy * 8;
+    ctx.shadowBlur = 8 + audio.energy * 10;
     ctx.stroke();
     ctx.restore();
   }
