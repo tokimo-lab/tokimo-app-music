@@ -102,7 +102,7 @@ function drawRibbons(
 ) {
   const cx = w / 2;
   const cy = h / 2;
-  const baseScale = Math.min(w, h) * 0.44;
+  const baseScale = Math.min(w, h) * 0.3;
 
   // ── Ambient glow: radial gradients sampled from ribbon positions ────────
   const ambientRadius = Math.min(w, h) * 0.35;
