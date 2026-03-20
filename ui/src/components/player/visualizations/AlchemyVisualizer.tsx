@@ -118,8 +118,8 @@ function drawRibbons(
 
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = 0.12 + audio.energy * 0.08;
-    ctx.lineWidth = 3 + audio.mid * 4;
+    ctx.globalAlpha = 0.04 + audio.energy * 0.03;
+    ctx.lineWidth = 6 + audio.mid * 6;
     ctx.beginPath();
     for (let p = 0; p < POINTS; p++) {
       const t = (p / POINTS) * Math.PI * 2;
@@ -138,10 +138,10 @@ function drawRibbons(
       else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    const color = `hsl(${hue}, 70%, 35%)`;
+    const color = `hsl(${hue}, 60%, 30%)`;
     ctx.strokeStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 40 + audio.energy * 30;
+    ctx.shadowBlur = 120 + audio.energy * 60;
     ctx.stroke();
     ctx.restore();
   }
