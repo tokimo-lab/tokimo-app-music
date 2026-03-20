@@ -69,20 +69,22 @@ function drawAmbient(
 ) {
   const cx = w / 2;
   const cy = h / 2;
-  const radius = Math.min(w, h) * 0.4;
+  // Large radius that overflows viewport — only partial blobs visible
+  const radius = Math.max(w, h) * 0.7;
 
   ctx.save();
   ctx.globalCompositeOperation = "screen";
   for (let i = 0; i < AMBIENT_BLOBS; i++) {
-    const angle = (i / AMBIENT_BLOBS) * Math.PI * 2 + time * (0.2 + i * 0.07);
-    const dist = Math.min(w, h) * 0.18 * (1 + audio.bass * 0.5);
+    const angle = (i / AMBIENT_BLOBS) * Math.PI * 2 + time * (0.15 + i * 0.05);
+    // Orbit far enough that blobs extend well beyond edges
+    const dist = Math.max(w, h) * 0.3 * (1 + audio.bass * 0.3);
     const bx = cx + Math.cos(angle) * dist;
     const by = cy + Math.sin(angle) * dist;
     const hue = (time * 25 + i * 72) % 360;
-    const alpha = 0.06 + audio.energy * 0.04;
+    const alpha = 0.025 + audio.energy * 0.02;
     const grad = ctx.createRadialGradient(bx, by, 0, bx, by, radius);
-    grad.addColorStop(0, `hsla(${hue}, 60%, 35%, ${alpha})`);
-    grad.addColorStop(0.5, `hsla(${hue}, 50%, 25%, ${alpha * 0.35})`);
+    grad.addColorStop(0, `hsla(${hue}, 50%, 25%, ${alpha})`);
+    grad.addColorStop(0.6, `hsla(${hue}, 40%, 18%, ${alpha * 0.3})`);
     grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
