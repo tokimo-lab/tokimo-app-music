@@ -21,8 +21,15 @@ export function AudioVisualizer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
   const dataRef = useRef<Uint8Array | null>(null);
-  // Smooth falloff values for when audio pauses
   const smoothRef = useRef<Float32Array | null>(null);
+
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -50,13 +57,13 @@ export function AudioVisualizer({
 
       ctx.clearRect(0, 0, w, h);
 
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
 
       if (!smoothRef.current || smoothRef.current.length !== BAR_COUNT) {
         smoothRef.current = new Float32Array(BAR_COUNT);
       }
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         const bufLen = analyser.frequencyBinCount;
         if (!dataRef.current || dataRef.current.length !== bufLen) {
           dataRef.current = new Uint8Array(bufLen);
@@ -65,23 +72,21 @@ export function AudioVisualizer({
 
         const step = Math.floor(bufLen / BAR_COUNT);
         for (let i = 0; i < BAR_COUNT; i++) {
-          // Average a few bins for smoother bars
           let sum = 0;
           const start = i * step;
           for (let j = start; j < start + step && j < bufLen; j++) {
             sum += dataRef.current[j];
           }
           const raw = sum / step / 255;
-          // Smooth towards target value
           smoothRef.current[i] += (raw - smoothRef.current[i]) * 0.3;
         }
       } else {
-        // Decay bars when paused
         for (let i = 0; i < BAR_COUNT; i++) {
           smoothRef.current[i] *= 0.92;
         }
       }
 
+      const color = accentColorRef.current;
       const barWidth = (w - BAR_GAP * (BAR_COUNT - 1)) / BAR_COUNT;
       const maxBarH = h * 0.85;
 
@@ -91,13 +96,12 @@ export function AudioVisualizer({
         const x = i * (barWidth + BAR_GAP);
         const y = h / 2 - barH / 2;
 
-        // Gradient per bar: accent color at center fading to transparent
         const gradient = ctx.createLinearGradient(x, y, x, y + barH);
-        gradient.addColorStop(0, `${accentColor}40`);
-        gradient.addColorStop(0.3, `${accentColor}cc`);
-        gradient.addColorStop(0.5, accentColor);
-        gradient.addColorStop(0.7, `${accentColor}cc`);
-        gradient.addColorStop(1, `${accentColor}40`);
+        gradient.addColorStop(0, `${color}40`);
+        gradient.addColorStop(0.3, `${color}cc`);
+        gradient.addColorStop(0.5, color);
+        gradient.addColorStop(0.7, `${color}cc`);
+        gradient.addColorStop(1, `${color}40`);
 
         ctx.beginPath();
         ctx.roundRect(x, y, barWidth, barH, BORDER_RADIUS);
@@ -114,7 +118,7 @@ export function AudioVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

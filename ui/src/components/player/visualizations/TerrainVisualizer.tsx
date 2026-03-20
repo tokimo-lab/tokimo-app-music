@@ -18,6 +18,14 @@ export function TerrainVisualizer({
   const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const historyRef = useRef<Float32Array[]>([]);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -48,7 +56,7 @@ export function TerrainVisualizer({
     }
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const freqBinCount = analyser ? analyser.frequencyBinCount : 128;
 
       if (!dataRef.current || dataRef.current.length !== freqBinCount) {
@@ -60,7 +68,7 @@ export function TerrainVisualizer({
       const data = dataRef.current;
       const history = historyRef.current;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         analyser.getByteFrequencyData(data);
       }
 
@@ -73,7 +81,7 @@ export function TerrainVisualizer({
         for (let j = start; j < start + binsPerPoint && j < freqBinCount; j++) {
           sum += data[j];
         }
-        newRow[i] = isPlaying ? sum / binsPerPoint : 0;
+        newRow[i] = isPlayingRef.current ? sum / binsPerPoint : 0;
       }
 
       // Shift history: move rows forward (index 0 = front/closest)
@@ -83,7 +91,7 @@ export function TerrainVisualizer({
       history[ROW_COUNT - 1] = newRow;
 
       // When paused, decay all rows
-      if (!isPlaying) {
+      if (!isPlayingRef.current) {
         for (let r = 0; r < ROW_COUNT; r++) {
           for (let i = 0; i < POINTS_PER_ROW; i++) {
             history[r][i] *= DECAY;
@@ -144,7 +152,7 @@ export function TerrainVisualizer({
         const fillOpacity = Math.round((0.05 + 0.12 * t) * 255)
           .toString(16)
           .padStart(2, "0");
-        ctx.fillStyle = `${accentColor}${fillOpacity}`;
+        ctx.fillStyle = `${accentColorRef.current}${fillOpacity}`;
         ctx.fill();
 
         // Stroke the mountain line
@@ -160,7 +168,7 @@ export function TerrainVisualizer({
           ctx.bezierCurveTo(cpx1, y0, cpx2, y1, x1, y1);
         }
 
-        ctx.strokeStyle = `${accentColor}${opacity}`;
+        ctx.strokeStyle = `${accentColorRef.current}${opacity}`;
         ctx.lineWidth = 1.5 * scale;
         ctx.lineJoin = "round";
         ctx.stroke();
@@ -175,7 +183,7 @@ export function TerrainVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

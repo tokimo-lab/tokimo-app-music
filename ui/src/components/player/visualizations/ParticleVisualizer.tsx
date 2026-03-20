@@ -55,6 +55,14 @@ export function ParticleVisualizer({
   const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const particlesRef = useRef<Particle[]>([]);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -80,7 +88,7 @@ export function ParticleVisualizer({
     const particles = particlesRef.current;
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const freqBinCount = analyser ? analyser.frequencyBinCount : 128;
 
       if (!dataRef.current || dataRef.current.length !== freqBinCount) {
@@ -91,9 +99,9 @@ export function ParticleVisualizer({
 
       const data = dataRef.current;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         analyser.getByteFrequencyData(data);
-      } else if (!isPlaying) {
+      } else if (!isPlayingRef.current) {
         // Decay data when paused
         for (let i = 0; i < data.length; i++) {
           data[i] = Math.max(0, data[i] - 3);
@@ -116,7 +124,7 @@ export function ParticleVisualizer({
       const cy = cssH / 2;
 
       // Spawn particles when playing
-      if (isPlaying) {
+      if (isPlayingRef.current) {
         const spawnCount =
           bassEnergy > BASS_THRESHOLD
             ? SPAWN_RATE + 3
@@ -138,7 +146,7 @@ export function ParticleVisualizer({
       // Update and draw particles
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        const speedMult = isPlaying ? 1 + overallEnergy * 2 : 0.5;
+        const speedMult = isPlayingRef.current ? 1 + overallEnergy * 2 : 0.5;
         p.x += p.vx * speedMult;
         p.y += p.vy * speedMult;
         p.life++;
@@ -149,7 +157,7 @@ export function ParticleVisualizer({
         const fadeOut = 1 - lifeRatio;
         const alpha = p.opacity * fadeIn * fadeOut;
 
-        if (!isPlaying) {
+        if (!isPlayingRef.current) {
           p.opacity *= 0.98;
         }
 
@@ -164,8 +172,8 @@ export function ParticleVisualizer({
         const alphaHex = Math.round(Math.min(alpha, 1) * 255)
           .toString(16)
           .padStart(2, "0");
-        grad.addColorStop(0, `${accentColor}${alphaHex}`);
-        grad.addColorStop(1, `${accentColor}00`);
+        grad.addColorStop(0, `${accentColorRef.current}${alphaHex}`);
+        grad.addColorStop(1, `${accentColorRef.current}00`);
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -190,7 +198,7 @@ export function ParticleVisualizer({
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
-            ctx.strokeStyle = `${accentColor}${lineHex}`;
+            ctx.strokeStyle = `${accentColorRef.current}${lineHex}`;
             ctx.lineWidth = 0.5;
             ctx.stroke();
           }
@@ -208,7 +216,7 @@ export function ParticleVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

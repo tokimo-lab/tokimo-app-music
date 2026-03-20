@@ -40,6 +40,14 @@ export function WaveVisualizer({
   // Running phase offset per layer
   const phaseRef = useRef(new Float32Array(WAVE_LAYERS));
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -63,11 +71,11 @@ export function WaveVisualizer({
     resizeObserver.observe(canvas);
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const bands = bandRef.current;
       const phases = phaseRef.current;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         const bufLen = analyser.frequencyBinCount;
         if (!dataRef.current || dataRef.current.length !== bufLen) {
           dataRef.current = new Uint8Array(bufLen) as Uint8Array<ArrayBuffer>;
@@ -102,7 +110,7 @@ export function WaveVisualizer({
 
       const centerY = cssH * 0.5;
       const maxAmp = cssH * 0.35;
-      const [r, g, bl] = hexToRgb(accentColor);
+      const [r, g, bl] = hexToRgb(accentColorRef.current);
 
       // Draw layers back-to-front (lowest opacity first)
       for (let layer = 0; layer < WAVE_LAYERS; layer++) {
@@ -185,7 +193,7 @@ export function WaveVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

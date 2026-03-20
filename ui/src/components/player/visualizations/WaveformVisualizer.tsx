@@ -16,6 +16,14 @@ export function WaveformVisualizer({
   const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const smoothRef = useRef<Float32Array | null>(null);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -39,7 +47,7 @@ export function WaveformVisualizer({
     resizeObserver.observe(canvas);
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const bufLen = analyser ? analyser.fftSize : 256;
 
       if (!dataRef.current || dataRef.current.length !== bufLen) {
@@ -50,13 +58,13 @@ export function WaveformVisualizer({
       const data = dataRef.current;
       const smooth = smoothRef.current!;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         analyser.getByteTimeDomainData(data);
       }
 
-      const alpha = isPlaying ? SMOOTHING : 0.06;
+      const alpha = isPlayingRef.current ? SMOOTHING : 0.06;
       for (let i = 0; i < bufLen; i++) {
-        const target = isPlaying ? data[i] : 128;
+        const target = isPlayingRef.current ? data[i] : 128;
         smooth[i] += (target - smooth[i]) * alpha;
       }
 
@@ -68,7 +76,7 @@ export function WaveformVisualizer({
       ctx.beginPath();
       ctx.moveTo(0, centerY);
       ctx.lineTo(cssW, centerY);
-      ctx.strokeStyle = `${accentColor}18`;
+      ctx.strokeStyle = `${accentColorRef.current}18`;
       ctx.lineWidth = 1;
       ctx.stroke();
 
@@ -94,10 +102,10 @@ export function WaveformVisualizer({
 
       // Glow layer
       ctx.save();
-      ctx.shadowColor = accentColor;
+      ctx.shadowColor = accentColorRef.current;
       ctx.shadowBlur = 12;
       buildPath();
-      ctx.strokeStyle = `${accentColor}40`;
+      ctx.strokeStyle = `${accentColorRef.current}40`;
       ctx.lineWidth = 6;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
@@ -106,7 +114,7 @@ export function WaveformVisualizer({
 
       // Main line
       buildPath();
-      ctx.strokeStyle = accentColor;
+      ctx.strokeStyle = accentColorRef.current;
       ctx.lineWidth = 2;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
@@ -121,7 +129,7 @@ export function WaveformVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

@@ -53,6 +53,14 @@ export function MatrixVisualizer({
   const columnsRef = useRef<RainColumn[]>([]);
   const frameCountRef = useRef(0);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -82,7 +90,7 @@ export function MatrixVisualizer({
     }
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const freqBinCount = analyser ? analyser.frequencyBinCount : 128;
 
       if (!dataRef.current || dataRef.current.length !== freqBinCount) {
@@ -95,9 +103,9 @@ export function MatrixVisualizer({
       const columns = columnsRef.current;
       const frame = frameCountRef.current++;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         analyser.getByteFrequencyData(data);
-      } else if (!isPlaying) {
+      } else if (!isPlayingRef.current) {
         // Fade frequency data toward zero when paused
         for (let i = 0; i < data.length; i++) {
           data[i] = Math.floor(data[i] * 0.92);
@@ -112,10 +120,10 @@ export function MatrixVisualizer({
       }
       bassEnergy /= bassEnd * 255;
 
-      const { r, g, b } = hexToRgb(accentColor);
+      const { r, g, b } = hexToRgb(accentColorRef.current);
 
       // Fade effect: semi-transparent black overlay
-      const fadeAlpha = isPlaying ? 0.05 : 0.15;
+      const fadeAlpha = isPlayingRef.current ? 0.05 : 0.15;
       if (frame % 120 === 0) {
         ctx.fillStyle = "rgba(0,0,0,1)";
         ctx.fillRect(0, 0, cssW, cssH);
@@ -142,13 +150,13 @@ export function MatrixVisualizer({
         colEnergy /= binsPerCol * 255;
 
         // Audio modulation
-        const speedMul = isPlaying ? 1 + colEnergy * 3 : 0.15;
+        const speedMul = isPlayingRef.current ? 1 + colEnergy * 3 : 0.15;
         col.speed = 1.5 + colEnergy * 4;
         col.trailLen =
           MIN_TRAIL + Math.floor(colEnergy * (MAX_TRAIL - MIN_TRAIL));
 
         // Bass burst: reset some columns to top
-        if (isPlaying && bassEnergy > 0.7 && Math.random() < 0.1) {
+        if (isPlayingRef.current && bassEnergy > 0.7 && Math.random() < 0.1) {
           col.y = 0;
           col.speed = 4 + Math.random() * 3;
           col.trailLen = MAX_TRAIL;
@@ -175,7 +183,7 @@ export function MatrixVisualizer({
           if (i === 0) {
             // Lead character: full brightness
             ctx.fillStyle = `rgb(${r},${g},${b})`;
-            ctx.shadowColor = accentColor;
+            ctx.shadowColor = accentColorRef.current;
             ctx.shadowBlur = 8;
           } else {
             // Trail: fade from bright to dim
@@ -210,7 +218,7 @@ export function MatrixVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

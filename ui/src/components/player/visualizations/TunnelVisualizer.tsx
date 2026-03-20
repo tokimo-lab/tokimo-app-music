@@ -11,7 +11,7 @@ const SMOOTH_ALPHA = 0.2;
 // Effect modes
 const EFFECT_CLOUD = 0;
 const EFFECT_SPIRAL = 1;
-const EFFECT_CRYSTAL = 2;
+const _EFFECT_CRYSTAL = 2;
 const EFFECT_COUNT = 3;
 
 interface EffectParams {

@@ -19,6 +19,14 @@ export function CircularVisualizer({
   const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const smoothRef = useRef<Float32Array | null>(null);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -46,7 +54,7 @@ export function CircularVisualizer({
     }
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const freqBinCount = analyser ? analyser.frequencyBinCount : 128;
 
       if (!dataRef.current || dataRef.current.length !== freqBinCount) {
@@ -58,7 +66,7 @@ export function CircularVisualizer({
       const data = dataRef.current;
       const smooth = smoothRef.current!;
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         analyser.getByteFrequencyData(data);
       }
 
@@ -70,8 +78,8 @@ export function CircularVisualizer({
         for (let j = start; j < start + binsPerBar && j < freqBinCount; j++) {
           sum += data[j];
         }
-        const target = isPlaying ? sum / binsPerBar : 0;
-        const alpha = isPlaying ? SMOOTH_ALPHA : 0.08;
+        const target = isPlayingRef.current ? sum / binsPerBar : 0;
+        const alpha = isPlayingRef.current ? SMOOTH_ALPHA : 0.08;
         smooth[i] += (target - smooth[i]) * alpha;
       }
 
@@ -88,7 +96,7 @@ export function CircularVisualizer({
       // Inner circle outline
       ctx.beginPath();
       ctx.arc(cx, cy, baseRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = `${accentColor}25`;
+      ctx.strokeStyle = `${accentColorRef.current}25`;
       ctx.lineWidth = 1;
       ctx.stroke();
 
@@ -118,7 +126,7 @@ export function CircularVisualizer({
         ctx.beginPath();
         ctx.moveTo(ox1, oy1);
         ctx.lineTo(ox2, oy2);
-        ctx.strokeStyle = `${accentColor}${opHex}`;
+        ctx.strokeStyle = `${accentColorRef.current}${opHex}`;
         ctx.lineWidth = barWidth;
         ctx.lineCap = "round";
         ctx.stroke();
@@ -136,7 +144,7 @@ export function CircularVisualizer({
         ctx.beginPath();
         ctx.moveTo(ix1, iy1);
         ctx.lineTo(ix2, iy2);
-        ctx.strokeStyle = `${accentColor}${innerOpHex}`;
+        ctx.strokeStyle = `${accentColorRef.current}${innerOpHex}`;
         ctx.lineWidth = barWidth * 0.8;
         ctx.lineCap = "round";
         ctx.stroke();
@@ -151,7 +159,7 @@ export function CircularVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas

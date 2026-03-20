@@ -63,6 +63,14 @@ export function SpectrogramVisualizer({
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
   const fadeOpacityRef = useRef(1);
 
+  // Store props in refs so the RAF loop always reads current values
+  const getAnalyserRef = useRef(getAnalyser);
+  const isPlayingRef = useRef(isPlaying);
+  const accentColorRef = useRef(accentColor);
+  getAnalyserRef.current = getAnalyser;
+  isPlayingRef.current = isPlaying;
+  accentColorRef.current = accentColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -124,7 +132,7 @@ export function SpectrogramVisualizer({
     let binMap: Float32Array | null = null;
 
     const draw = () => {
-      const analyser = getAnalyser();
+      const analyser = getAnalyserRef.current();
       const off = offscreenRef.current;
       if (!off) {
         rafRef.current = requestAnimationFrame(draw);
@@ -136,9 +144,9 @@ export function SpectrogramVisualizer({
         return;
       }
 
-      const [r, g, b] = hexToRgb(accentColor);
+      const [r, g, b] = hexToRgb(accentColorRef.current);
 
-      if (analyser && isPlaying) {
+      if (analyser && isPlayingRef.current) {
         fadeOpacityRef.current = 1;
         const bufLen = analyser.frequencyBinCount;
         if (!dataRef.current || dataRef.current.length !== bufLen) {
@@ -205,7 +213,7 @@ export function SpectrogramVisualizer({
       cancelAnimationFrame(rafRef.current);
       resizeObserver.disconnect();
     };
-  }, [getAnalyser, isPlaying, accentColor]);
+  }, []);
 
   return (
     <canvas
