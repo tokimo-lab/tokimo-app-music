@@ -84,7 +84,9 @@ export function ParticleVisualizer({
       const freqBinCount = analyser ? analyser.frequencyBinCount : 128;
 
       if (!dataRef.current || dataRef.current.length !== freqBinCount) {
-        dataRef.current = new Uint8Array(freqBinCount) as Uint8Array<ArrayBuffer>;
+        dataRef.current = new Uint8Array(
+          freqBinCount,
+        ) as Uint8Array<ArrayBuffer>;
       }
 
       const data = dataRef.current;
