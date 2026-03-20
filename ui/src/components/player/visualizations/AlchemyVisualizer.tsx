@@ -6,6 +6,8 @@ const SCENE_DURATION = 900; // frames (~15s at 60fps)
 const CROSSFADE_FRAMES = 120; // ~2s transition
 const TRAIL_ALPHA = 0.06;
 const POINTS = 200;
+const SPIRO_POINTS = 300;
+const SPIRO_LAYERS = 2;
 
 // ── Audio helpers ────────────────────────────────────────────────────────────
 
@@ -219,20 +221,19 @@ function drawSpirograph(
   const d = lerp(spiro.d, spiro.targetd, mt);
   const cx = w / 2;
   const cy = h / 2;
-  const scale = Math.min(w, h) * 0.25 * (0.6 + audio.energy * 0.4);
-  const layers = 3;
+  const scale = Math.min(w, h) * 0.3 * (0.6 + audio.energy * 0.4);
 
-  for (let layer = 0; layer < layers; layer++) {
-    const hue = (spiro.hueBase + layer * 120 + time * 20) % 360;
+  for (let layer = 0; layer < SPIRO_LAYERS; layer++) {
+    const hue = (spiro.hueBase + layer * 150 + time * 20) % 360;
     const layerPhase = time * (1 + layer * 0.3);
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.lineWidth = 1.5 + audio.bass * 2;
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 0.6 + audio.energy * 0.2;
+    ctx.lineWidth = 0.8 + audio.bass * 1.2;
     ctx.beginPath();
-    const pts = 500;
-    for (let i = 0; i < pts; i++) {
-      const t = (i / pts) * Math.PI * 2 * Math.ceil(r);
-      const rr = r + layer * 0.2;
+    for (let i = 0; i < SPIRO_POINTS; i++) {
+      const t = (i / SPIRO_POINTS) * Math.PI * 2 * Math.ceil(r);
+      const rr = r + layer * 0.3;
       const x =
         cx +
         scale *
@@ -246,10 +247,12 @@ function drawSpirograph(
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
-    const color = `hsl(${hue}, ${85 + audio.mid * 15}%, ${50 + audio.high * 20}%)`;
+    const sat = 75 + audio.mid * 15;
+    const lit = 40 + audio.high * 15;
+    const color = `hsl(${hue}, ${sat}%, ${lit}%)`;
     ctx.strokeStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 10 + audio.energy * 15;
+    ctx.shadowBlur = 4 + audio.energy * 6;
     ctx.stroke();
     ctx.restore();
   }
@@ -448,12 +451,20 @@ export function AlchemyVisualizer({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Offscreen buffers for proper crossfade (trails can't fade on a shared canvas)
+    const bufA = document.createElement("canvas");
+    const bufB = document.createElement("canvas");
+    const ctxA = bufA.getContext("2d")!;
+    const ctxB = bufB.getContext("2d")!;
+
     let raf = 0;
     let time = 0;
     let sceneTimer = 0;
     let currentScene = Math.floor(Math.random() * SCENE_COUNT);
     let nextScene = -1;
     let fadeProgress = 0;
+    let bufW = 0;
+    let bufH = 0;
 
     // Scene-specific state
     const ribbons = Array.from({ length: 5 }, (_, i) => initRibbon(i, 5));
@@ -466,29 +477,50 @@ export function AlchemyVisualizer({
       return n;
     }
 
+    function syncBufferSize(w: number, h: number, dpr: number) {
+      const pw = Math.round(w * dpr);
+      const ph = Math.round(h * dpr);
+      if (bufW === pw && bufH === ph) return;
+      bufW = pw;
+      bufH = ph;
+      for (const buf of [bufA, bufB]) {
+        buf.width = pw;
+        buf.height = ph;
+      }
+      ctxA.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctxB.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
     const ro = new ResizeObserver(([entry]) => {
       const dpr = window.devicePixelRatio || 1;
       const { width, height } = entry.contentRect;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      syncBufferSize(width, height, dpr);
     });
     ro.observe(canvas);
 
-    function drawScene(scene: number, w: number, h: number, audio: AudioBands) {
+    function drawSceneTo(
+      target: CanvasRenderingContext2D,
+      scene: number,
+      w: number,
+      h: number,
+      audio: AudioBands,
+    ) {
       switch (scene) {
         case 0:
-          drawRibbons(ctx!, w, h, time, audio, ribbons);
+          drawRibbons(target, w, h, time, audio, ribbons);
           break;
         case 1:
-          drawSpirograph(ctx!, w, h, time, audio, spiro);
+          drawSpirograph(target, w, h, time, audio, spiro);
           break;
         case 2:
-          drawPlasma(ctx!, w, h, time, audio);
+          drawPlasma(target, w, h, time, audio);
           break;
         case 3:
           drawStarburst(
-            ctx!,
+            target,
             w,
             h,
             time,
@@ -498,7 +530,7 @@ export function AlchemyVisualizer({
           );
           break;
         case 4:
-          drawVortex(ctx!, w, h, time, audio, vortexParticles);
+          drawVortex(target, w, h, time, audio, vortexParticles);
           break;
       }
     }
@@ -511,6 +543,9 @@ export function AlchemyVisualizer({
         return;
       }
 
+      const dpr = window.devicePixelRatio || 1;
+      syncBufferSize(w, h, dpr);
+
       const analyser = getAnalyserRef.current();
       const audio = getAudioBands(analyser, isPlayingRef.current);
 
@@ -521,39 +556,52 @@ export function AlchemyVisualizer({
       if (nextScene < 0 && sceneTimer >= SCENE_DURATION) {
         nextScene = pickNextScene(currentScene);
         fadeProgress = 0;
+        // Clear incoming buffer so it starts fresh
+        ctxB.clearRect(0, 0, w, h);
       }
+
+      // Clear main canvas
+      ctx.clearRect(0, 0, w, h);
 
       if (nextScene >= 0) {
         fadeProgress++;
         const fadePct = Math.min(1, fadeProgress / CROSSFADE_FRAMES);
+        const fadeEased = ease(fadePct);
 
-        // Outgoing scene fades out
-        ctx.globalAlpha = 1 - fadePct;
-        ctx.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA})`;
-        ctx.fillRect(0, 0, w, h);
-        drawScene(currentScene, w, h, audio);
+        // Draw current scene into buffer A with trail overlay
+        ctxA.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA + audio.energy * 0.04})`;
+        ctxA.fillRect(0, 0, w, h);
+        drawSceneTo(ctxA, currentScene, w, h, audio);
 
-        // Incoming scene fades in
-        ctx.globalAlpha = fadePct;
-        drawScene(nextScene, w, h, audio);
+        // Draw next scene into buffer B with trail overlay
+        ctxB.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA + audio.energy * 0.04})`;
+        ctxB.fillRect(0, 0, w, h);
+        drawSceneTo(ctxB, nextScene, w, h, audio);
 
+        // Composite: old fades out, new fades in
+        ctx.globalAlpha = 1 - fadeEased;
+        ctx.drawImage(bufA, 0, 0, w, h);
+        ctx.globalAlpha = fadeEased;
+        ctx.drawImage(bufB, 0, 0, w, h);
         ctx.globalAlpha = 1;
 
         if (fadePct >= 1) {
+          // Swap: buffer B becomes the new "current" buffer
+          // Copy B content into A for the next steady-state phase
+          ctxA.clearRect(0, 0, w, h);
+          ctxA.drawImage(bufB, 0, 0);
+          ctxB.clearRect(0, 0, w, h);
           currentScene = nextScene;
           nextScene = -1;
           sceneTimer = 0;
           fadeProgress = 0;
-          // Clear canvas to remove leftover trails from old scene
-          ctx.fillStyle = "rgba(0, 0, 0, 1)";
-          ctx.fillRect(0, 0, w, h);
         }
       } else {
-        // Single scene rendering with trails
-        ctx.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA + audio.energy * 0.04})`;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = 1;
-        drawScene(currentScene, w, h, audio);
+        // Single scene: draw into buffer A, then copy to main canvas
+        ctxA.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA + audio.energy * 0.04})`;
+        ctxA.fillRect(0, 0, w, h);
+        drawSceneTo(ctxA, currentScene, w, h, audio);
+        ctx.drawImage(bufA, 0, 0, w, h);
       }
 
       raf = requestAnimationFrame(tick);
