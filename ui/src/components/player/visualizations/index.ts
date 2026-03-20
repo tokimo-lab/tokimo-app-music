@@ -1,4 +1,4 @@
-export { AlchemyVisualizer, type AlchemySceneInfo } from "./AlchemyVisualizer";
+export { type AlchemySceneInfo, AlchemyVisualizer } from "./AlchemyVisualizer";
 export { CircularVisualizer } from "./CircularVisualizer";
 export { DnaVisualizer } from "./DnaVisualizer";
 export { FlameVisualizer } from "./FlameVisualizer";

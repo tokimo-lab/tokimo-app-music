@@ -66,7 +66,7 @@ export function AudioVisualizer({
       if (analyser && isPlayingRef.current) {
         const bufLen = analyser.frequencyBinCount;
         if (!dataRef.current || dataRef.current.length !== bufLen) {
-          dataRef.current = new Uint8Array(bufLen);
+          dataRef.current = new Uint8Array(bufLen) as Uint8Array<ArrayBuffer>;
         }
         analyser.getByteFrequencyData(dataRef.current);
 

@@ -564,6 +564,7 @@ interface Props {
   getAnalyser: () => AnalyserNode | null;
   isPlaying: boolean;
   accentColor: string;
+  ambientBgEnabled?: boolean;
   onSceneInfo?: (info: AlchemySceneInfo) => void;
 }
 
@@ -571,16 +572,19 @@ export function AlchemyVisualizer({
   getAnalyser,
   isPlaying,
   accentColor,
+  ambientBgEnabled = false,
   onSceneInfo,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getAnalyserRef = useRef(getAnalyser);
   const isPlayingRef = useRef(isPlaying);
   const accentColorRef = useRef(accentColor);
+  const ambientBgRef = useRef(ambientBgEnabled);
   const onSceneInfoRef = useRef(onSceneInfo);
   getAnalyserRef.current = getAnalyser;
   isPlayingRef.current = isPlaying;
   accentColorRef.current = accentColor;
+  ambientBgRef.current = ambientBgEnabled;
   onSceneInfoRef.current = onSceneInfo;
 
   useEffect(() => {
@@ -648,8 +652,10 @@ export function AlchemyVisualizer({
       h: number,
       audio: AudioBands,
     ) {
-      // Shared ambient glow behind all scenes
-      drawAmbient(target, w, h, frame, audio, ambientBubbles);
+      // Shared ambient glow behind all scenes (toggled by user)
+      if (ambientBgRef.current) {
+        drawAmbient(target, w, h, frame, audio, ambientBubbles);
+      }
       switch (scene) {
         case 0:
           drawRibbons(target, w, h, time, audio, ribbons);
