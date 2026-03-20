@@ -55,6 +55,41 @@ function randomFreq(): number {
   return 1 + Math.floor(Math.random() * 7);
 }
 
+// ── Shared ambient glow layer ─────────────────────────────────────────────
+// Orbiting radial gradient blobs that provide color atmosphere behind all scenes
+
+const AMBIENT_BLOBS = 5;
+
+function drawAmbient(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  time: number,
+  audio: AudioBands,
+) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) * 0.4;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (let i = 0; i < AMBIENT_BLOBS; i++) {
+    const angle = (i / AMBIENT_BLOBS) * Math.PI * 2 + time * (0.2 + i * 0.07);
+    const dist = Math.min(w, h) * 0.18 * (1 + audio.bass * 0.5);
+    const bx = cx + Math.cos(angle) * dist;
+    const by = cy + Math.sin(angle) * dist;
+    const hue = (time * 25 + i * 72) % 360;
+    const alpha = 0.06 + audio.energy * 0.04;
+    const grad = ctx.createRadialGradient(bx, by, 0, bx, by, radius);
+    grad.addColorStop(0, `hsla(${hue}, 60%, 35%, ${alpha})`);
+    grad.addColorStop(0.5, `hsla(${hue}, 50%, 25%, ${alpha * 0.35})`);
+    grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  }
+  ctx.restore();
+}
+
 // ── Scene: Lissajous Ribbons ─────────────────────────────────────────────────
 // Flowing neon parametric curves that morph between shapes
 
@@ -103,34 +138,6 @@ function drawRibbons(
   const cx = w / 2;
   const cy = h / 2;
   const baseScale = Math.min(w, h) * 0.3;
-
-  // ── Ambient glow: radial gradients sampled from ribbon positions ────────
-  const ambientRadius = Math.min(w, h) * 0.35;
-  ctx.save();
-  ctx.globalCompositeOperation = "screen";
-  for (const r of ribbons) {
-    const mt = ease(r.morphT / r.morphDur);
-    const ax = lerp(r.ax, r.targetAx, mt);
-    const ay = lerp(r.ay, r.targetAy, mt);
-    const hue = lerp(r.hue, r.targetHue, mt);
-    const amp = 0.5 + audio.bass * 0.5;
-    const po = r.phase + time;
-    const sampleScale = baseScale * 1.2;
-    // Sample 2 points per ribbon for ambient blobs
-    for (const st of [0.25, 0.75]) {
-      const t = st * Math.PI * 2;
-      const bx = cx + sampleScale * amp * Math.sin(ax * t + po);
-      const by = cy + sampleScale * amp * Math.cos(ay * t + po * 0.7);
-      const alpha = 0.06 + audio.energy * 0.04;
-      const grad = ctx.createRadialGradient(bx, by, 0, bx, by, ambientRadius);
-      grad.addColorStop(0, `hsla(${hue}, 60%, 35%, ${alpha})`);
-      grad.addColorStop(0.5, `hsla(${hue}, 50%, 25%, ${alpha * 0.4})`);
-      grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-    }
-  }
-  ctx.restore();
 
   // ── Main sharp pass ──────────────────────────────────────────────────────
   for (const r of ribbons) {
@@ -552,6 +559,8 @@ export function AlchemyVisualizer({
       h: number,
       audio: AudioBands,
     ) {
+      // Shared ambient glow behind all scenes
+      drawAmbient(target, w, h, time, audio);
       switch (scene) {
         case 0:
           drawRibbons(target, w, h, time, audio, ribbons);
