@@ -37,6 +37,10 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::album_genres::Entity")]
+    AlbumGenres,
+    #[sea_orm(has_many = "super::album_tags::Entity")]
+    AlbumTags,
     #[sea_orm(has_many = "super::media_arts::Entity")]
     MediaArts,
     #[sea_orm(has_many = "super::media_credits::Entity")]
@@ -51,6 +55,18 @@ pub enum Relation {
     MediaLibraries,
     #[sea_orm(has_many = "super::music_tracks::Entity")]
     MusicTracks,
+}
+
+impl Related<super::album_genres::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AlbumGenres.def()
+    }
+}
+
+impl Related<super::album_tags::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AlbumTags.def()
+    }
 }
 
 impl Related<super::media_arts::Entity> for Entity {
@@ -74,6 +90,24 @@ impl Related<super::media_libraries::Entity> for Entity {
 impl Related<super::music_tracks::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::MusicTracks.def()
+    }
+}
+
+impl Related<super::genres::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::album_genres::Relation::Genres.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::album_genres::Relation::MusicAlbums.def().rev())
+    }
+}
+
+impl Related<super::media_tags::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::album_tags::Relation::MediaTags.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::album_tags::Relation::MusicAlbums.def().rev())
     }
 }
 
