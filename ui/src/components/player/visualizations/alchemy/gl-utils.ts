@@ -9,6 +9,7 @@ import {
   LinearFilter,
 } from "three";
 import type { SceneBuffer } from "./scene-buffer";
+import type { MorphModifier } from "./transitions";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -16,13 +17,11 @@ export const CAM_FOV = 60;
 export const BASE_Z = 10;
 const MAX_DEPTH = 1200;
 const DEPTH_RANGE = 8;
-const MAX_PTS = 40000;
+const MAX_PTS = 60000;
 const MAX_SEGS = 8000;
 const LINE_GLOW_SIZE = 48;
 /** Spacing between glow sprites along a line (fraction of glow radius) */
-const GLOW_SPACING = 0.35;
-/** World-space scatter amplitude during morph (peaks at t=0.5) */
-const MORPH_SCATTER = 2.0;
+const GLOW_SPACING = 0.12;
 
 // ── Glow texture ─────────────────────────────────────────────────────────────
 
@@ -40,11 +39,12 @@ export function makeGlowTexture(size = 64): CanvasTexture {
     center,
     center,
   );
+  // Wide bright core → smooth falloff for continuous line glow
   grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.12, "rgba(255,255,255,1)");
-  grad.addColorStop(0.25, "rgba(255,255,255,0.7)");
-  grad.addColorStop(0.45, "rgba(255,255,255,0.3)");
-  grad.addColorStop(0.7, "rgba(255,255,255,0.08)");
+  grad.addColorStop(0.15, "rgba(255,255,255,1)");
+  grad.addColorStop(0.35, "rgba(255,255,255,0.8)");
+  grad.addColorStop(0.5, "rgba(255,255,255,0.45)");
+  grad.addColorStop(0.7, "rgba(255,255,255,0.12)");
   grad.addColorStop(1, "rgba(255,255,255,0)");
   g.fillStyle = grad;
   g.fillRect(0, 0, size, size);
@@ -199,7 +199,7 @@ export function uploadBuffer(
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const spacing = glowSz * GLOW_SPACING;
     const steps = Math.max(1, Math.ceil(dist / spacing));
-    const clampedSteps = Math.min(steps, 6); // cap to avoid budget blow
+    const clampedSteps = Math.min(steps, 16);
 
     for (let s = 0; s <= clampedSteps && n < MAX_PTS; s++) {
       const t = clampedSteps > 0 ? s / clampedSteps : 0;
@@ -269,16 +269,20 @@ export function snapshotPoints(geo: BufferGeometry): PointSnapshot {
 
 /**
  * Morph point cloud from `src` snapshot → current `geo` data (destination).
- * `t` goes 0→1. Adds scatter turbulence peaking at t≈0.5.
+ * `t` goes 0→1. The `morph` modifier adds per-point displacement.
  */
-export function applyMorph(geo: BufferGeometry, src: PointSnapshot, t: number) {
+export function applyMorph(
+  geo: BufferGeometry,
+  src: PointSnapshot,
+  t: number,
+  morph: MorphModifier,
+) {
   const pp = geo.attributes.position as BufferAttribute;
   const pc = geo.attributes.aColor as BufferAttribute;
   const pz = geo.attributes.aSize as BufferAttribute;
   const dstN = geo.drawRange.count;
   const srcN = src.count;
   const maxN = Math.min(Math.max(srcN, dstN), MAX_PTS);
-  const turb = Math.sin(t * Math.PI) * MORPH_SCATTER;
   const st = t * t * (3 - 2 * t); // smoothstep
 
   for (let i = 0; i < maxN; i++) {
@@ -292,9 +296,10 @@ export function applyMorph(geo: BufferGeometry, src: PointSnapshot, t: number) {
     const dy = inD ? pp.array[i * 3 + 1] : prand(i, 4) * 5;
     const dpz = inD ? pp.array[i * 3 + 2] : prand(i, 5) * 3 - BASE_Z;
 
-    pp.array[i * 3] = sx + (dx - sx) * st + prand(i, 6) * turb;
-    pp.array[i * 3 + 1] = sy + (dy - sy) * st + prand(i, 7) * turb;
-    pp.array[i * 3 + 2] = spz + (dpz - spz) * st + prand(i, 8) * turb * 0.3;
+    const [ox, oy, oz] = morph(i, sx, sy, spz, dx, dy, dpz, t, st);
+    pp.array[i * 3] = sx + (dx - sx) * st + ox;
+    pp.array[i * 3 + 1] = sy + (dy - sy) * st + oy;
+    pp.array[i * 3 + 2] = spz + (dpz - spz) * st + oz;
 
     const sr = inS ? src.colors[i * 4] : 0;
     const sg = inS ? src.colors[i * 4 + 1] : 0;

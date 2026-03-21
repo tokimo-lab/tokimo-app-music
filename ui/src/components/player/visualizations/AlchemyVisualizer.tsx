@@ -33,6 +33,7 @@ import {
 } from "./alchemy/gl-utils";
 import { ALL_SCENES, SCENE_COUNT } from "./alchemy/registry";
 import { SceneBuffer } from "./alchemy/scene-buffer";
+import { createTransition, type TransitionEffect } from "./alchemy/transitions";
 import type { AlchemySceneInfo, DrawCtx } from "./alchemy/types";
 import { getAudioBands } from "./alchemy/utils";
 
@@ -41,7 +42,6 @@ export type { AlchemySceneInfo };
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const SCENE_DURATION = 900;
-const TRANSITION_FRAMES = 75;
 const TRAIL_ALPHA = 0.06;
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -167,6 +167,7 @@ export function AlchemyVisualizer({
     let nextSceneIdx = -1;
     let fadeProgress = 0;
     let morphSrc: PointSnapshot | null = null;
+    let transition: TransitionEffect | null = null;
     let cssW = 0;
     let cssH = 0;
 
@@ -247,20 +248,25 @@ export function AlchemyVisualizer({
       uploadBuffer(bufA, ptGeoA, lineGeoA, h);
 
       // ── Point-cloud morph transition ──────────────────────────────
-      if (nextSceneIdx >= 0 && morphSrc) {
+      let transT = 0;
+      if (nextSceneIdx >= 0 && morphSrc && transition) {
         fadeProgress++;
-        const t = Math.min(1, fadeProgress / TRANSITION_FRAMES);
-        applyMorph(ptGeoA, morphSrc, t);
-        // Lines: hidden during morph, fade in at end
-        lineMatA.uniforms.uOpacity.value = t < 0.6 ? 0 : (t - 0.6) / 0.4;
+        transT = Math.min(1, fadeProgress / transition.duration);
+        applyMorph(ptGeoA, morphSrc, transT, transition.morph);
+        // Lines: hidden during morph, fade in near end
+        const lf = transition.lineFadeIn;
+        lineMatA.uniforms.uOpacity.value =
+          transT < lf ? 0 : (transT - lf) / (1 - lf);
 
-        if (t >= 1) {
+        if (transT >= 1) {
           currentSceneIdx = nextSceneIdx;
           nextSceneIdx = -1;
           sceneTimer = 0;
           fadeProgress = 0;
           morphSrc = null;
+          transition = null;
           lineMatA.uniforms.uOpacity.value = 1;
+          transT = 0;
         }
       }
 
@@ -269,15 +275,19 @@ export function AlchemyVisualizer({
         nextSceneIdx = pickNextScene(currentSceneIdx);
         fadeProgress = 0;
         morphSrc = snapshotPoints(ptGeoA);
+        transition = createTransition();
       }
 
-      // ── Camera wobble + Z breathing ───────────────────────────────
+      // ── Camera wobble + Z breathing + transition effects ──────────
+      const env = transition && transT > 0 ? Math.sin(transT * Math.PI) : 0;
       camera.rotation.set(
-        Math.cos(time * 0.25) * 0.01,
-        Math.sin(time * 0.3) * 0.015 + audio.bass * 0.008,
+        Math.cos(time * 0.25) * 0.01 + (transition?.camRotX ?? 0) * env,
+        Math.sin(time * 0.3) * 0.015 +
+          audio.bass * 0.008 +
+          (transition?.camRotY ?? 0) * env,
         0,
       );
-      camera.position.set(0, 0, -camZBreath);
+      camera.position.set(0, 0, -camZBreath + (transition?.camPush ?? 0) * env);
 
       // ── RTT trail composite ───────────────────────────────────────
       const trailFade = 1 - (TRAIL_ALPHA + audio.energy * 0.04);
@@ -311,7 +321,9 @@ export function AlchemyVisualizer({
         nextScene:
           nextSceneIdx >= 0 ? (ALL_SCENES[nextSceneIdx]?.name ?? "?") : null,
         fadePct:
-          nextSceneIdx >= 0 ? Math.min(1, fadeProgress / TRANSITION_FRAMES) : 0,
+          nextSceneIdx >= 0
+            ? Math.min(1, fadeProgress / (transition?.duration ?? 75))
+            : 0,
         sceneTimer,
       });
 
