@@ -1,4 +1,4 @@
-import type { MusicAlbumOutput, MusicArtistOutput } from "@acme/types";
+import type { MusicAlbumOutput, MusicArtistOutput } from "@tokiomo/types";
 import { Disc3, Heart, Play, User } from "lucide-react";
 import { memo } from "react";
 

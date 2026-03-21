@@ -4,8 +4,8 @@ import {
   HorizontalScroll,
   Spin,
   Tag,
-} from "@acme/components";
-import type { CreditOutput, MusicTrackOutput } from "@acme/types";
+} from "@tokiomo/components";
+import type { CreditOutput, MusicTrackOutput } from "@tokiomo/types";
 import { Clock, Disc3, Heart, ListPlus, Pause, Play } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";

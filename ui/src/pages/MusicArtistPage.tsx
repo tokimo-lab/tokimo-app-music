@@ -1,4 +1,4 @@
-import { ArrowLeftOutlined, Button, Empty, Spin } from "@acme/components";
+import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokiomo/components";
 import { User } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { trpc } from "../../lib/trpc";

@@ -6,7 +6,7 @@ import {
   RemoveFromPlaylistInputSchema,
   ReorderPlaylistInputSchema,
   UpdatePlaylistInputSchema,
-} from "@acme/types";
+} from "@tokiomo/types";
 import { z } from "zod";
 import { protectedProcedure } from "../../trpc/middlewares";
 import { router } from "../../trpc/trpc";

@@ -1,9 +1,9 @@
-import { Button, Empty, Spin, Tag } from "@acme/components";
+import { Button, Empty, Spin, Tag } from "@tokiomo/components";
 import type {
   MusicAlbumOutput,
   MusicArtistOutput,
   MusicTrackOutput,
-} from "@acme/types";
+} from "@tokiomo/types";
 import {
   Clock,
   Disc3,

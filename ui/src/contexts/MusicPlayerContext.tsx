@@ -1,4 +1,4 @@
-import type { MusicTrackOutput } from "@acme/types";
+import type { MusicTrackOutput } from "@tokiomo/types";
 import {
   createContext,
   type ReactNode,

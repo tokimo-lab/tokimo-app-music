@@ -5,7 +5,7 @@ import type {
   PlaylistItemOutput,
   PlaylistOutput,
   UpdatePlaylistInput,
-} from "@acme/types";
+} from "@tokiomo/types";
 import { TRPCError } from "@trpc/server";
 import { prisma } from "../../db/client";
 

@@ -1,8 +1,7 @@
-import { cn, Tooltip } from "@acme/components";
+import { cn, Tooltip } from "@tokiomo/components";
 import {
   Disc3,
   ListMusic,
-  Music,
   Pause,
   Play,
   Repeat,

@@ -1,5 +1,5 @@
-import { Button, Empty, Modal, Spin } from "@acme/components";
-import type { PlaylistOutput } from "@acme/types";
+import { Button, Empty, Modal, Spin } from "@tokiomo/components";
+import type { PlaylistOutput } from "@tokiomo/types";
 import { ListMusic, Music, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";

@@ -5,7 +5,7 @@
  * 限制：1 request/second，User-Agent 必须包含应用名和联系方式
  */
 
-import type { MusicMatchCandidate, MusicMatchDetail } from "@acme/types";
+import type { MusicMatchCandidate, MusicMatchDetail } from "@tokiomo/types";
 
 const MB_BASE_URL = "https://musicbrainz.org/ws/2";
 const CAA_BASE_URL = "https://coverartarchive.org";

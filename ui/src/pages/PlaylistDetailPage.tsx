@@ -1,5 +1,5 @@
-import { Button, Empty, Popconfirm, Spin } from "@acme/components";
-import type { MusicTrackOutput, PlaylistDetailOutput } from "@acme/types";
+import { Button, Empty, Popconfirm, Spin } from "@tokiomo/components";
+import type { MusicTrackOutput, PlaylistDetailOutput } from "@tokiomo/types";
 import {
   ArrowDown,
   ArrowUp,
