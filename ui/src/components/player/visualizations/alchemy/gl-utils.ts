@@ -21,6 +21,8 @@ const MAX_SEGS = 8000;
 const LINE_GLOW_SIZE = 48;
 /** Spacing between glow sprites along a line (fraction of glow radius) */
 const GLOW_SPACING = 0.35;
+/** World-space scatter amplitude during morph (peaks at t=0.5) */
+const MORPH_SCATTER = 2.0;
 
 // ── Glow texture ─────────────────────────────────────────────────────────────
 
@@ -234,4 +236,86 @@ export function uploadBuffer(
   }
   lineGeo.setDrawRange(0, buf.segN * 2);
   lp.needsUpdate = lc.needsUpdate = true;
+}
+
+// ── Point-cloud morph transition ─────────────────────────────────────────────
+
+export interface PointSnapshot {
+  positions: Float32Array;
+  colors: Float32Array;
+  sizes: Float32Array;
+  count: number;
+}
+
+/** Deterministic pseudo-random in [-1, 1], stable across frames. */
+function prand(i: number, ch: number): number {
+  const x = Math.sin(i * 12.9898 + ch * 78.233) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+}
+
+/** Capture the current point cloud for later morphing. */
+export function snapshotPoints(geo: BufferGeometry): PointSnapshot {
+  const n = geo.drawRange.count;
+  const p = (geo.attributes.position as BufferAttribute).array as Float32Array;
+  const c = (geo.attributes.aColor as BufferAttribute).array as Float32Array;
+  const s = (geo.attributes.aSize as BufferAttribute).array as Float32Array;
+  return {
+    positions: Float32Array.from(p.subarray(0, n * 3)),
+    colors: Float32Array.from(c.subarray(0, n * 4)),
+    sizes: Float32Array.from(s.subarray(0, n)),
+    count: n,
+  };
+}
+
+/**
+ * Morph point cloud from `src` snapshot → current `geo` data (destination).
+ * `t` goes 0→1. Adds scatter turbulence peaking at t≈0.5.
+ */
+export function applyMorph(geo: BufferGeometry, src: PointSnapshot, t: number) {
+  const pp = geo.attributes.position as BufferAttribute;
+  const pc = geo.attributes.aColor as BufferAttribute;
+  const pz = geo.attributes.aSize as BufferAttribute;
+  const dstN = geo.drawRange.count;
+  const srcN = src.count;
+  const maxN = Math.min(Math.max(srcN, dstN), MAX_PTS);
+  const turb = Math.sin(t * Math.PI) * MORPH_SCATTER;
+  const st = t * t * (3 - 2 * t); // smoothstep
+
+  for (let i = 0; i < maxN; i++) {
+    const inS = i < srcN;
+    const inD = i < dstN;
+
+    const sx = inS ? src.positions[i * 3] : prand(i, 0) * 5;
+    const sy = inS ? src.positions[i * 3 + 1] : prand(i, 1) * 5;
+    const spz = inS ? src.positions[i * 3 + 2] : prand(i, 2) * 3 - BASE_Z;
+    const dx = inD ? pp.array[i * 3] : prand(i, 3) * 5;
+    const dy = inD ? pp.array[i * 3 + 1] : prand(i, 4) * 5;
+    const dpz = inD ? pp.array[i * 3 + 2] : prand(i, 5) * 3 - BASE_Z;
+
+    pp.array[i * 3] = sx + (dx - sx) * st + prand(i, 6) * turb;
+    pp.array[i * 3 + 1] = sy + (dy - sy) * st + prand(i, 7) * turb;
+    pp.array[i * 3 + 2] = spz + (dpz - spz) * st + prand(i, 8) * turb * 0.3;
+
+    const sr = inS ? src.colors[i * 4] : 0;
+    const sg = inS ? src.colors[i * 4 + 1] : 0;
+    const sb = inS ? src.colors[i * 4 + 2] : 0;
+    const sa = inS ? src.colors[i * 4 + 3] : 0;
+    const dr = inD ? pc.array[i * 4] : 0;
+    const dg = inD ? pc.array[i * 4 + 1] : 0;
+    const db = inD ? pc.array[i * 4 + 2] : 0;
+    const da = inD ? pc.array[i * 4 + 3] : 0;
+
+    const fade = inS && inD ? 1 : inD ? t : 1 - t;
+    pc.array[i * 4] = sr + (dr - sr) * st;
+    pc.array[i * 4 + 1] = sg + (dg - sg) * st;
+    pc.array[i * 4 + 2] = sb + (db - sb) * st;
+    pc.array[i * 4 + 3] = (sa + (da - sa) * st) * fade;
+
+    const sSz = inS ? src.sizes[i] : 0;
+    const dSz = inD ? pz.array[i] : 0;
+    pz.array[i] = sSz + (dSz - sSz) * st;
+  }
+
+  geo.setDrawRange(0, maxN);
+  pp.needsUpdate = pc.needsUpdate = pz.needsUpdate = true;
 }

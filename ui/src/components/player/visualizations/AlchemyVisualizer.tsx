@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import {
   AdditiveBlending,
   Color,
-  Euler,
   Group,
   LinearFilter,
   LineSegments,
@@ -12,14 +11,13 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   Points,
-  Quaternion,
   ShaderMaterial,
   Scene as ThreeScene,
-  Vector3,
   WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
 import {
+  applyMorph,
   BASE_Z,
   CAM_FOV,
   LINE_FS,
@@ -29,11 +27,12 @@ import {
   makePointGeo,
   POINT_FS,
   POINT_VS,
+  type PointSnapshot,
+  snapshotPoints,
   uploadBuffer,
 } from "./alchemy/gl-utils";
 import { ALL_SCENES, SCENE_COUNT } from "./alchemy/registry";
 import { SceneBuffer } from "./alchemy/scene-buffer";
-import { type CameraTransition, createTransition } from "./alchemy/transitions";
 import type { AlchemySceneInfo, DrawCtx } from "./alchemy/types";
 import { getAudioBands } from "./alchemy/utils";
 
@@ -42,7 +41,7 @@ export type { AlchemySceneInfo };
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const SCENE_DURATION = 900;
-const TRANSITION_FRAMES = 160;
+const TRANSITION_FRAMES = 75;
 const TRAIL_ALPHA = 0.06;
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -120,27 +119,16 @@ export function AlchemyVisualizer({
       });
     }
     const ptMatA = mkPointMat();
-    const ptMatB = mkPointMat();
     const lineMatA = mkLineMat();
-    const lineMatB = mkLineMat();
 
-    // Two groups that alternate roles (current / next)
     const ptGeoA = makePointGeo();
     const lineGeoA = makeLineGeo();
-    const ptGeoB = makePointGeo();
-    const lineGeoB = makeLineGeo();
     const groupA = new Group();
-    const groupB = new Group();
     groupA.add(
       new Points(ptGeoA, ptMatA),
       new LineSegments(lineGeoA, lineMatA),
     );
-    groupB.add(
-      new Points(ptGeoB, ptMatB),
-      new LineSegments(lineGeoB, lineMatB),
-    );
-    groupB.visible = false;
-    mainScene.add(groupA, groupB);
+    mainScene.add(groupA);
 
     // Position groupA in front of camera
     groupA.position.set(0, 0, -BASE_Z);
@@ -169,7 +157,6 @@ export function AlchemyVisualizer({
 
     // ── Scene buffers ─────────────────────────────────────────────────
     const bufA = new SceneBuffer();
-    const bufB = new SceneBuffer();
 
     // ── State ─────────────────────────────────────────────────────────
     let raf = 0;
@@ -179,18 +166,9 @@ export function AlchemyVisualizer({
     let currentSceneIdx = Math.floor(Math.random() * SCENE_COUNT);
     let nextSceneIdx = -1;
     let fadeProgress = 0;
-    let transition: CameraTransition | null = null;
+    let morphSrc: PointSnapshot | null = null;
     let cssW = 0;
     let cssH = 0;
-
-    // Camera tracking — accumulates across transitions
-    const cameraQuat = new Quaternion();
-    const startQuat = new Quaternion();
-    const targetQuat = new Quaternion();
-    const wobbleQuat = new Quaternion();
-    const wobbleEuler = new Euler(0, 0, 0, "YXZ");
-    const tmpEuler = new Euler(0, 0, 0, "YXZ");
-    const tmpVec = new Vector3();
 
     const sceneStates = ALL_SCENES.map((s) => s.init());
 
@@ -212,7 +190,6 @@ export function AlchemyVisualizer({
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
       ptMatA.uniforms.uScale.value = h * 0.5;
-      ptMatB.uniforms.uScale.value = h * 0.5;
 
       // Resize RTTs
       const dpr = renderer.getPixelRatio();
@@ -252,7 +229,7 @@ export function AlchemyVisualizer({
           Math.sin(time * 1.3) * 15) *
         0.015;
 
-      // ── Draw current scene to bufA ────────────────────────────────
+      // ── Draw scene ────────────────────────────────────────────────
       const dc: DrawCtx = {
         buf: bufA,
         w,
@@ -264,82 +241,43 @@ export function AlchemyVisualizer({
         playing: isPlayingRef.current,
       };
       bufA.clear();
-      const scA = ALL_SCENES[currentSceneIdx];
-      if (scA) scA.draw({ ...dc, buf: bufA }, sceneStates[currentSceneIdx]);
+      const drawIdx = nextSceneIdx >= 0 ? nextSceneIdx : currentSceneIdx;
+      const sc = ALL_SCENES[drawIdx];
+      if (sc) sc.draw({ ...dc, buf: bufA }, sceneStates[drawIdx]);
       uploadBuffer(bufA, ptGeoA, lineGeoA, h);
+
+      // ── Point-cloud morph transition ──────────────────────────────
+      if (nextSceneIdx >= 0 && morphSrc) {
+        fadeProgress++;
+        const t = Math.min(1, fadeProgress / TRANSITION_FRAMES);
+        applyMorph(ptGeoA, morphSrc, t);
+        // Lines: hidden during morph, fade in at end
+        lineMatA.uniforms.uOpacity.value = t < 0.6 ? 0 : (t - 0.6) / 0.4;
+
+        if (t >= 1) {
+          currentSceneIdx = nextSceneIdx;
+          nextSceneIdx = -1;
+          sceneTimer = 0;
+          fadeProgress = 0;
+          morphSrc = null;
+          lineMatA.uniforms.uOpacity.value = 1;
+        }
+      }
 
       // ── Transition trigger ────────────────────────────────────────
       if (nextSceneIdx < 0 && sceneTimer >= SCENE_DURATION) {
         nextSceneIdx = pickNextScene(currentSceneIdx);
         fadeProgress = 0;
-        transition = createTransition();
-
-        startQuat.copy(cameraQuat);
-        const yaw = -Math.cos(transition.dirAngle) * transition.rotAngle;
-        const pitch = -Math.sin(transition.dirAngle) * transition.rotAngle;
-        tmpEuler.set(pitch, yaw, 0);
-        targetQuat
-          .copy(startQuat)
-          .multiply(new Quaternion().setFromEuler(tmpEuler));
-
-        // Place groupB at target direction
-        tmpVec.set(0, 0, -1).applyQuaternion(targetQuat);
-        groupB.position.copy(tmpVec.multiplyScalar(BASE_Z));
-        groupB.visible = true;
+        morphSrc = snapshotPoints(ptGeoA);
       }
 
-      // ── Transition animation ──────────────────────────────────────
-      if (nextSceneIdx >= 0 && transition) {
-        fadeProgress++;
-        const fadePct = Math.min(1, fadeProgress / TRANSITION_FRAMES);
-        const eased = transition.easing(fadePct);
-
-        // Draw next scene to bufB
-        bufB.clear();
-        const scB = ALL_SCENES[nextSceneIdx];
-        if (scB) scB.draw({ ...dc, buf: bufB }, sceneStates[nextSceneIdx]);
-        uploadBuffer(bufB, ptGeoB, lineGeoB, h);
-
-        // Slerp camera
-        cameraQuat.slerpQuaternions(startQuat, targetQuat, eased);
-
-        // Fade out old scene via uniform
-        const fadeOutAlpha = Math.max(0, 1 - fadePct * 1.5);
-        ptMatA.uniforms.uOpacity.value = fadeOutAlpha;
-        lineMatA.uniforms.uOpacity.value = fadeOutAlpha;
-
-        if (fadePct >= 1) {
-          // Transition complete — swap groups
-          currentSceneIdx = nextSceneIdx;
-          nextSceneIdx = -1;
-          sceneTimer = 0;
-          fadeProgress = 0;
-          transition = null;
-
-          // Move groupA to where groupB is (the new forward direction)
-          groupA.position.copy(groupB.position);
-          groupB.visible = false;
-
-          // Copy bufB data into ptGeoA / lineGeoA
-          uploadBuffer(bufB, ptGeoA, lineGeoA, h);
-
-          // Restore opacity
-          ptMatA.uniforms.uOpacity.value = 1;
-          lineMatA.uniforms.uOpacity.value = 1;
-        }
-      }
-
-      // ── Camera: base quat + wobble + Z breathing ──────────────────
-      wobbleEuler.set(
+      // ── Camera wobble + Z breathing ───────────────────────────────
+      camera.rotation.set(
         Math.cos(time * 0.25) * 0.01,
         Math.sin(time * 0.3) * 0.015 + audio.bass * 0.008,
         0,
       );
-      wobbleQuat.setFromEuler(wobbleEuler);
-      camera.quaternion.multiplyQuaternions(cameraQuat, wobbleQuat);
-      // Z breathing: push camera slightly forward from origin
-      tmpVec.set(0, 0, -1).applyQuaternion(cameraQuat);
-      camera.position.copy(tmpVec.multiplyScalar(camZBreath));
+      camera.position.set(0, 0, -camZBreath);
 
       // ── RTT trail composite ───────────────────────────────────────
       const trailFade = 1 - (TRAIL_ALPHA + audio.energy * 0.04);
@@ -385,13 +323,9 @@ export function AlchemyVisualizer({
       cancelAnimationFrame(raf);
       ro.disconnect();
       ptGeoA.dispose();
-      ptGeoB.dispose();
       lineGeoA.dispose();
-      lineGeoB.dispose();
       ptMatA.dispose();
-      ptMatB.dispose();
       lineMatA.dispose();
-      lineMatB.dispose();
       glowTex.dispose();
       fadeMat.dispose();
       displayMat.dispose();
