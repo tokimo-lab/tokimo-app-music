@@ -1,7 +1,7 @@
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokiomo/components";
 import { User } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
-import { trpc } from "../../lib/trpc";
+import { api } from "../../generated/rust-api";
 import { SectionTitle } from "./media-detail-shared";
 import { AlbumCard } from "./music-shared";
 
@@ -10,11 +10,10 @@ export default function MusicArtistPage() {
   const { id, personId } = useParams<{ id: string; personId: string }>();
   const navigate = useNavigate();
 
-  const { data: artist, isLoading } =
-    trpc.mediaLibrary.getArtistDetail.useQuery(
-      { personId: personId!, libraryId: id! },
-      { enabled: !!personId && !!id },
-    );
+  const { data: artist, isLoading } = api.mediaLibrary.getArtistDetail.useQuery(
+    { personId: personId!, libraryId: id! },
+    { enabled: !!personId && !!id },
+  );
 
   if (isLoading) {
     return (

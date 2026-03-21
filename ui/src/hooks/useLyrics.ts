@@ -1,11 +1,11 @@
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../generated/rust-api";
 import {
   currentLineIndex,
   type LrcLine,
   lineProgress,
   parseLrc,
 } from "../lib/lrc-parser";
-import { trpc } from "../lib/trpc";
 
 interface UseLyricsResult {
   lines: LrcLine[];
@@ -28,7 +28,7 @@ export function useLyrics(
   trackId: string | null | undefined,
   getCurrentTime: () => number,
 ): UseLyricsResult {
-  const { data, isLoading } = trpc.mediaLibrary.getTrackLyrics.useQuery(
+  const { data, isLoading } = api.mediaLibrary.getTrackLyrics.useQuery(
     { trackId: trackId! },
     { enabled: !!trackId, staleTime: Number.POSITIVE_INFINITY },
   );

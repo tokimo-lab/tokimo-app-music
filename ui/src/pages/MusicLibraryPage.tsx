@@ -16,7 +16,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
-import { trpc } from "../../lib/trpc";
+import { api } from "../../generated/rust-api";
 import { AlbumCard, ArtistCard, formatDuration } from "./music-shared";
 
 type TabKey = "albums" | "artists" | "tracks";
@@ -140,14 +140,14 @@ export default function MusicLibraryPage() {
     setDebouncedSearch("");
   }, [id]);
 
-  const libraryQuery = trpc.mediaLibrary.getById.useQuery(
+  const libraryQuery = api.mediaLibrary.getById.useQuery(
     { id: id! },
     { enabled: !!id },
   );
 
   const albumSortParams = parseAlbumSort(albumSort);
 
-  const albumsQuery = trpc.mediaLibrary.listAlbums.useQuery(
+  const albumsQuery = api.mediaLibrary.listAlbums.useQuery(
     {
       libraryId: id!,
       page,
@@ -158,7 +158,7 @@ export default function MusicLibraryPage() {
     { enabled: !!id && tab === "albums" },
   );
 
-  const artistsQuery = trpc.mediaLibrary.listArtists.useQuery(
+  const artistsQuery = api.mediaLibrary.listArtists.useQuery(
     {
       libraryId: id!,
       page,
@@ -168,7 +168,7 @@ export default function MusicLibraryPage() {
     { enabled: !!id && tab === "artists" },
   );
 
-  const tracksQuery = trpc.mediaLibrary.listTracks.useQuery(
+  const tracksQuery = api.mediaLibrary.listTracks.useQuery(
     {
       libraryId: id!,
       page,

@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftOutlined,
   Button,
@@ -10,7 +11,7 @@ import { Clock, Disc3, Heart, ListPlus, Pause, Play } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
-import { trpc } from "../../lib/trpc";
+import { api } from "../../generated/rust-api";
 import { PersonCard, SectionTitle } from "./media-detail-shared";
 import { formatDuration, formatTotalDuration } from "./music-shared";
 
@@ -22,10 +23,10 @@ function FavoriteButton({
   isFavorite: boolean;
   albumId: string;
 }) {
-  const utils = trpc.useUtils();
-  const toggle = trpc.mediaLibrary.toggleAlbumFavorite.useMutation({
+  const qc = useQueryClient();
+  const toggle = api.mediaLibrary.toggleAlbumFavorite.useMutation({
     onSuccess: () =>
-      void utils.mediaLibrary.getAlbumDetail.invalidate({ albumId }),
+      void api.mediaLibrary.getAlbumDetail.invalidate(qc, { albumId }),
   });
   return (
     <button
@@ -164,7 +165,7 @@ export default function MusicAlbumDetailPage() {
   const navigate = useNavigate();
   const { playTracks, addToQueue } = useMusicPlayer();
 
-  const { data: album, isLoading } = trpc.mediaLibrary.getAlbumDetail.useQuery(
+  const { data: album, isLoading } = api.mediaLibrary.getAlbumDetail.useQuery(
     { albumId: albumId! },
     { enabled: !!albumId },
   );
