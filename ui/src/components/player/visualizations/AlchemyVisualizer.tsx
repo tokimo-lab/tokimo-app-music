@@ -1,9 +1,6 @@
 import { useEffect, useRef } from "react";
 import {
   AdditiveBlending,
-  BufferAttribute,
-  BufferGeometry,
-  CanvasTexture,
   Color,
   Euler,
   Group,
@@ -11,7 +8,6 @@ import {
   LineSegments,
   Mesh,
   MeshBasicMaterial,
-  NearestFilter,
   OrthographicCamera,
   PerspectiveCamera,
   PlaneGeometry,
@@ -23,6 +19,18 @@ import {
   WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
+import {
+  BASE_Z,
+  CAM_FOV,
+  LINE_FS,
+  LINE_VS,
+  makeGlowTexture,
+  makeLineGeo,
+  makePointGeo,
+  POINT_FS,
+  POINT_VS,
+  uploadBuffer,
+} from "./alchemy/gl-utils";
 import { ALL_SCENES, SCENE_COUNT } from "./alchemy/registry";
 import { SceneBuffer } from "./alchemy/scene-buffer";
 import { type CameraTransition, createTransition } from "./alchemy/transitions";
@@ -36,153 +44,6 @@ export type { AlchemySceneInfo };
 const SCENE_DURATION = 900;
 const TRANSITION_FRAMES = 160;
 const TRAIL_ALPHA = 0.06;
-const CAM_FOV = 60;
-const BASE_Z = 10;
-const MAX_DEPTH = 1200;
-const DEPTH_RANGE = 8;
-const MAX_PTS = 4000;
-const MAX_SEGS = 8000;
-
-function makeGlowTexture(size = 64): CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = size;
-  c.height = size;
-  const g = c.getContext("2d")!;
-  const center = size / 2;
-  const grad = g.createRadialGradient(
-    center,
-    center,
-    0,
-    center,
-    center,
-    center,
-  );
-  grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.15, "rgba(255,255,255,0.8)");
-  grad.addColorStop(0.4, "rgba(255,255,255,0.3)");
-  grad.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = grad;
-  g.fillRect(0, 0, size, size);
-  const tex = new CanvasTexture(c);
-  tex.minFilter = NearestFilter;
-  tex.magFilter = LinearFilter;
-  return tex;
-}
-
-// ── Shaders ──────────────────────────────────────────────────────────────────
-
-const POINT_VS = `
-attribute float aSize;
-attribute vec4 aColor;
-varying vec4 vColor;
-uniform float uScale;
-uniform float uOpacity;
-void main() {
-  vColor = aColor * vec4(1.0, 1.0, 1.0, uOpacity);
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  gl_PointSize = max(1.0, aSize * (uScale / -mv.z));
-  gl_Position = projectionMatrix * mv;
-}`;
-
-const POINT_FS = `
-uniform sampler2D glowMap;
-varying vec4 vColor;
-void main() {
-  vec4 t = texture2D(glowMap, gl_PointCoord);
-  gl_FragColor = vColor * t;
-  if (gl_FragColor.a < 0.005) discard;
-}`;
-
-const LINE_VS = `
-attribute vec4 aColor;
-varying vec4 vColor;
-uniform float uOpacity;
-void main() {
-  vColor = aColor * vec4(1.0, 1.0, 1.0, uOpacity);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
-
-const LINE_FS = `
-varying vec4 vColor;
-void main() {
-  gl_FragColor = vColor;
-  if (gl_FragColor.a < 0.005) discard;
-}`;
-
-// ── Geometry builders ─────────────────────────────────────────────────────────
-
-function makePointGeo() {
-  const geo = new BufferGeometry();
-  geo.setAttribute(
-    "position",
-    new BufferAttribute(new Float32Array(MAX_PTS * 3), 3),
-  );
-  geo.setAttribute(
-    "aColor",
-    new BufferAttribute(new Float32Array(MAX_PTS * 4), 4),
-  );
-  geo.setAttribute("aSize", new BufferAttribute(new Float32Array(MAX_PTS), 1));
-  geo.setDrawRange(0, 0);
-  return geo;
-}
-
-function makeLineGeo() {
-  const geo = new BufferGeometry();
-  const v = MAX_SEGS * 2;
-  geo.setAttribute("position", new BufferAttribute(new Float32Array(v * 3), 3));
-  geo.setAttribute("aColor", new BufferAttribute(new Float32Array(v * 4), 4));
-  geo.setDrawRange(0, 0);
-  return geo;
-}
-
-// ── Upload SceneBuffer → GPU ─────────────────────────────────────────────────
-
-function uploadBuffer(
-  buf: SceneBuffer,
-  ptGeo: BufferGeometry,
-  lineGeo: BufferGeometry,
-  h: number,
-) {
-  const ps = (2 * BASE_Z * Math.tan((CAM_FOV * Math.PI) / 360)) / h;
-  const ds = DEPTH_RANGE / MAX_DEPTH;
-  const ss = (2 * BASE_Z) / h;
-  const pp = ptGeo.attributes.position as BufferAttribute;
-  const pc = ptGeo.attributes.aColor as BufferAttribute;
-  const pz = ptGeo.attributes.aSize as BufferAttribute;
-  for (let i = 0; i < buf.ptN; i++) {
-    const si = i * 8;
-    pp.array[i * 3] = buf.pts[si] * ps;
-    pp.array[i * 3 + 1] = -buf.pts[si + 1] * ps;
-    pp.array[i * 3 + 2] = -buf.pts[si + 2] * ds;
-    pc.array[i * 4] = buf.pts[si + 3];
-    pc.array[i * 4 + 1] = buf.pts[si + 4];
-    pc.array[i * 4 + 2] = buf.pts[si + 5];
-    pc.array[i * 4 + 3] = buf.pts[si + 6];
-    pz.array[i] = buf.pts[si + 7] * ss;
-  }
-  ptGeo.setDrawRange(0, buf.ptN);
-  pp.needsUpdate = pc.needsUpdate = pz.needsUpdate = true;
-
-  const lp = lineGeo.attributes.position as BufferAttribute;
-  const lc = lineGeo.attributes.aColor as BufferAttribute;
-  for (let i = 0; i < buf.segN; i++) {
-    const si = i * 14;
-    for (let v = 0; v < 2; v++) {
-      const vi = i * 2 + v,
-        so = si + v * 7;
-      lp.array[vi * 3] = buf.segs[so] * ps;
-      lp.array[vi * 3 + 1] = -buf.segs[so + 1] * ps;
-      lp.array[vi * 3 + 2] = -buf.segs[so + 2] * ds;
-      lc.array[vi * 4] = buf.segs[so + 3];
-      lc.array[vi * 4 + 1] = buf.segs[so + 4];
-      lc.array[vi * 4 + 2] = buf.segs[so + 5];
-      lc.array[vi * 4 + 3] = buf.segs[so + 6];
-    }
-  }
-  lineGeo.setDrawRange(0, buf.segN * 2);
-  lp.needsUpdate = true;
-  lc.needsUpdate = true;
-}
 
 // ── Main component ───────────────────────────────────────────────────────────
 
