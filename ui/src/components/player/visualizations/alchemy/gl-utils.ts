@@ -134,21 +134,43 @@ export function uploadBuffer(
   const pc = ptGeo.attributes.aColor as BufferAttribute;
   const pz = ptGeo.attributes.aSize as BufferAttribute;
 
-  // Upload explicit scene points (size ×3 for visibility)
-  for (let i = 0; i < buf.ptN; i++) {
+  // Upload explicit scene points: bright core + glow halo behind each
+  let n = 0;
+  for (let i = 0; i < buf.ptN && n + 1 < MAX_PTS; i++) {
     const si = i * 8;
-    pp.array[i * 3] = buf.pts[si] * ps;
-    pp.array[i * 3 + 1] = -buf.pts[si + 1] * ps;
-    pp.array[i * 3 + 2] = -buf.pts[si + 2] * ds;
-    pc.array[i * 4] = buf.pts[si + 3];
-    pc.array[i * 4 + 1] = buf.pts[si + 4];
-    pc.array[i * 4 + 2] = buf.pts[si + 5];
-    pc.array[i * 4 + 3] = buf.pts[si + 6];
-    pz.array[i] = buf.pts[si + 7] * ss * 3;
+    const wx = buf.pts[si] * ps;
+    const wy = -buf.pts[si + 1] * ps;
+    const wz = -buf.pts[si + 2] * ds;
+    const r = buf.pts[si + 3];
+    const g = buf.pts[si + 4];
+    const b = buf.pts[si + 5];
+    const a = buf.pts[si + 6];
+    const sz = buf.pts[si + 7] * ss;
+
+    // Glow halo (larger, dimmer) — emitted first so core draws on top
+    pp.array[n * 3] = wx;
+    pp.array[n * 3 + 1] = wy;
+    pp.array[n * 3 + 2] = wz;
+    pc.array[n * 4] = r;
+    pc.array[n * 4 + 1] = g;
+    pc.array[n * 4 + 2] = b;
+    pc.array[n * 4 + 3] = a * 0.55;
+    pz.array[n] = Math.max(glowSz, sz * 6);
+    n++;
+
+    // Bright core
+    pp.array[n * 3] = wx;
+    pp.array[n * 3 + 1] = wy;
+    pp.array[n * 3 + 2] = wz;
+    pc.array[n * 4] = r;
+    pc.array[n * 4 + 1] = g;
+    pc.array[n * 4 + 2] = b;
+    pc.array[n * 4 + 3] = a;
+    pz.array[n] = sz * 3;
+    n++;
   }
 
   // Add glow point sprites along line segments → neon halo effect
-  let n = buf.ptN;
   for (let i = 0; i < buf.segN && n + 2 < MAX_PTS; i++) {
     const si = i * 14;
     // Start vertex
