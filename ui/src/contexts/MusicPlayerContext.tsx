@@ -108,7 +108,7 @@ function normalizeStreamUrl(raw: string): string {
     const resolved = new URL(raw, window.location.origin);
     const isMediafsPath =
       resolved.pathname.startsWith("/api/media-files/") ||
-      resolved.pathname.startsWith("/api/media-sources/") ||
+      resolved.pathname.startsWith("/api/file-systems/") ||
       resolved.pathname.startsWith("/api/hls/");
 
     if (!isMediafsPath) return resolved.toString();
