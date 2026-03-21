@@ -1,6 +1,6 @@
 import type { P3 } from "./helpers";
-import { glow, mkP3, S, TAU } from "./helpers";
-import { depthAlpha, depthSize, MAX_DEPTH, project } from "./perspective";
+import { mkP3, S, TAU } from "./helpers";
+import { hsl } from "./scene-buffer";
 import type { Scene } from "./types";
 import { clamp } from "./utils";
 
@@ -51,7 +51,7 @@ const fireworks: Scene = {
   init: (): FireworkState => ({ bursts: [], timer: 0 }),
   draw(dc, _s) {
     const st = _s as FireworkState;
-    const { ctx, w, h, audio } = dc;
+    const { buf, w, h, audio } = dc;
     st.timer++;
     const interval = Math.max(20, 60 - audio.bass * 40);
     if (st.timer >= interval) {
@@ -59,12 +59,10 @@ const fireworks: Scene = {
       st.timer = 0;
     }
     if (st.bursts.length > 6) st.bursts.shift();
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
     for (const b of st.bursts) {
       b.t++;
       const fade = clamp(1 - b.t / 90, 0, 1);
-      glow(ctx, b.hue);
+      const [r, g, bl] = hsl(b.hue, 85, 45);
       for (const p of b.particles) {
         p.x += p.vx;
         p.y += p.vy;
@@ -73,16 +71,20 @@ const fireworks: Scene = {
         p.vx *= 0.98;
         p.vy *= 0.98;
         p.vz *= 0.98;
-        const { sx, sy, scale } = project(p.x, p.y, p.z, w / 2, h / 2, dc.cam);
-        const drawSize = depthSize(p.size * fade, scale);
-        ctx.globalAlpha = depthAlpha(p.z) * fade * 0.7;
-        ctx.beginPath();
-        ctx.arc(sx, sy, drawSize, 0, TAU);
-        ctx.fill();
+        const alpha = Math.max(0, 1 - p.z / 1200) * fade * 0.7;
+        buf.point(
+          p.x - w / 2,
+          p.y - h / 2,
+          p.z,
+          r,
+          g,
+          bl,
+          alpha,
+          p.size * fade,
+        );
       }
     }
     st.bursts = st.bursts.filter((b) => b.t < 90);
-    ctx.restore();
   },
 };
 
@@ -113,27 +115,21 @@ const fireflies: Scene = {
   },
   draw(dc, _s) {
     const ps = _s as Firefly[];
-    const { ctx, w, h, time, audio } = dc;
+    const { buf, w, h, time, audio } = dc;
     const s = S(w, h);
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
     for (const p of ps) {
       const t = time * 0.001 * p.freq;
       const wx = (p.ox + sin(t + p.hue) * 0.05) * w;
       const wy = (p.oy + cos(t * 0.7 + p.hue * 2) * 0.05) * h;
       p.z = p.oz + sin(t * 0.5) * 50;
       const flicker = 0.3 + 0.5 * (0.5 + 0.5 * sin(t * 5 + p.hue));
-      const { sx, sy, scale } = project(wx, wy, p.z, w / 2, h / 2, dc.cam);
-      const drawSize = depthSize(p.size, scale) * (s / 500);
+      const drawSize = p.size * (s / 500);
       const drawAlpha =
-        depthAlpha(p.z, 800) * clamp(flicker + audio.energy * 0.3, 0.3, 0.8);
-      ctx.globalAlpha = drawAlpha;
-      glow(ctx, p.hue, 80, 50, s * 0.02);
-      ctx.beginPath();
-      ctx.arc(sx, sy, drawSize, 0, TAU);
-      ctx.fill();
+        Math.max(0, 1 - p.z / 800) *
+        clamp(flicker + audio.energy * 0.3, 0.3, 0.8);
+      const [r, g, bl] = hsl(p.hue, 80, 50);
+      buf.point(wx - w / 2, wy - h / 2, p.z, r, g, bl, drawAlpha, drawSize);
     }
-    ctx.restore();
   },
 };
 
@@ -161,25 +157,19 @@ const galaxy: Scene = {
   },
   draw(dc, _s) {
     const ps = _s as GalaxyStar[];
-    const { ctx, w, h, time, audio } = dc;
+    const { buf, w, h, time, audio } = dc;
     const s = S(w, h) * 0.45;
     const rot = time * 0.0002;
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
     for (const p of ps) {
       const spread = 1 + audio.bass * 0.5;
       const a = p.ang + rot / (0.5 + p.r);
       const px = w / 2 + cos(a) * p.r * s * spread;
       const py = h / 2 + sin(a) * p.r * s * spread * 0.6;
-      const { sx, sy, scale } = project(px, py, p.z, w / 2, h / 2, dc.cam);
-      const drawSize = depthSize(p.size, scale) * (s / 300);
-      ctx.globalAlpha = depthAlpha(p.z, 600) * (0.6 + audio.bass * 0.2);
-      glow(ctx, p.hue, 80, 45, 8);
-      ctx.beginPath();
-      ctx.arc(sx, sy, drawSize, 0, TAU);
-      ctx.fill();
+      const drawSize = p.size * (s / 300);
+      const alpha = Math.max(0, 1 - p.z / 600) * (0.6 + audio.bass * 0.2);
+      const [r, g, bl] = hsl(p.hue, 80, 45);
+      buf.point(px - w / 2, py - h / 2, p.z, r, g, bl, alpha, drawSize);
     }
-    ctx.restore();
   },
 };
 
@@ -207,54 +197,72 @@ const constellation: Scene = {
   },
   draw(dc, _s) {
     const ps = _s as P3[];
-    const { ctx, w, h, time, audio } = dc;
+    const { buf, w, h, time, audio } = dc;
     const s = S(w, h);
     const linkDist = s * (0.1 + audio.mid * 0.08);
-    const proj = ps.map((p) =>
-      project(p.x * w, p.y * h, p.z, w / 2, h / 2, dc.cam),
-    );
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    glow(ctx, 220, 70, 50, 6);
-    ctx.lineWidth = 0.5;
+    // Use scene-space coords for distance checks
+    const coords = ps.map((p) => ({ sx: p.x * w, sy: p.y * h }));
+    const [lr, lg, lb] = hsl(220, 70, 50);
     for (let i = 0; i < ps.length; i++) {
       for (let j = i + 1; j < ps.length; j++) {
         if (Math.abs(ps[i].z - ps[j].z) > 200) continue;
-        const dx = proj[i].sx - proj[j].sx;
-        const dy = proj[i].sy - proj[j].sy;
+        const dx = coords[i].sx - coords[j].sx;
+        const dy = coords[i].sy - coords[j].sy;
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d < linkDist) {
           const avgZ = (ps[i].z + ps[j].z) / 2;
-          ctx.globalAlpha = (1 - d / linkDist) * 0.4 * depthAlpha(avgZ, 600);
-          ctx.beginPath();
-          ctx.moveTo(proj[i].sx, proj[i].sy);
-          ctx.lineTo(proj[j].sx, proj[j].sy);
-          ctx.stroke();
+          const alpha = (1 - d / linkDist) * 0.4 * Math.max(0, 1 - avgZ / 600);
+          buf.lineStart();
+          buf.lineTo(
+            coords[i].sx - w / 2,
+            coords[i].sy - h / 2,
+            ps[i].z,
+            lr,
+            lg,
+            lb,
+            alpha,
+          );
+          buf.lineTo(
+            coords[j].sx - w / 2,
+            coords[j].sy - h / 2,
+            ps[j].z,
+            lr,
+            lg,
+            lb,
+            alpha,
+          );
         }
       }
     }
     for (let i = 0; i < ps.length; i++) {
       const p = ps[i];
-      const { sx, sy, scale } = proj[i];
       const twinkle = 0.4 + 0.4 * sin(time * 0.003 * ((p.hue % 5) + 1) + p.hue);
-      ctx.globalAlpha = clamp(twinkle, 0.3, 0.8) * depthAlpha(p.z, 600);
-      glow(ctx, p.hue, 80, 50, 10);
-      ctx.beginPath();
-      ctx.arc(sx, sy, depthSize(p.size, scale) * (s / 500), 0, TAU);
-      ctx.fill();
+      const alpha = clamp(twinkle, 0.3, 0.8) * Math.max(0, 1 - p.z / 600);
+      const [r, g, bl] = hsl(p.hue, 80, 50);
+      buf.point(
+        coords[i].sx - w / 2,
+        coords[i].sy - h / 2,
+        p.z,
+        r,
+        g,
+        bl,
+        alpha,
+        p.size * (s / 500),
+      );
     }
-    ctx.restore();
   },
 };
 
 // ── 5: Meteor Shower ─────────────────────────────────────────────────────────
+
+const METEOR_MAX_DEPTH = 1200;
 
 function resetMeteor(p: P3, w: number, h: number) {
   p.x = Math.random() * w * 1.5;
   p.y = -10 - Math.random() * h * 0.3;
   p.z = Math.random() * 400;
   const spd = 3 + Math.random() * 5;
-  const zFactor = 1 - (p.z / MAX_DEPTH) * 0.5;
+  const zFactor = 1 - (p.z / METEOR_MAX_DEPTH) * 0.5;
   p.vx = -spd * 0.7 * zFactor;
   p.vy = spd * zFactor;
   p.vz = 0;
@@ -271,7 +279,7 @@ const meteorShower: Scene = {
   },
   draw(dc, _s) {
     const st = _s as { ps: P3[]; inited: boolean };
-    const { ctx, w, h, audio } = dc;
+    const { buf, w, h, audio } = dc;
     if (!st.inited) {
       for (const p of st.ps) {
         resetMeteor(p, w, h);
@@ -280,26 +288,19 @@ const meteorShower: Scene = {
       st.inited = true;
     }
     const boost = 1 + audio.energy * 2;
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
     for (const p of st.ps) {
       p.x += p.vx * boost;
       p.y += p.vy * boost;
       if (p.y > h + 20 || p.x < -50) resetMeteor(p, w, h);
-      const { sx, sy, scale } = project(p.x, p.y, p.z, w / 2, h / 2, dc.cam);
       const len = Math.sqrt(p.vx * p.vx + p.vy * p.vy) * 4 * boost;
       const tailX = p.x - (p.vx / Math.abs(p.vx || 1)) * len * 0.7;
       const tailY = p.y - (p.vy / Math.abs(p.vy || 1)) * len;
-      const tail = project(tailX, tailY, p.z, w / 2, h / 2, dc.cam);
-      ctx.globalAlpha = depthAlpha(p.z, 600) * 0.6;
-      glow(ctx, p.hue, 90, 50, 8);
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(tail.sx, tail.sy);
-      ctx.lineWidth = depthSize(p.size, scale, 0.3);
-      ctx.stroke();
+      const alpha = Math.max(0, 1 - p.z / 600) * 0.6;
+      const [r, g, bl] = hsl(p.hue, 90, 50);
+      buf.lineStart();
+      buf.lineTo(p.x - w / 2, p.y - h / 2, p.z, r, g, bl, alpha);
+      buf.lineTo(tailX - w / 2, tailY - h / 2, p.z, r, g, bl, alpha);
     }
-    ctx.restore();
   },
 };
 
@@ -325,7 +326,7 @@ const risingBubbles: Scene = {
   },
   draw(dc, _s) {
     const st = _s as { ps: P3[]; inited: boolean };
-    const { ctx, w, h, time, audio } = dc;
+    const { buf, w, h, time, audio } = dc;
     const s = S(w, h);
     if (!st.inited) {
       for (const p of st.ps) {
@@ -334,23 +335,16 @@ const risingBubbles: Scene = {
       }
       st.inited = true;
     }
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
     for (const p of st.ps) {
       p.y += p.vy * (1 + audio.bass);
       p.x += sin(time * 0.002 + p.hue + p.size) * 0.5;
       if (p.y < -p.size * 2) resetBubble(p, w, h);
-      const { sx, sy, scale } = project(p.x, p.y, p.z, w / 2, h / 2, dc.cam);
-      const drawSize = depthSize(p.size, scale) * (s / 700);
-      ctx.globalAlpha =
-        depthAlpha(p.z, 600) * clamp(0.3 + (p.y / h) * 0.4, 0.3, 0.7);
-      glow(ctx, p.hue, 75, 45, p.size * 0.6);
-      ctx.beginPath();
-      ctx.arc(sx, sy, drawSize, 0, TAU);
-      ctx.stroke();
-      ctx.lineWidth = 1.5;
+      const drawSize = p.size * (s / 700);
+      const alpha =
+        Math.max(0, 1 - p.z / 600) * clamp(0.3 + (p.y / h) * 0.4, 0.3, 0.7);
+      const [r, g, bl] = hsl(p.hue, 75, 45);
+      buf.circle(p.x - w / 2, p.y - h / 2, p.z, drawSize, r, g, bl, alpha);
     }
-    ctx.restore();
   },
 };
 
@@ -378,12 +372,10 @@ const swarm: Scene = {
   },
   draw(dc, _s) {
     const ps = _s as P3[];
-    const { ctx, w, h, time, audio } = dc;
+    const { buf, w, h, time, audio } = dc;
     const s = S(w, h);
     const cx = w / 2 + sin(time * 0.001) * w * 0.2;
     const cy = h / 2 + cos(time * 0.0013) * h * 0.15;
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
     for (const p of ps) {
       const dx = cx - p.x * w;
       const dy = cy - p.y * h;
@@ -399,22 +391,20 @@ const swarm: Scene = {
       p.y = ((p.y % 1) + 1) % 1;
       p.z += sin(time * 0.002 + p.hue * 0.1) * 0.5;
       p.z = clamp(p.z, 0, 500);
-      const { sx, sy, scale } = project(
-        p.x * w,
-        p.y * h,
+      const drawSize = p.size * (s / 600);
+      const alpha = Math.max(0, 1 - p.z / 600) * 0.55;
+      const [r, g, bl] = hsl(p.hue, 85, 42);
+      buf.point(
+        p.x * w - w / 2,
+        p.y * h - h / 2,
         p.z,
-        w / 2,
-        h / 2,
-        dc.cam,
+        r,
+        g,
+        bl,
+        alpha,
+        drawSize,
       );
-      const drawSize = depthSize(p.size, scale) * (s / 600);
-      ctx.globalAlpha = depthAlpha(p.z, 600) * 0.55;
-      glow(ctx, p.hue, 85, 42, 10);
-      ctx.beginPath();
-      ctx.arc(sx, sy, drawSize, 0, TAU);
-      ctx.fill();
     }
-    ctx.restore();
   },
 };
 

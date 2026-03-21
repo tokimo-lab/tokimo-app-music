@@ -1,6 +1,6 @@
 // Shared types for Alchemy visualizer scenes
 
-import type { Camera } from "./perspective";
+import type { SceneBuffer } from "./scene-buffer";
 
 export interface AudioBands {
   bass: number;
@@ -11,7 +11,8 @@ export interface AudioBands {
 
 /** Context passed to every scene draw call */
 export interface DrawCtx {
-  ctx: CanvasRenderingContext2D;
+  /** 3D draw buffer — scenes push points/lines here instead of canvas */
+  buf: SceneBuffer;
   w: number;
   h: number;
   time: number;
@@ -19,8 +20,6 @@ export interface DrawCtx {
   audio: AudioBands;
   analyser: AnalyserNode | null;
   playing: boolean;
-  /** 3D camera state — audio-reactive z-offset + FOV */
-  cam: Camera;
 }
 
 /** A registered scene */

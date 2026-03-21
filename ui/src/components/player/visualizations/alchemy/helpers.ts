@@ -1,56 +1,8 @@
 /** Shared rendering helpers for Alchemy scenes */
-import { clamp } from "./utils";
 
 const TAU = Math.PI * 2;
 
 export { TAU };
-
-/** Set up neon glow style (stroke mode by default) */
-export function neon(
-  ctx: CanvasRenderingContext2D,
-  hue: number,
-  alpha = 0.5,
-  blur = 14,
-  fill = false,
-) {
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = clamp(alpha, 0.3, 0.7);
-  const c = `hsl(${hue},85%,45%)`;
-  if (fill) ctx.fillStyle = c;
-  else {
-    ctx.strokeStyle = c;
-    ctx.lineWidth = 1.5;
-  }
-  ctx.shadowColor = `hsl(${hue},90%,55%)`;
-  ctx.shadowBlur = blur;
-}
-
-/** Set up glow style for particles (sets fill + stroke + shadow) */
-export function glow(
-  ctx: CanvasRenderingContext2D,
-  hue: number,
-  s = 85,
-  l = 45,
-  blur = 12,
-) {
-  const c = `hsl(${hue},${s}%,${l}%)`;
-  ctx.fillStyle = c;
-  ctx.strokeStyle = c;
-  ctx.shadowColor = c;
-  ctx.shadowBlur = blur;
-}
-
-/** Enter screen-blend save scope, optionally translate to center */
-export function scr(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  center = false,
-) {
-  ctx.save();
-  ctx.globalCompositeOperation = "screen";
-  if (center) ctx.translate(w / 2, h / 2);
-}
 
 /** Shortcut for min(w,h) */
 export function S(w: number, h: number) {
