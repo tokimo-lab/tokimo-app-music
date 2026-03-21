@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, Empty, Popconfirm, Spin } from "@tokiomo/components";
 import type { MusicTrackOutput, PlaylistDetailOutput } from "@tokiomo/types";
 import {
@@ -16,8 +17,8 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
+import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";
-import { trpc } from "../../lib/trpc";
 
 const API_BASE =
   (typeof window !== "undefined" &&
@@ -321,72 +322,76 @@ export default function PlaylistDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const message = useMessage();
-  const utils = trpc.useUtils();
+  const qc = useQueryClient();
   const { playTracks } = useMusicPlayer();
 
-  const detailQuery = trpc.playlist.getById.useQuery(
-    { playlistId: playlistId! },
+  const detailQuery = api.playlists.getById.useQuery(
+    { id: playlistId! },
     { enabled: !!playlistId },
   );
 
-  const updateMutation = trpc.playlist.update.useMutation({
+  const updateMutation = api.playlists.update.useMutation({
     onSuccess: () => {
       message.success({
         content: t("media.playlist.updateSuccess"),
         key: "pl-update",
       });
-      utils.playlist.getById.invalidate({ playlistId: playlistId! });
-      utils.playlist.list.invalidate();
+      api.playlists.getById.invalidate(qc, { id: playlistId! });
+      api.playlists.list.invalidate(qc);
     },
     onError: (err) =>
       message.error({ content: err.message, key: "pl-update-err" }),
   });
 
-  const deleteMutation = trpc.playlist.delete.useMutation({
+  const deleteMutation = api.playlists.delete.useMutation({
     onSuccess: () => {
       message.success({
         content: t("media.playlist.deleteSuccess"),
         key: "pl-delete",
       });
-      utils.playlist.list.invalidate();
+      api.playlists.list.invalidate(qc);
       navigate("../playlists", { replace: true });
     },
     onError: (err) =>
       message.error({ content: err.message, key: "pl-delete-err" }),
   });
 
-  const removeMutation = trpc.playlist.removeItems.useMutation({
+  const removeMutation = api.playlists.removeItems.useMutation({
     onSuccess: () => {
-      utils.playlist.getById.invalidate({ playlistId: playlistId! });
-      utils.playlist.list.invalidate();
+      api.playlists.getById.invalidate(qc, { id: playlistId! });
+      api.playlists.list.invalidate(qc);
     },
     onError: (err) =>
       message.error({ content: err.message, key: "pl-remove-err" }),
   });
 
-  const reorderMutation = trpc.playlist.reorder.useMutation({
+  const reorderMutation = api.playlists.reorder.useMutation({
     onSuccess: () => {
-      utils.playlist.getById.invalidate({ playlistId: playlistId! });
+      api.playlists.getById.invalidate(qc, { id: playlistId! });
     },
   });
 
   const handleUpdate = useCallback(
     (name: string, description: string | null) => {
       if (!playlistId) return;
-      updateMutation.mutate({ id: playlistId, name, description });
+      updateMutation.mutate({
+        id: playlistId,
+        name,
+        description: description ?? undefined,
+      });
     },
     [playlistId, updateMutation],
   );
 
   const handleDelete = useCallback(() => {
     if (!playlistId) return;
-    deleteMutation.mutate({ playlistId });
+    deleteMutation.mutate(playlistId);
   }, [playlistId, deleteMutation]);
 
   const handleRemove = useCallback(
     (itemId: string) => {
       if (!playlistId) return;
-      removeMutation.mutate({ playlistId, itemIds: [itemId] });
+      removeMutation.mutate({ id: playlistId!, itemIds: [itemId] });
     },
     [playlistId, removeMutation],
   );
@@ -431,7 +436,7 @@ export default function PlaylistDetailPage() {
         items[currentIndex],
       ];
       const newOrder = items.map((it) => it.id);
-      reorderMutation.mutate({ playlistId, itemIds: newOrder });
+      reorderMutation.mutate({ id: playlistId!, itemIds: newOrder });
     },
     [detailQuery.data, playlistId, reorderMutation],
   );

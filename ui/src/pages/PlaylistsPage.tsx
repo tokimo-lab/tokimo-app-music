@@ -1,11 +1,12 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, Empty, Modal, Spin } from "@tokiomo/components";
 import type { PlaylistOutput } from "@tokiomo/types";
 import { ListMusic, Music, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";
-import { trpc } from "../../lib/trpc";
 
 const API_BASE =
   (typeof window !== "undefined" &&
@@ -86,7 +87,7 @@ function CreatePlaylistDialog({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
-  const createMutation = trpc.playlist.create.useMutation({
+  const createMutation = api.playlists.create.useMutation({
     onSuccess: () => {
       message.success({
         content: t("media.playlist.createSuccess"),
@@ -166,12 +167,12 @@ export default function PlaylistsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
-  const utils = trpc.useUtils();
+  const qc = useQueryClient();
 
-  const playlistsQuery = trpc.playlist.list.useQuery();
+  const playlistsQuery = api.playlists.list.useQuery();
 
   const handleCreated = () => {
-    utils.playlist.list.invalidate();
+    api.playlists.list.invalidate(qc);
   };
 
   if (playlistsQuery.isLoading) {

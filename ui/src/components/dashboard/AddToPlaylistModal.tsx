@@ -1,10 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, Modal, Spin } from "@tokiomo/components";
 import type { PlaylistOutput } from "@tokiomo/types";
 import { Music, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";
-import { trpc } from "../../lib/trpc";
 
 interface AddToPlaylistModalProps {
   open: boolean;
@@ -78,22 +79,22 @@ export default function AddToPlaylistModal({
 }: AddToPlaylistModalProps) {
   const { t } = useTranslation();
   const message = useMessage();
-  const utils = trpc.useUtils();
+  const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [addingToId, setAddingToId] = useState<string | null>(null);
 
-  const playlistsQuery = trpc.playlist.list.useQuery(undefined, {
+  const playlistsQuery = api.playlists.list.useQuery({
     enabled: open,
   });
 
-  const addTracksMutation = trpc.playlist.addTracks.useMutation({
+  const addTracksMutation = api.playlists.addTracks.useMutation({
     onSuccess: () => {
       message.success({
         content: t("media.playlist.addSuccess"),
         key: "pl-add",
       });
-      utils.playlist.list.invalidate();
+      api.playlists.list.invalidate(qc);
       setAddingToId(null);
       onClose();
     },
@@ -103,9 +104,9 @@ export default function AddToPlaylistModal({
     },
   });
 
-  const createMutation = trpc.playlist.create.useMutation({
+  const createMutation = api.playlists.create.useMutation({
     onSuccess: (created) => {
-      addTracksMutation.mutate({ playlistId: created.id, trackIds });
+      addTracksMutation.mutate({ id: created.id, trackIds });
       setNewName("");
       setShowCreate(false);
     },
@@ -117,7 +118,7 @@ export default function AddToPlaylistModal({
     (playlistId: string) => {
       if (trackIds.length === 0) return;
       setAddingToId(playlistId);
-      addTracksMutation.mutate({ playlistId, trackIds });
+      addTracksMutation.mutate({ id: playlistId, trackIds });
     },
     [trackIds, addTracksMutation],
   );
