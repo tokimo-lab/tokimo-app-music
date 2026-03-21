@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
+// Force full remount on HMR so WebGL resources are recreated
+// @refresh reset
 import {
   AdditiveBlending,
-  Color,
   Group,
   LinearFilter,
-  LineSegments,
   Mesh,
   MeshBasicMaterial,
   OrthographicCamera,
@@ -13,17 +13,22 @@ import {
   Points,
   ShaderMaterial,
   Scene as ThreeScene,
+  Vector2,
   WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
 import {
   applyMorph,
   BASE_Z,
+  BLOOM_VS,
+  BLUR_FS,
   CAM_FOV,
-  LINE_FS,
-  LINE_VS,
+  DISPLAY_FS,
+  EXTRACT_FS,
+  FAT_LINE_FS,
+  FAT_LINE_VS,
+  makeFatLineGeo,
   makeGlowTexture,
-  makeLineGeo,
   makePointGeo,
   POINT_FS,
   POINT_VS,
@@ -42,7 +47,7 @@ export type { AlchemySceneInfo };
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const SCENE_DURATION = 900;
-const TRAIL_ALPHA = 0.06;
+const TRAIL_ALPHA = 0.10;
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -81,11 +86,11 @@ export function AlchemyVisualizer({
     const renderer = new WebGLRenderer({ antialias: false, alpha: false });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.domElement.style.display = "block";
+    renderer.autoClear = false;
     container.appendChild(renderer.domElement);
 
     // ── 3D Scene ──────────────────────────────────────────────────────
     const mainScene = new ThreeScene();
-    mainScene.background = new Color(0x000000);
     const camera = new PerspectiveCamera(CAM_FOV, 1, 0.1, 200);
     camera.position.set(0, 0, 0);
 
@@ -109,9 +114,13 @@ export function AlchemyVisualizer({
     }
     function mkLineMat() {
       return new ShaderMaterial({
-        uniforms: { uOpacity: { value: 1 } },
-        vertexShader: LINE_VS,
-        fragmentShader: LINE_FS,
+        uniforms: {
+          uOpacity: { value: 1 },
+          lineWidth: { value: 3.0 },
+          resolution: { value: new Vector2(2, 2) },
+        },
+        vertexShader: FAT_LINE_VS,
+        fragmentShader: FAT_LINE_FS,
         transparent: true,
         blending: AdditiveBlending,
         depthWrite: false,
@@ -122,12 +131,13 @@ export function AlchemyVisualizer({
     const lineMatA = mkLineMat();
 
     const ptGeoA = makePointGeo();
-    const lineGeoA = makeLineGeo();
+    const lineGeoA = makeFatLineGeo();
     const groupA = new Group();
-    groupA.add(
-      new Points(ptGeoA, ptMatA),
-      new LineSegments(lineGeoA, lineMatA),
-    );
+    const ptMeshA = new Points(ptGeoA, ptMatA);
+    ptMeshA.frustumCulled = false;
+    const lineMeshA = new Mesh(lineGeoA, lineMatA);
+    lineMeshA.frustumCulled = false;
+    groupA.add(ptMeshA, lineMeshA);
     mainScene.add(groupA);
 
     // Position groupA in front of camera
@@ -149,10 +159,64 @@ export function AlchemyVisualizer({
     const ortho = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const quadGeo = new PlaneGeometry(2, 2);
     const fadeScene = new ThreeScene();
-    const fadeMat = new MeshBasicMaterial({ transparent: true, opacity: 0.94 });
+    const fadeMat = new MeshBasicMaterial({
+      transparent: true,
+      opacity: 1 - TRAIL_ALPHA,
+      map: rtA.texture,
+    });
     fadeScene.add(new Mesh(quadGeo, fadeMat));
+
+    // ── Bloom post-processing ─────────────────────────────────────────
+    let bloomW = 2;
+    let bloomH = 2;
+    const bloomRT1 = new WebGLRenderTarget(bloomW, bloomH, {
+      minFilter: LinearFilter,
+      magFilter: LinearFilter,
+    });
+    const bloomRT2 = new WebGLRenderTarget(bloomW, bloomH, {
+      minFilter: LinearFilter,
+      magFilter: LinearFilter,
+    });
+    // Bloom extract: amplify bright pixels before blurring
+    const extractMat = new ShaderMaterial({
+      uniforms: {
+        tInput: { value: null },
+        amplify: { value: 5.0 },
+      },
+      vertexShader: BLOOM_VS,
+      fragmentShader: EXTRACT_FS,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const extractScene = new ThreeScene();
+    extractScene.add(new Mesh(quadGeo.clone(), extractMat));
+
+    const blurMat = new ShaderMaterial({
+      uniforms: {
+        tInput: { value: null },
+        direction: { value: new Vector2(1, 0) },
+        resolution: { value: new Vector2(bloomW, bloomH) },
+      },
+      vertexShader: BLOOM_VS,
+      fragmentShader: BLUR_FS,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const blurScene = new ThreeScene();
+    blurScene.add(new Mesh(quadGeo.clone(), blurMat));
+
+    const displayMat = new ShaderMaterial({
+      uniforms: {
+        tMain: { value: null },
+        tBloom: { value: null },
+        bloomStrength: { value: 2.0 },
+      },
+      vertexShader: BLOOM_VS,
+      fragmentShader: DISPLAY_FS,
+      depthTest: false,
+      depthWrite: false,
+    });
     const displayScene = new ThreeScene();
-    const displayMat = new MeshBasicMaterial();
     displayScene.add(new Mesh(quadGeo.clone(), displayMat));
 
     // ── Scene buffers ─────────────────────────────────────────────────
@@ -201,6 +265,14 @@ export function AlchemyVisualizer({
         rtH = ph;
         rtA.setSize(pw, ph);
         rtB.setSize(pw, ph);
+        const bw = pw;
+        const bh = ph;
+        bloomW = bw;
+        bloomH = bh;
+        bloomRT1.setSize(bw, bh);
+        bloomRT2.setSize(bw, bh);
+        blurMat.uniforms.resolution.value.set(bw, bh);
+        lineMatA.uniforms.resolution.value.set(bw, bh);
       }
     }
 
@@ -289,28 +361,44 @@ export function AlchemyVisualizer({
       );
       camera.position.set(0, 0, -camZBreath + (transition?.camPush ?? 0) * env);
 
-      // ── RTT trail composite ───────────────────────────────────────
-      const trailFade = 1 - (TRAIL_ALPHA + audio.energy * 0.04);
-
-      // 1) Fade previous frame
+      // ── 1) Trail: fade previous frame onto trail.write ─────────
       fadeMat.map = trail.read.texture;
-      fadeMat.opacity = trailFade;
       renderer.setRenderTarget(trail.write);
       renderer.clear();
       renderer.render(fadeScene, ortho);
 
-      // 2) Draw 3D scene on top (additive)
-      renderer.autoClear = false;
+      // ── 2) Draw 3D scene on top of faded trail ────────────────────
       renderer.render(mainScene, camera);
-      renderer.autoClear = true;
 
-      // 3) Display to screen
-      displayMat.map = trail.write.texture;
+      // ── 3) Bloom: extract bright pixels ───────────────────────────
+      extractMat.uniforms.tInput.value = trail.write.texture;
+      renderer.setRenderTarget(bloomRT1);
+      renderer.clear();
+      renderer.render(extractScene, ortho);
+
+      // ── 4) Bloom: multi-scale Gaussian blur ───────────────────────
+      for (const step of [1, 4, 12]) {
+        blurMat.uniforms.tInput.value = bloomRT1.texture;
+        blurMat.uniforms.direction.value.set(step, 0);
+        renderer.setRenderTarget(bloomRT2);
+        renderer.clear();
+        renderer.render(blurScene, ortho);
+
+        blurMat.uniforms.tInput.value = bloomRT2.texture;
+        blurMat.uniforms.direction.value.set(0, step);
+        renderer.setRenderTarget(bloomRT1);
+        renderer.clear();
+        renderer.render(blurScene, ortho);
+      }
+
+      // ── 5) Display: composite trail + bloom → screen ──────────────
+      displayMat.uniforms.tMain.value = trail.write.texture;
+      displayMat.uniforms.tBloom.value = bloomRT1.texture;
       renderer.setRenderTarget(null);
       renderer.clear();
       renderer.render(displayScene, ortho);
 
-      // 4) Swap
+      // ── 6) Swap trail buffers ─────────────────────────────────────
       const tmp = trail.read;
       trail.read = trail.write;
       trail.write = tmp;
@@ -341,6 +429,10 @@ export function AlchemyVisualizer({
       glowTex.dispose();
       fadeMat.dispose();
       displayMat.dispose();
+      extractMat.dispose();
+      blurMat.dispose();
+      bloomRT1.dispose();
+      bloomRT2.dispose();
       quadGeo.dispose();
       rtA.dispose();
       rtB.dispose();

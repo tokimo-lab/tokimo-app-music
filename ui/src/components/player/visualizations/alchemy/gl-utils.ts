@@ -6,6 +6,8 @@ import {
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
+  InstancedBufferAttribute,
+  InstancedBufferGeometry,
   LinearFilter,
 } from "three";
 import type { SceneBuffer } from "./scene-buffer";
@@ -17,11 +19,9 @@ export const CAM_FOV = 60;
 export const BASE_Z = 10;
 const MAX_DEPTH = 1200;
 const DEPTH_RANGE = 8;
-const MAX_PTS = 100000;
+const MAX_PTS = 10000;
 const MAX_SEGS = 8000;
-const LINE_GLOW_SIZE = 26;
-/** Spacing between glow sprites along a line (fraction of glow radius) */
-const GLOW_SPACING = 0.14;
+const POINT_GLOW_SIZE = 20;
 
 // ── Glow texture ─────────────────────────────────────────────────────────────
 
@@ -39,13 +39,11 @@ export function makeGlowTexture(size = 64): CanvasTexture {
     center,
     center,
   );
-  // Wide flat-top core (no brightness modulation between sprites)
-  // then rapid drop → subtle outer halo, no defocus
+  // Smooth radial glow for explicit point halos
   grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.4, "rgba(255,255,255,1)");
-  grad.addColorStop(0.5, "rgba(255,255,255,0.35)");
-  grad.addColorStop(0.65, "rgba(255,255,255,0.08)");
-  grad.addColorStop(0.8, "rgba(255,255,255,0.02)");
+  grad.addColorStop(0.15, "rgba(255,255,255,0.7)");
+  grad.addColorStop(0.35, "rgba(255,255,255,0.25)");
+  grad.addColorStop(0.55, "rgba(255,255,255,0.06)");
   grad.addColorStop(1, "rgba(255,255,255,0)");
   g.fillStyle = grad;
   g.fillRect(0, 0, size, size);
@@ -79,20 +77,101 @@ void main() {
   if (gl_FragColor.a < 0.005) discard;
 }`;
 
-export const LINE_VS = `
-attribute vec4 aColor;
-varying vec4 vColor;
+/** Fat line vertex shader — instanced quads extruded in screen space. */
+export const FAT_LINE_VS = `
+attribute vec3 instanceStart;
+attribute vec3 instanceEnd;
+attribute vec4 instanceColorStart;
+attribute vec4 instanceColorEnd;
+uniform float lineWidth;
+uniform vec2 resolution;
 uniform float uOpacity;
+varying vec4 vColor;
+varying float vEdge;
 void main() {
-  vColor = aColor * vec4(1.0, 1.0, 1.0, uOpacity);
+  float side = position.x;
+  float t = position.y;
+  vColor = mix(instanceColorStart, instanceColorEnd, t);
+  vColor.a *= uOpacity;
+  vEdge = side * 0.5;
+  vec4 cs = projectionMatrix * modelViewMatrix * vec4(instanceStart, 1.0);
+  vec4 ce = projectionMatrix * modelViewMatrix * vec4(instanceEnd, 1.0);
+  vec4 cp = mix(cs, ce, t);
+  vec2 d = ce.xy / ce.w - cs.xy / cs.w;
+  vec2 px = d * resolution * 0.5;
+  float pxLen = length(px);
+  if (pxLen < 0.001) { gl_Position = cp; return; }
+  vec2 norm = vec2(-px.y, px.x) / pxLen;
+  cp.xy += norm * lineWidth * side * 2.0 / resolution * cp.w;
+  gl_Position = cp;
+}`;
+
+/** Fat line fragment shader — soft edge falloff for natural neon bloom. */
+export const FAT_LINE_FS = `
+varying vec4 vColor;
+varying float vEdge;
+void main() {
+  float edge = 1.0 - smoothstep(0.3, 0.5, abs(vEdge));
+  vec3 rgb = vColor.rgb * 1.3;
+  gl_FragColor = vec4(rgb, vColor.a * edge);
+  if (gl_FragColor.a < 0.005) discard;
+}`;
+
+// ── Bloom shaders ────────────────────────────────────────────────────────────
+
+export const BLOOM_VS = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 
-export const LINE_FS = `
-varying vec4 vColor;
+/** 9-tap Gaussian blur — direction vector encodes step scale. */
+export const BLUR_FS = `
+uniform sampler2D tInput;
+uniform vec2 direction;
+uniform vec2 resolution;
+varying vec2 vUv;
 void main() {
-  gl_FragColor = vColor;
-  if (gl_FragColor.a < 0.005) discard;
+  vec2 off = direction / resolution;
+  vec4 c = vec4(0.0);
+  c += texture2D(tInput, vUv - 4.0 * off) * 0.0162;
+  c += texture2D(tInput, vUv - 3.0 * off) * 0.0540;
+  c += texture2D(tInput, vUv - 2.0 * off) * 0.1218;
+  c += texture2D(tInput, vUv - 1.0 * off) * 0.1944;
+  c += texture2D(tInput, vUv)              * 0.2270;
+  c += texture2D(tInput, vUv + 1.0 * off) * 0.1944;
+  c += texture2D(tInput, vUv + 2.0 * off) * 0.1218;
+  c += texture2D(tInput, vUv + 3.0 * off) * 0.0540;
+  c += texture2D(tInput, vUv + 4.0 * off) * 0.0162;
+  gl_FragColor = c;
+}`;
+
+/** Extract and amplify scene for bloom input (gives 1px lines enough energy). */
+export const EXTRACT_FS = `
+uniform sampler2D tInput;
+uniform float amplify;
+varying vec2 vUv;
+void main() {
+  vec4 c = texture2D(tInput, vUv);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  // Very low threshold — exclude only pure black; let all visible pixels bloom
+  gl_FragColor = c * amplify * smoothstep(0.003, 0.06, lum);
+}`;
+
+/** Display: main frame + bloom composite with soft tone mapping. */
+export const DISPLAY_FS = `
+uniform sampler2D tMain;
+uniform sampler2D tBloom;
+uniform float bloomStrength;
+varying vec2 vUv;
+void main() {
+  vec4 main = texture2D(tMain, vUv);
+  vec4 bloom = texture2D(tBloom, vUv);
+  vec3 c = main.rgb + bloom.rgb * bloomStrength;
+  // Soft Reinhard tone map — prevents overblown whites on bright scenes
+  c = c / (1.0 + c * 0.35);
+  gl_FragColor = vec4(c, 1.0);
 }`;
 
 // ── Geometry builders ────────────────────────────────────────────────────────
@@ -112,12 +191,35 @@ export function makePointGeo(): BufferGeometry {
   return geo;
 }
 
-export function makeLineGeo(): BufferGeometry {
-  const geo = new BufferGeometry();
-  const v = MAX_SEGS * 2;
-  geo.setAttribute("position", new BufferAttribute(new Float32Array(v * 3), 3));
-  geo.setAttribute("aColor", new BufferAttribute(new Float32Array(v * 4), 4));
-  geo.setDrawRange(0, 0);
+export function makeFatLineGeo(): InstancedBufferGeometry {
+  const geo = new InstancedBufferGeometry();
+  // Template quad: position.x = side (-1/+1), position.y = t (0/1)
+  geo.setAttribute(
+    "position",
+    new BufferAttribute(
+      new Float32Array([-1, 0, 0, 1, 0, 0, -1, 1, 0, 1, 1, 0]),
+      3,
+    ),
+  );
+  geo.setIndex([0, 1, 2, 2, 1, 3]);
+  // Pre-allocated per-instance attributes
+  geo.setAttribute(
+    "instanceStart",
+    new InstancedBufferAttribute(new Float32Array(MAX_SEGS * 3), 3),
+  );
+  geo.setAttribute(
+    "instanceEnd",
+    new InstancedBufferAttribute(new Float32Array(MAX_SEGS * 3), 3),
+  );
+  geo.setAttribute(
+    "instanceColorStart",
+    new InstancedBufferAttribute(new Float32Array(MAX_SEGS * 4), 4),
+  );
+  geo.setAttribute(
+    "instanceColorEnd",
+    new InstancedBufferAttribute(new Float32Array(MAX_SEGS * 4), 4),
+  );
+  geo.instanceCount = 0;
   return geo;
 }
 
@@ -126,13 +228,13 @@ export function makeLineGeo(): BufferGeometry {
 export function uploadBuffer(
   buf: SceneBuffer,
   ptGeo: BufferGeometry,
-  lineGeo: BufferGeometry,
+  lineGeo: InstancedBufferGeometry,
   h: number,
 ) {
   const ps = (2 * BASE_Z * Math.tan((CAM_FOV * Math.PI) / 360)) / h;
   const ds = DEPTH_RANGE / MAX_DEPTH;
   const ss = (2 * BASE_Z) / h;
-  const glowSz = LINE_GLOW_SIZE * ss;
+  const glowSz = POINT_GLOW_SIZE * ss;
   const pp = ptGeo.attributes.position as BufferAttribute;
   const pc = ptGeo.attributes.aColor as BufferAttribute;
   const pz = ptGeo.attributes.aSize as BufferAttribute;
@@ -173,70 +275,50 @@ export function uploadBuffer(
     n++;
   }
 
-  // Add glow point sprites along line segments → neon halo effect
-  for (let i = 0; i < buf.segN && n + 2 < MAX_PTS; i++) {
+  // Sample line-segment midpoints as tiny morph particles.
+  // These are nearly invisible in normal rendering but provide
+  // point-cloud density for morph transitions in line-heavy scenes.
+  for (let i = 0; i < buf.segN && n < MAX_PTS; i += 3) {
     const si = i * 14;
-    // Start vertex
-    const x0 = buf.segs[si] * ps;
-    const y0 = -buf.segs[si + 1] * ps;
-    const z0 = -buf.segs[si + 2] * ds;
-    const r0 = buf.segs[si + 3];
-    const g0 = buf.segs[si + 4];
-    const b0 = buf.segs[si + 5];
-    const a0 = buf.segs[si + 6];
-    // End vertex
-    const x1 = buf.segs[si + 7] * ps;
-    const y1 = -buf.segs[si + 8] * ps;
-    const z1 = -buf.segs[si + 9] * ds;
-    const r1 = buf.segs[si + 10];
-    const g1 = buf.segs[si + 11];
-    const b1 = buf.segs[si + 12];
-    const a1 = buf.segs[si + 13];
-
-    // Compute distance in world coords and number of glow sprites needed
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const dz = z1 - z0;
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    const spacing = glowSz * GLOW_SPACING;
-    const steps = Math.max(1, Math.ceil(dist / spacing));
-    const clampedSteps = Math.min(steps, 128);
-
-    for (let s = 0; s <= clampedSteps && n < MAX_PTS; s++) {
-      const t = clampedSteps > 0 ? s / clampedSteps : 0;
-      pp.array[n * 3] = x0 + dx * t;
-      pp.array[n * 3 + 1] = y0 + dy * t;
-      pp.array[n * 3 + 2] = z0 + dz * t;
-      pc.array[n * 4] = r0 + (r1 - r0) * t;
-      pc.array[n * 4 + 1] = g0 + (g1 - g0) * t;
-      pc.array[n * 4 + 2] = b0 + (b1 - b0) * t;
-      pc.array[n * 4 + 3] = (a0 + (a1 - a0) * t) * 0.65;
-      pz.array[n] = glowSz;
-      n++;
-    }
+    pp.array[n * 3] = ((buf.segs[si] + buf.segs[si + 7]) / 2) * ps;
+    pp.array[n * 3 + 1] = (-(buf.segs[si + 1] + buf.segs[si + 8]) / 2) * ps;
+    pp.array[n * 3 + 2] = (-(buf.segs[si + 2] + buf.segs[si + 9]) / 2) * ds;
+    pc.array[n * 4] = (buf.segs[si + 3] + buf.segs[si + 10]) / 2;
+    pc.array[n * 4 + 1] = (buf.segs[si + 4] + buf.segs[si + 11]) / 2;
+    pc.array[n * 4 + 2] = (buf.segs[si + 5] + buf.segs[si + 12]) / 2;
+    pc.array[n * 4 + 3] = 0.001;
+    pz.array[n] = 0.001;
+    n++;
   }
+
   ptGeo.setDrawRange(0, n);
   pp.needsUpdate = pc.needsUpdate = pz.needsUpdate = true;
 
-  // Upload line segments
-  const lp = lineGeo.attributes.position as BufferAttribute;
-  const lc = lineGeo.attributes.aColor as BufferAttribute;
-  for (let i = 0; i < buf.segN; i++) {
+  // Upload fat line instances
+  const iS = lineGeo.attributes.instanceStart as InstancedBufferAttribute;
+  const iE = lineGeo.attributes.instanceEnd as InstancedBufferAttribute;
+  const iCS = lineGeo.attributes.instanceColorStart as InstancedBufferAttribute;
+  const iCE = lineGeo.attributes.instanceColorEnd as InstancedBufferAttribute;
+  const segCount = Math.min(buf.segN, MAX_SEGS);
+  for (let i = 0; i < segCount; i++) {
     const si = i * 14;
-    for (let v = 0; v < 2; v++) {
-      const vi = i * 2 + v;
-      const so = si + v * 7;
-      lp.array[vi * 3] = buf.segs[so] * ps;
-      lp.array[vi * 3 + 1] = -buf.segs[so + 1] * ps;
-      lp.array[vi * 3 + 2] = -buf.segs[so + 2] * ds;
-      lc.array[vi * 4] = buf.segs[so + 3];
-      lc.array[vi * 4 + 1] = buf.segs[so + 4];
-      lc.array[vi * 4 + 2] = buf.segs[so + 5];
-      lc.array[vi * 4 + 3] = buf.segs[so + 6];
-    }
+    iS.array[i * 3] = buf.segs[si] * ps;
+    iS.array[i * 3 + 1] = -buf.segs[si + 1] * ps;
+    iS.array[i * 3 + 2] = -buf.segs[si + 2] * ds;
+    iE.array[i * 3] = buf.segs[si + 7] * ps;
+    iE.array[i * 3 + 1] = -buf.segs[si + 8] * ps;
+    iE.array[i * 3 + 2] = -buf.segs[si + 9] * ds;
+    iCS.array[i * 4] = buf.segs[si + 3];
+    iCS.array[i * 4 + 1] = buf.segs[si + 4];
+    iCS.array[i * 4 + 2] = buf.segs[si + 5];
+    iCS.array[i * 4 + 3] = buf.segs[si + 6];
+    iCE.array[i * 4] = buf.segs[si + 10];
+    iCE.array[i * 4 + 1] = buf.segs[si + 11];
+    iCE.array[i * 4 + 2] = buf.segs[si + 12];
+    iCE.array[i * 4 + 3] = buf.segs[si + 13];
   }
-  lineGeo.setDrawRange(0, buf.segN * 2);
-  lp.needsUpdate = lc.needsUpdate = true;
+  lineGeo.instanceCount = segCount;
+  iS.needsUpdate = iE.needsUpdate = iCS.needsUpdate = iCE.needsUpdate = true;
 }
 
 // ── Point-cloud morph transition ─────────────────────────────────────────────
