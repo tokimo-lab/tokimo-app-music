@@ -2,15 +2,21 @@ import { useEffect, useRef } from "react";
 import { drawAmbient, initAmbientBubbles } from "./alchemy/ambient";
 import { DEFAULT_FOV } from "./alchemy/perspective";
 import { ALL_SCENES, SCENE_COUNT } from "./alchemy/registry";
+import {
+  type CameraTransition,
+  compositeBuffer,
+  createTransition,
+  getTransitionOffsets,
+} from "./alchemy/transitions";
 import type { AlchemySceneInfo, DrawCtx } from "./alchemy/types";
-import { ease, getAudioBands } from "./alchemy/utils";
+import { getAudioBands } from "./alchemy/utils";
 
 export type { AlchemySceneInfo };
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const SCENE_DURATION = 900; // frames (~15s at 60fps)
-const CROSSFADE_FRAMES = 120; // ~2s transition
+const TRANSITION_FRAMES = 160; // ~2.7s camera movement
 const TRAIL_ALPHA = 0.06;
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -60,6 +66,7 @@ export function AlchemyVisualizer({
     let currentScene = Math.floor(Math.random() * SCENE_COUNT);
     let nextScene = -1;
     let fadeProgress = 0;
+    let transition: CameraTransition | null = null;
     let bufW = 0;
     let bufH = 0;
     let camZ = 0;
@@ -150,16 +157,18 @@ export function AlchemyVisualizer({
       if (nextScene < 0 && sceneTimer >= SCENE_DURATION) {
         nextScene = pickNextScene(currentScene);
         fadeProgress = 0;
+        transition = createTransition();
         ctxB.clearRect(0, 0, w, h);
       }
 
       ctx.clearRect(0, 0, w, h);
 
-      if (nextScene >= 0) {
+      if (nextScene >= 0 && transition) {
         fadeProgress++;
-        const fadePct = Math.min(1, fadeProgress / CROSSFADE_FRAMES);
-        const fadeEased = ease(fadePct);
+        const fadePct = Math.min(1, fadeProgress / TRANSITION_FRAMES);
+        const eased = transition.easing(fadePct);
 
+        // Draw both scenes to their respective buffers
         ctxA.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA + audio.energy * 0.04})`;
         ctxA.fillRect(0, 0, w, h);
         drawSceneTo(ctxA, currentScene, w, h, dc);
@@ -168,11 +177,28 @@ export function AlchemyVisualizer({
         ctxB.fillRect(0, 0, w, h);
         drawSceneTo(ctxB, nextScene, w, h, dc);
 
-        ctx.globalAlpha = 1 - fadeEased;
-        ctx.drawImage(bufA, 0, 0, w, h);
-        ctx.globalAlpha = fadeEased;
-        ctx.drawImage(bufB, 0, 0, w, h);
-        ctx.globalAlpha = 1;
+        // Composite with camera-movement transforms
+        const off = getTransitionOffsets(transition.dir, eased, w, h);
+        compositeBuffer(
+          ctx,
+          bufA,
+          w,
+          h,
+          off.oldDx,
+          off.oldDy,
+          off.oldScale,
+          off.oldAlpha,
+        );
+        compositeBuffer(
+          ctx,
+          bufB,
+          w,
+          h,
+          off.newDx,
+          off.newDy,
+          off.newScale,
+          off.newAlpha,
+        );
 
         if (fadePct >= 1) {
           ctxA.save();
@@ -188,6 +214,7 @@ export function AlchemyVisualizer({
           nextScene = -1;
           sceneTimer = 0;
           fadeProgress = 0;
+          transition = null;
         }
       } else {
         ctxA.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA + audio.energy * 0.04})`;
@@ -200,7 +227,7 @@ export function AlchemyVisualizer({
         scene: ALL_SCENES[currentScene]?.name ?? "?",
         nextScene: nextScene >= 0 ? (ALL_SCENES[nextScene]?.name ?? "?") : null,
         fadePct:
-          nextScene >= 0 ? Math.min(1, fadeProgress / CROSSFADE_FRAMES) : 0,
+          nextScene >= 0 ? Math.min(1, fadeProgress / TRANSITION_FRAMES) : 0,
         sceneTimer,
       });
 
