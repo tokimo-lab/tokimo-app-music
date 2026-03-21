@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { WasmAudioEngine } from "../components/player/WasmAudioEngine";
+import { api } from "../generated/rust-api";
 import { usePlayer } from "./PlayerContext";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -88,11 +89,6 @@ function saveVolume(v: number): void {
   }
 }
 
-const API_BASE =
-  (typeof window !== "undefined" &&
-    (import.meta.env as Record<string, string>).VITE_API_URL) ||
-  "";
-
 const MEDIAFS_BASE =
   (typeof window !== "undefined" &&
     (import.meta.env as Record<string, string>).RUST_SERVER) ||
@@ -109,7 +105,8 @@ function normalizeStreamUrl(raw: string): string {
     const isMediafsPath =
       resolved.pathname.startsWith("/api/media-files/") ||
       resolved.pathname.startsWith("/api/file-systems/") ||
-      resolved.pathname.startsWith("/api/hls/");
+      resolved.pathname.startsWith("/api/hls/") ||
+      resolved.pathname.startsWith("/api/playback/");
 
     if (!isMediafsPath) return resolved.toString();
 
@@ -126,11 +123,11 @@ function normalizeStreamUrl(raw: string): string {
 }
 
 async function resolveStreamUrl(fileId: string): Promise<string> {
-  const res = await fetch(`${API_BASE}/media/stream-url/${fileId}`, {
-    credentials: "include",
+  const data = await api.playback.streamUrl.fetch({
+    fileId,
+    vc: "",
+    vr: "",
   });
-  if (!res.ok) throw new Error(`stream-url ${res.status}`);
-  const data = (await res.json()) as { url: string };
   return normalizeStreamUrl(data.url);
 }
 
