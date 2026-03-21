@@ -17,7 +17,7 @@ export const CAM_FOV = 60;
 export const BASE_Z = 10;
 const MAX_DEPTH = 1200;
 const DEPTH_RANGE = 8;
-const MAX_PTS = 80000;
+const MAX_PTS = 100000;
 const MAX_SEGS = 8000;
 const LINE_GLOW_SIZE = 26;
 /** Spacing between glow sprites along a line (fraction of glow radius) */
@@ -200,7 +200,7 @@ export function uploadBuffer(
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const spacing = glowSz * GLOW_SPACING;
     const steps = Math.max(1, Math.ceil(dist / spacing));
-    const clampedSteps = Math.min(steps, 32);
+    const clampedSteps = Math.min(steps, 128);
 
     for (let s = 0; s <= clampedSteps && n < MAX_PTS; s++) {
       const t = clampedSteps > 0 ? s / clampedSteps : 0;
