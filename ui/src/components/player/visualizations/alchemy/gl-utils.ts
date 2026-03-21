@@ -19,9 +19,9 @@ const MAX_DEPTH = 1200;
 const DEPTH_RANGE = 8;
 const MAX_PTS = 60000;
 const MAX_SEGS = 8000;
-const LINE_GLOW_SIZE = 48;
+const LINE_GLOW_SIZE = 24;
 /** Spacing between glow sprites along a line (fraction of glow radius) */
-const GLOW_SPACING = 0.12;
+const GLOW_SPACING = 0.22;
 
 // ── Glow texture ─────────────────────────────────────────────────────────────
 
@@ -39,12 +39,12 @@ export function makeGlowTexture(size = 64): CanvasTexture {
     center,
     center,
   );
-  // Wide bright core → smooth falloff for continuous line glow
+  // Tight bright core → fast falloff for crisp neon glow
   grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.15, "rgba(255,255,255,1)");
-  grad.addColorStop(0.35, "rgba(255,255,255,0.8)");
-  grad.addColorStop(0.5, "rgba(255,255,255,0.45)");
-  grad.addColorStop(0.7, "rgba(255,255,255,0.12)");
+  grad.addColorStop(0.08, "rgba(255,255,255,0.9)");
+  grad.addColorStop(0.2, "rgba(255,255,255,0.45)");
+  grad.addColorStop(0.35, "rgba(255,255,255,0.15)");
+  grad.addColorStop(0.55, "rgba(255,255,255,0.04)");
   grad.addColorStop(1, "rgba(255,255,255,0)");
   g.fillStyle = grad;
   g.fillRect(0, 0, size, size);
@@ -156,8 +156,8 @@ export function uploadBuffer(
     pc.array[n * 4] = r;
     pc.array[n * 4 + 1] = g;
     pc.array[n * 4 + 2] = b;
-    pc.array[n * 4 + 3] = a * 0.55;
-    pz.array[n] = Math.max(glowSz, sz * 6);
+    pc.array[n * 4 + 3] = a * 0.35;
+    pz.array[n] = Math.max(glowSz, sz * 4);
     n++;
 
     // Bright core
@@ -168,7 +168,7 @@ export function uploadBuffer(
     pc.array[n * 4 + 1] = g;
     pc.array[n * 4 + 2] = b;
     pc.array[n * 4 + 3] = a;
-    pz.array[n] = sz * 3;
+    pz.array[n] = sz * 2.5;
     n++;
   }
 
@@ -209,7 +209,7 @@ export function uploadBuffer(
       pc.array[n * 4] = r0 + (r1 - r0) * t;
       pc.array[n * 4 + 1] = g0 + (g1 - g0) * t;
       pc.array[n * 4 + 2] = b0 + (b1 - b0) * t;
-      pc.array[n * 4 + 3] = (a0 + (a1 - a0) * t) * 0.7;
+      pc.array[n * 4 + 3] = (a0 + (a1 - a0) * t) * 0.4;
       pz.array[n] = glowSz;
       n++;
     }
