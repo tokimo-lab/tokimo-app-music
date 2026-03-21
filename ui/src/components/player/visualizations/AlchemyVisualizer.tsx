@@ -325,10 +325,8 @@ export function AlchemyVisualizer({
         fadeProgress++;
         transT = Math.min(1, fadeProgress / transition.duration);
         applyMorph(ptGeoA, morphSrc, transT, transition.morph);
-        // Lines: hidden during morph, fade in near end
-        const lf = transition.lineFadeIn;
-        lineMatA.uniforms.uOpacity.value =
-          transT < lf ? 0 : (transT - lf) / (1 - lf);
+        // Lines: dim at start, quadratic ease-in to full opacity
+        lineMatA.uniforms.uOpacity.value = 0.1 + 0.9 * transT * transT;
 
         if (transT >= 1) {
           currentSceneIdx = nextSceneIdx;
@@ -362,6 +360,13 @@ export function AlchemyVisualizer({
       camera.position.set(0, 0, -camZBreath + (transition?.camPush ?? 0) * env);
 
       // ── 1) Trail: fade previous frame onto trail.write ─────────
+      // Slow trail fade during transitions to keep old scene visible
+      if (nextSceneIdx >= 0) {
+        const fadeFactor = 0.15 + 0.85 * transT * transT;
+        fadeMat.opacity = 1 - TRAIL_ALPHA * fadeFactor;
+      } else {
+        fadeMat.opacity = 1 - TRAIL_ALPHA;
+      }
       fadeMat.map = trail.read.texture;
       renderer.setRenderTarget(trail.write);
       renderer.clear();

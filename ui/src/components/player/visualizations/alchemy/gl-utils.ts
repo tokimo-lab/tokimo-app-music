@@ -274,9 +274,8 @@ export function uploadBuffer(
     n++;
   }
 
-  // Sample line-segment midpoints as tiny morph particles.
-  // These are nearly invisible in normal rendering but provide
-  // point-cloud density for morph transitions in line-heavy scenes.
+  // Sample line-segment midpoints as morph particles.
+  // Slightly visible (above discard threshold) to prevent black during transitions.
   for (let i = 0; i < buf.segN && n < MAX_PTS; i += 3) {
     const si = i * 14;
     pp.array[n * 3] = ((buf.segs[si] + buf.segs[si + 7]) / 2) * ps;
@@ -285,8 +284,8 @@ export function uploadBuffer(
     pc.array[n * 4] = (buf.segs[si + 3] + buf.segs[si + 10]) / 2;
     pc.array[n * 4 + 1] = (buf.segs[si + 4] + buf.segs[si + 11]) / 2;
     pc.array[n * 4 + 2] = (buf.segs[si + 5] + buf.segs[si + 12]) / 2;
-    pc.array[n * 4 + 3] = 0.001;
-    pz.array[n] = 0.001;
+    pc.array[n * 4 + 3] = 0.04;
+    pz.array[n] = 1.5;
     n++;
   }
 

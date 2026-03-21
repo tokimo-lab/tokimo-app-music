@@ -28,7 +28,6 @@ export interface TransitionEffect {
   camRotX: number;
   camRotY: number;
   camPush: number;
-  lineFadeIn: number;
 }
 
 // ── Pseudo-random (deterministic per point per frame) ────────────────────────
@@ -166,6 +165,5 @@ export function createTransition(): TransitionEffect {
     camRotX: cam.rx * scale,
     camRotY: cam.ry * scale,
     camPush: cam.push * scale,
-    lineFadeIn: 0.5 + Math.random() * 0.2,
   };
 }
