@@ -17,11 +17,11 @@ export const CAM_FOV = 60;
 export const BASE_Z = 10;
 const MAX_DEPTH = 1200;
 const DEPTH_RANGE = 8;
-const MAX_PTS = 60000;
+const MAX_PTS = 80000;
 const MAX_SEGS = 8000;
-const LINE_GLOW_SIZE = 24;
+const LINE_GLOW_SIZE = 26;
 /** Spacing between glow sprites along a line (fraction of glow radius) */
-const GLOW_SPACING = 0.22;
+const GLOW_SPACING = 0.14;
 
 // ── Glow texture ─────────────────────────────────────────────────────────────
 
@@ -39,12 +39,13 @@ export function makeGlowTexture(size = 64): CanvasTexture {
     center,
     center,
   );
-  // Tight bright core → fast falloff for crisp neon glow
+  // Wide flat-top core (no brightness modulation between sprites)
+  // then rapid drop → subtle outer halo, no defocus
   grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.08, "rgba(255,255,255,0.9)");
-  grad.addColorStop(0.2, "rgba(255,255,255,0.45)");
-  grad.addColorStop(0.35, "rgba(255,255,255,0.15)");
-  grad.addColorStop(0.55, "rgba(255,255,255,0.04)");
+  grad.addColorStop(0.4, "rgba(255,255,255,1)");
+  grad.addColorStop(0.5, "rgba(255,255,255,0.35)");
+  grad.addColorStop(0.65, "rgba(255,255,255,0.08)");
+  grad.addColorStop(0.8, "rgba(255,255,255,0.02)");
   grad.addColorStop(1, "rgba(255,255,255,0)");
   g.fillStyle = grad;
   g.fillRect(0, 0, size, size);
@@ -156,8 +157,8 @@ export function uploadBuffer(
     pc.array[n * 4] = r;
     pc.array[n * 4 + 1] = g;
     pc.array[n * 4 + 2] = b;
-    pc.array[n * 4 + 3] = a * 0.35;
-    pz.array[n] = Math.max(glowSz, sz * 4);
+    pc.array[n * 4 + 3] = a * 0.3;
+    pz.array[n] = Math.max(glowSz, sz * 2.5);
     n++;
 
     // Bright core
@@ -168,7 +169,7 @@ export function uploadBuffer(
     pc.array[n * 4 + 1] = g;
     pc.array[n * 4 + 2] = b;
     pc.array[n * 4 + 3] = a;
-    pz.array[n] = sz * 2.5;
+    pz.array[n] = sz * 2;
     n++;
   }
 
@@ -199,7 +200,7 @@ export function uploadBuffer(
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const spacing = glowSz * GLOW_SPACING;
     const steps = Math.max(1, Math.ceil(dist / spacing));
-    const clampedSteps = Math.min(steps, 16);
+    const clampedSteps = Math.min(steps, 32);
 
     for (let s = 0; s <= clampedSteps && n < MAX_PTS; s++) {
       const t = clampedSteps > 0 ? s / clampedSteps : 0;
@@ -209,7 +210,7 @@ export function uploadBuffer(
       pc.array[n * 4] = r0 + (r1 - r0) * t;
       pc.array[n * 4 + 1] = g0 + (g1 - g0) * t;
       pc.array[n * 4 + 2] = b0 + (b1 - b0) * t;
-      pc.array[n * 4 + 3] = (a0 + (a1 - a0) * t) * 0.4;
+      pc.array[n * 4 + 3] = (a0 + (a1 - a0) * t) * 0.65;
       pz.array[n] = glowSz;
       n++;
     }
