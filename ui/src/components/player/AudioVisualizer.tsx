@@ -20,7 +20,7 @@ export function AudioVisualizer({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
-  const dataRef = useRef<Uint8Array | null>(null);
+  const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const smoothRef = useRef<Float32Array | null>(null);
 
   // Store props in refs so the RAF loop always reads current values

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type {
   MusicAlbumDetailOutput,
   MusicAlbumOutput,
@@ -5,7 +6,6 @@ import type {
   MusicArtistOutput,
   MusicTrackOutput,
 } from "@tokiomo/types";
-import { Prisma } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { prisma } from "../../db/client";
 
