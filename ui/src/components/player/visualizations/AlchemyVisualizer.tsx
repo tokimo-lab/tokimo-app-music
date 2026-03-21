@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { drawAmbient, initAmbientBubbles } from "./alchemy/ambient";
+import { DEFAULT_FOV } from "./alchemy/perspective";
 import { ALL_SCENES, SCENE_COUNT } from "./alchemy/registry";
 import type { AlchemySceneInfo, DrawCtx } from "./alchemy/types";
 import { ease, getAudioBands } from "./alchemy/utils";
@@ -61,6 +62,7 @@ export function AlchemyVisualizer({
     let fadeProgress = 0;
     let bufW = 0;
     let bufH = 0;
+    let camZ = 0;
 
     const sceneStates = ALL_SCENES.map((s) => s.init());
     const ambientBubbles = initAmbientBubbles();
@@ -129,6 +131,10 @@ export function AlchemyVisualizer({
       frame++;
       sceneTimer++;
 
+      // Audio-reactive camera — gentle z-breathing + bass punch
+      camZ =
+        Math.sin(time * 0.5) * 30 + audio.bass * 60 + Math.sin(time * 1.3) * 15;
+
       const dc: DrawCtx = {
         ctx,
         w,
@@ -138,6 +144,7 @@ export function AlchemyVisualizer({
         audio,
         analyser,
         playing: isPlayingRef.current,
+        cam: { z: camZ, fov: DEFAULT_FOV },
       };
 
       if (nextScene < 0 && sceneTimer >= SCENE_DURATION) {

@@ -1,3 +1,5 @@
+import type { Camera } from "./perspective";
+import { depthAlpha, depthSize, MAX_DEPTH, project } from "./perspective";
 import type { AudioBands, Scene } from "./types";
 import { ease, lerp, randomFreq } from "./utils";
 
@@ -46,11 +48,14 @@ function drawRibbons(
   time: number,
   audio: AudioBands,
   ribbons: RibbonState[],
+  cam: Camera,
 ) {
   const cx = w / 2;
   const cy = h / 2;
   const baseScale = Math.min(w, h) * 0.3;
-  for (const r of ribbons) {
+  for (let ri = 0; ri < ribbons.length; ri++) {
+    const r = ribbons[ri];
+    const ribbonZ = ri * 80 - 160;
     r.morphT++;
     if (r.morphT >= r.morphDur) {
       r.morphT = 0;
@@ -75,10 +80,11 @@ function drawRibbons(
     const amp = 0.5 + audio.bass * 0.5;
     const lw = 1.2 + audio.mid * 2;
     const po = r.phase + time;
+    const baseProj = project(cx, cy, ribbonZ, cx, cy, cam);
     ctx.save();
     ctx.globalCompositeOperation = "screen";
     ctx.globalAlpha = 0.6 + audio.energy * 0.15;
-    ctx.lineWidth = lw;
+    ctx.lineWidth = depthSize(lw, baseProj.scale, 0.3);
     ctx.lineCap = "round";
     ctx.beginPath();
     for (let p = 0; p < POINTS; p++) {
@@ -94,8 +100,10 @@ function drawRibbons(
           amp *
           (Math.cos(ay * t + po * 0.7) +
             0.3 * Math.cos(by * t * 1.7 + po * 0.9));
-      if (p === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      const zp = ribbonZ + Math.sin(t * 2 + r.phase) * 60;
+      const proj = project(x, y, zp, cx, cy, cam);
+      if (p === 0) ctx.moveTo(proj.sx, proj.sy);
+      else ctx.lineTo(proj.sx, proj.sy);
     }
     ctx.closePath();
     const sat = 80 + audio.energy * 15;
@@ -113,6 +121,7 @@ function drawRibbons(
 
 const SPIRO_POINTS = 300;
 const SPIRO_LAYERS = 2;
+const SPIRO_LAYER_Z = [0, 150];
 
 interface SpiroState {
   R: number;
@@ -147,6 +156,7 @@ function drawSpirograph(
   time: number,
   audio: AudioBands,
   spiro: SpiroState,
+  cam: Camera,
 ) {
   spiro.morphT++;
   if (spiro.morphT >= spiro.morphDur) {
@@ -167,12 +177,14 @@ function drawSpirograph(
   const cy = h / 2;
   const scale = Math.min(w, h) * 0.3 * (0.6 + audio.energy * 0.4);
   for (let layer = 0; layer < SPIRO_LAYERS; layer++) {
+    const baseZ = SPIRO_LAYER_Z[layer];
     const hue = (spiro.hueBase + layer * 150 + time * 20) % 360;
     const layerPhase = time * (1 + layer * 0.3);
+    const baseProj = project(cx, cy, baseZ, cx, cy, cam);
     ctx.save();
     ctx.globalCompositeOperation = "screen";
     ctx.globalAlpha = 0.6 + audio.energy * 0.2;
-    ctx.lineWidth = 0.8 + audio.bass * 1.2;
+    ctx.lineWidth = depthSize(0.8 + audio.bass * 1.2, baseProj.scale, 0.3);
     ctx.beginPath();
     for (let i = 0; i < SPIRO_POINTS; i++) {
       const t = (i / SPIRO_POINTS) * Math.PI * 2 * Math.ceil(r);
@@ -187,8 +199,10 @@ function drawSpirograph(
         scale *
           ((R - rr) * Math.sin(t + layerPhase) +
             d * Math.sin(((R - rr) / rr) * t + layerPhase));
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      const z = baseZ + Math.sin(t * 3) * 80;
+      const proj = project(x, y, z, cx, cy, cam);
+      if (i === 0) ctx.moveTo(proj.sx, proj.sy);
+      else ctx.lineTo(proj.sx, proj.sy);
     }
     const sat = 75 + audio.mid * 15;
     const lit = 40 + audio.high * 15;
@@ -210,6 +224,7 @@ function drawPlasma(
   h: number,
   time: number,
   audio: AudioBands,
+  cam: Camera,
 ) {
   const cx = w / 2;
   const cy = h / 2;
@@ -217,15 +232,25 @@ function drawPlasma(
   ctx.save();
   ctx.globalCompositeOperation = "screen";
   for (let i = 0; i < blobCount; i++) {
+    const z = i * 100 - 200;
     const angle = (i / blobCount) * Math.PI * 2 + time * (0.3 + i * 0.1);
     const dist = Math.min(w, h) * 0.15 * (1 + audio.bass * 0.8);
     const bx = cx + Math.cos(angle) * dist;
     const by = cy + Math.sin(angle) * dist;
-    const radius =
+    const proj = project(bx, by, z, cx, cy, cam);
+    const baseRadius =
       Math.min(w, h) *
       (0.2 + audio.energy * 0.25 + Math.sin(time * 2 + i) * 0.05);
+    const radius = depthSize(baseRadius, proj.scale, 10);
     const hue = (time * 30 + i * 72) % 360;
-    const grad = ctx.createRadialGradient(bx, by, 0, bx, by, radius);
+    const grad = ctx.createRadialGradient(
+      proj.sx,
+      proj.sy,
+      0,
+      proj.sx,
+      proj.sy,
+      radius,
+    );
     grad.addColorStop(0, `hsla(${hue}, 90%, 60%, ${0.3 + audio.mid * 0.3})`);
     grad.addColorStop(
       0.5,
@@ -248,6 +273,7 @@ function drawStarburst(
   audio: AudioBands,
   analyser: AnalyserNode | null,
   playing: boolean,
+  cam: Camera,
 ) {
   const cx = w / 2;
   const cy = h / 2;
@@ -268,15 +294,19 @@ function drawStarburst(
     const angle = (i / rays) * Math.PI * 2 + rotation;
     const val = freqData ? freqData[i % freqData.length] / 255 : 0;
     const len = maxR * (0.1 + val * 0.9);
+    const ex = cx + Math.cos(angle) * len;
+    const ey = cy + Math.sin(angle) * len;
+    const z = val * 300;
+    const proj = project(ex, ey, z, cx, cy, cam);
     const hue = (i / rays) * 360 + time * 40;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(angle) * len, cy + Math.sin(angle) * len);
+    ctx.lineTo(proj.sx, proj.sy);
     const color = `hsl(${hue % 360}, ${80 + val * 15}%, ${35 + val * 25}%)`;
     ctx.strokeStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 4 + val * 6;
-    ctx.lineWidth = 0.8 + val * 1.8;
+    ctx.lineWidth = depthSize(0.8 + val * 1.8, proj.scale, 0.3);
     ctx.stroke();
   }
   const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.15);
@@ -298,6 +328,7 @@ interface VortexParticle {
   speed: number;
   hue: number;
   size: number;
+  z: number;
 }
 
 function initVortexParticles(count: number): VortexParticle[] {
@@ -309,9 +340,17 @@ function initVortexParticles(count: number): VortexParticle[] {
       speed: 0.5 + Math.random() * 1.5,
       hue: Math.random() * 360,
       size: 1 + Math.random() * 2,
+      z: Math.random() * MAX_DEPTH,
     });
   }
   return particles;
+}
+
+function resetVortexParticle(p: VortexParticle) {
+  p.radius = 0;
+  p.z = 0;
+  p.hue = Math.random() * 360;
+  p.angle = Math.random() * Math.PI * 2;
 }
 
 function drawVortex(
@@ -321,6 +360,7 @@ function drawVortex(
   _time: number,
   audio: AudioBands,
   particles: VortexParticle[],
+  cam: Camera,
 ) {
   const cx = w / 2;
   const cy = h / 2;
@@ -330,19 +370,20 @@ function drawVortex(
   for (const p of particles) {
     p.angle += p.speed * 0.02 * (1 + audio.energy);
     p.radius += (0.003 + audio.bass * 0.005) * p.speed;
-    if (p.radius > 1) {
-      p.radius = 0;
-      p.hue = Math.random() * 360;
-      p.angle = Math.random() * Math.PI * 2;
-    }
+    p.z += p.speed * 2;
+    if (p.radius > 1 || p.z > MAX_DEPTH) resetVortexParticle(p);
     p.hue = (p.hue + 0.3) % 360;
     const r = p.radius * maxR;
     const x = cx + Math.cos(p.angle) * r;
     const y = cy + Math.sin(p.angle) * r;
-    const alpha = Math.sin(p.radius * Math.PI);
-    const sz = p.size * (1 + audio.mid * 2) * alpha;
+    const proj = project(x, y, p.z, cx, cy, cam);
+    const dAlpha = depthAlpha(p.z);
+    const radialFade = Math.sin(p.radius * Math.PI);
+    const alpha = radialFade * dAlpha;
+    const sz =
+      depthSize(p.size * (1 + audio.mid * 2), proj.scale, 0.5) * radialFade;
     ctx.beginPath();
-    ctx.arc(x, y, sz, 0, Math.PI * 2);
+    ctx.arc(proj.sx, proj.sy, Math.max(0.5, sz), 0, Math.PI * 2);
     const color = `hsla(${p.hue}, 90%, ${55 + audio.high * 20}%, ${alpha * 0.8})`;
     ctx.fillStyle = color;
     ctx.shadowColor = color;
@@ -366,6 +407,7 @@ export const originalScenes: Scene[] = [
         dc.time,
         dc.audio,
         state as RibbonState[],
+        dc.cam,
       );
     },
   },
@@ -380,6 +422,7 @@ export const originalScenes: Scene[] = [
         dc.time,
         dc.audio,
         state as SpiroState,
+        dc.cam,
       );
     },
   },
@@ -387,7 +430,7 @@ export const originalScenes: Scene[] = [
     name: "Plasma",
     init: () => null,
     draw: (dc) => {
-      drawPlasma(dc.ctx, dc.w, dc.h, dc.time, dc.audio);
+      drawPlasma(dc.ctx, dc.w, dc.h, dc.time, dc.audio, dc.cam);
     },
   },
   {
@@ -402,6 +445,7 @@ export const originalScenes: Scene[] = [
         dc.audio,
         dc.analyser,
         dc.playing,
+        dc.cam,
       );
     },
   },
@@ -416,6 +460,7 @@ export const originalScenes: Scene[] = [
         dc.time,
         dc.audio,
         state as VortexParticle[],
+        dc.cam,
       );
     },
   },
