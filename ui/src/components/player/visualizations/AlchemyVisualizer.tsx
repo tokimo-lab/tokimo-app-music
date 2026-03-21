@@ -47,7 +47,7 @@ export type { AlchemySceneInfo };
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const SCENE_DURATION = 900;
-const TRAIL_ALPHA = 0.07;
+const TRAIL_ALPHA = 0.12;
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -116,7 +116,7 @@ export function AlchemyVisualizer({
       return new ShaderMaterial({
         uniforms: {
           uOpacity: { value: 1 },
-          lineWidth: { value: 5.0 },
+          lineWidth: { value: 3.5 },
           resolution: { value: new Vector2(2, 2) },
         },
         vertexShader: FAT_LINE_VS,
@@ -181,7 +181,7 @@ export function AlchemyVisualizer({
     const extractMat = new ShaderMaterial({
       uniforms: {
         tInput: { value: null },
-        amplify: { value: 15.0 },
+        amplify: { value: 4.0 },
       },
       vertexShader: BLOOM_VS,
       fragmentShader: EXTRACT_FS,
@@ -209,7 +209,7 @@ export function AlchemyVisualizer({
       uniforms: {
         tMain: { value: null },
         tBloom: { value: null },
-        bloomStrength: { value: 5.0 },
+        bloomStrength: { value: 1.5 },
       },
       vertexShader: BLOOM_VS,
       fragmentShader: DISPLAY_FS,

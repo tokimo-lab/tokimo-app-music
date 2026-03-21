@@ -112,8 +112,7 @@ varying vec4 vColor;
 varying float vEdge;
 void main() {
   float edge = 1.0 - smoothstep(0.3, 0.5, abs(vEdge));
-  vec3 rgb = vColor.rgb * 2.5;
-  gl_FragColor = vec4(rgb, vColor.a * edge);
+  gl_FragColor = vec4(vColor.rgb, vColor.a * edge);
   if (gl_FragColor.a < 0.005) discard;
 }`;
 
@@ -170,7 +169,7 @@ void main() {
   vec4 bloom = texture2D(tBloom, vUv);
   vec3 c = main.rgb + bloom.rgb * bloomStrength;
   // Mild Reinhard tone map — keeps colors vivid while preventing blow-out
-  c = c / (1.0 + c * 0.12);
+  c = c / (1.0 + c * 0.8);
   gl_FragColor = vec4(c, 1.0);
 }`;
 
