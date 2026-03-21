@@ -1,34 +1,18 @@
 /**
  * Camera-based scene transition system for Alchemy visualizer.
  *
- * Instead of simple alpha crossfade, the camera "flies" from the old scene
- * to the new scene using physically-plausible motion curves. The new scene
- * appears at a random spatial offset (left / right / up / down / forward /
- * backward) and the camera accelerates → decelerates toward it.
+ * Scenes are drawn inside shared buffers with a stationary background.
+ * During transitions the scene *content* is shifted within its buffer
+ * (via ctx.translate) while the trail / ambient layer stays in place,
+ * so both scenes appear to coexist in the same 3D space. The camera
+ * drifts from one scene region to the next using physics easing curves.
  */
 
-// ── Transition directions ─────────────────────────────────────────────
+// ── Directions ────────────────────────────────────────────────────────
 
-export type TransitionDir =
-  | "left"
-  | "right"
-  | "up"
-  | "down"
-  | "forward"
-  | "backward";
+type Dir = "left" | "right" | "up" | "down" | "forward" | "backward";
 
-const DIRECTIONS: TransitionDir[] = [
-  "left",
-  "right",
-  "up",
-  "down",
-  "forward",
-  "backward",
-];
-
-export function pickDirection(): TransitionDir {
-  return DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
-}
+const DIRS: Dir[] = ["left", "right", "up", "down", "forward", "backward"];
 
 // ── Physics easing curves ─────────────────────────────────────────────
 
@@ -49,7 +33,7 @@ function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3;
 }
 
-/** Anticipation + overshoot — slight windup before launch, overshoot at end */
+/** Anticipation + overshoot — slight windup, overshoot at end */
 function easeInOutBack(t: number): number {
   const c1 = 1.70158;
   const c2 = c1 * 1.525;
@@ -73,154 +57,86 @@ const EASINGS: EasingFn[] = [
   easeOutBack,
 ];
 
-export function pickEasing(): EasingFn {
-  return EASINGS[Math.floor(Math.random() * EASINGS.length)];
-}
-
 // ── Transition state ──────────────────────────────────────────────────
 
 export interface CameraTransition {
-  dir: TransitionDir;
   easing: EasingFn;
+  /** Normalised direction vector (where new scene lives relative to old) */
+  dx: number;
+  dy: number;
+  dz: number;
 }
+
+/** Max lateral shift as fraction of canvas dimension */
+const LATERAL_RANGE = 0.15;
+/** Max cam.z delta for depth transitions */
+const DEPTH_RANGE = 180;
 
 export function createTransition(): CameraTransition {
-  return { dir: pickDirection(), easing: pickEasing() };
+  const dir = DIRS[Math.floor(Math.random() * DIRS.length)];
+  const easing = EASINGS[Math.floor(Math.random() * EASINGS.length)];
+
+  // perpendicular drift for organic feel (±15 %)
+  const drift = (Math.random() - 0.5) * 0.3;
+
+  switch (dir) {
+    case "left":
+      return { easing, dx: -1, dy: drift, dz: drift * 0.4 };
+    case "right":
+      return { easing, dx: 1, dy: drift, dz: drift * 0.4 };
+    case "up":
+      return { easing, dx: drift, dy: -1, dz: drift * 0.4 };
+    case "down":
+      return { easing, dx: drift, dy: 1, dz: drift * 0.4 };
+    case "forward":
+      return { easing, dx: drift * 0.4, dy: drift * 0.4, dz: 1 };
+    case "backward":
+      return { easing, dx: drift * 0.4, dy: drift * 0.4, dz: -1 };
+  }
 }
 
-// ── Composite offsets ─────────────────────────────────────────────────
+// ── Per-frame offsets ─────────────────────────────────────────────────
 
 export interface TransitionOffsets {
-  /** Old scene: horizontal offset (px) */
-  oldDx: number;
-  /** Old scene: vertical offset (px) */
-  oldDy: number;
-  /** Old scene: uniform scale factor */
-  oldScale: number;
-  /** Old scene: opacity 0..1 */
+  /** Old scene: translate px inside buffer */
+  oldOffX: number;
+  oldOffY: number;
+  /** Old scene: cam.z delta (added to base cam.z) */
+  oldCamZ: number;
+  /** Old scene: composite opacity */
   oldAlpha: number;
-  /** New scene: horizontal offset (px) */
-  newDx: number;
-  /** New scene: vertical offset (px) */
-  newDy: number;
-  /** New scene: uniform scale factor */
-  newScale: number;
-  /** New scene: opacity 0..1 */
+  /** New scene */
+  newOffX: number;
+  newOffY: number;
+  newCamZ: number;
   newAlpha: number;
 }
 
 /**
- * Compute position / scale / alpha for both scene buffers during transition.
+ * Compute per-frame offsets for both scenes.
  *
- * @param dir  - where the camera is heading
- * @param t    - eased progress 0 → 1
- * @param w    - canvas width
- * @param h    - canvas height
+ * @param tr  transition descriptor
+ * @param t   eased progress 0 → 1
+ * @param w   canvas CSS width
+ * @param h   canvas CSS height
  */
 export function getTransitionOffsets(
-  dir: TransitionDir,
+  tr: CameraTransition,
   t: number,
   w: number,
   h: number,
 ): TransitionOffsets {
-  // Lateral fade: old stays visible a bit longer, then fades
-  const lateralOldAlpha = Math.max(0, t < 0.35 ? 1 : 1 - (t - 0.35) / 0.55);
-  const lateralNewAlpha = Math.min(1, t * 1.4);
+  // Old scene drifts opposite to camera movement
+  // New scene starts offset in camera direction, glides to center
+  return {
+    oldOffX: -t * tr.dx * w * LATERAL_RANGE,
+    oldOffY: -t * tr.dy * h * LATERAL_RANGE,
+    oldCamZ: t * tr.dz * DEPTH_RANGE,
+    oldAlpha: 1 - t,
 
-  switch (dir) {
-    case "left":
-      return {
-        oldDx: -t * w * 0.7,
-        oldDy: 0,
-        oldScale: 1 - t * 0.08,
-        oldAlpha: lateralOldAlpha,
-        newDx: (1 - t) * w * 0.85,
-        newDy: 0,
-        newScale: 0.92 + t * 0.08,
-        newAlpha: lateralNewAlpha,
-      };
-    case "right":
-      return {
-        oldDx: t * w * 0.7,
-        oldDy: 0,
-        oldScale: 1 - t * 0.08,
-        oldAlpha: lateralOldAlpha,
-        newDx: -(1 - t) * w * 0.85,
-        newDy: 0,
-        newScale: 0.92 + t * 0.08,
-        newAlpha: lateralNewAlpha,
-      };
-    case "up":
-      return {
-        oldDx: 0,
-        oldDy: -t * h * 0.7,
-        oldScale: 1 - t * 0.08,
-        oldAlpha: lateralOldAlpha,
-        newDx: 0,
-        newDy: (1 - t) * h * 0.85,
-        newScale: 0.92 + t * 0.08,
-        newAlpha: lateralNewAlpha,
-      };
-    case "down":
-      return {
-        oldDx: 0,
-        oldDy: t * h * 0.7,
-        oldScale: 1 - t * 0.08,
-        oldAlpha: lateralOldAlpha,
-        newDx: 0,
-        newDy: -(1 - t) * h * 0.85,
-        newScale: 0.92 + t * 0.08,
-        newAlpha: lateralNewAlpha,
-      };
-    case "forward":
-      // Camera rushes forward: old scene zooms past, new approaches from afar
-      return {
-        oldDx: 0,
-        oldDy: 0,
-        oldScale: 1 + t * 1.2,
-        oldAlpha: Math.max(0, 1 - t * 1.6),
-        newDx: 0,
-        newDy: 0,
-        newScale: 0.25 + t * 0.75,
-        newAlpha: Math.min(1, t * 1.5),
-      };
-    case "backward":
-      // Camera pulls back: old scene recedes, new scene wraps around from edges
-      return {
-        oldDx: 0,
-        oldDy: 0,
-        oldScale: 1 - t * 0.65,
-        oldAlpha: Math.max(0, 1 - t * 1.6),
-        newDx: 0,
-        newDy: 0,
-        newScale: 1.7 - t * 0.7,
-        newAlpha: Math.min(1, t * 1.5),
-      };
-  }
-}
-
-/**
- * Draw a scene buffer onto the main canvas with camera-movement transforms.
- *
- * Transform chain: translate to center+offset → scale → translate back → draw.
- * This produces a centered zoom/pan effect.
- */
-export function compositeBuffer(
-  ctx: CanvasRenderingContext2D,
-  buf: HTMLCanvasElement,
-  w: number,
-  h: number,
-  dx: number,
-  dy: number,
-  scale: number,
-  alpha: number,
-): void {
-  if (alpha <= 0) return;
-  ctx.save();
-  ctx.globalAlpha = Math.min(1, alpha);
-  ctx.translate(w / 2 + dx, h / 2 + dy);
-  ctx.scale(scale, scale);
-  ctx.translate(-w / 2, -h / 2);
-  ctx.drawImage(buf, 0, 0, w, h);
-  ctx.restore();
+    newOffX: (1 - t) * tr.dx * w * LATERAL_RANGE * 1.15,
+    newOffY: (1 - t) * tr.dy * h * LATERAL_RANGE * 1.15,
+    newCamZ: -(1 - t) * tr.dz * DEPTH_RANGE,
+    newAlpha: t,
+  };
 }

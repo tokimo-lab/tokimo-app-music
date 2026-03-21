@@ -4,7 +4,6 @@ import { DEFAULT_FOV } from "./alchemy/perspective";
 import { ALL_SCENES, SCENE_COUNT } from "./alchemy/registry";
 import {
   type CameraTransition,
-  compositeBuffer,
   createTransition,
   getTransitionOffsets,
 } from "./alchemy/transitions";
@@ -110,13 +109,24 @@ export function AlchemyVisualizer({
       w: number,
       h: number,
       dc: DrawCtx,
+      offX = 0,
+      offY = 0,
     ) {
+      // Ambient at normal position — shared background, never shifted
       if (ambientBgRef.current) {
         drawAmbient(target, w, h, frame, dc.audio, ambientBubbles);
       }
+      // Scene content at camera offset
       const scene = ALL_SCENES[sceneIdx];
       if (scene) {
-        scene.draw({ ...dc, ctx: target }, sceneStates[sceneIdx]);
+        if (offX !== 0 || offY !== 0) {
+          target.save();
+          target.translate(offX, offY);
+          scene.draw({ ...dc, ctx: target }, sceneStates[sceneIdx]);
+          target.restore();
+        } else {
+          scene.draw({ ...dc, ctx: target }, sceneStates[sceneIdx]);
+        }
       }
     }
 
@@ -167,38 +177,32 @@ export function AlchemyVisualizer({
         fadeProgress++;
         const fadePct = Math.min(1, fadeProgress / TRANSITION_FRAMES);
         const eased = transition.easing(fadePct);
+        const off = getTransitionOffsets(transition, eased, w, h);
 
-        // Draw both scenes to their respective buffers
+        // Old scene: trail + ambient at normal position, content shifted
         ctxA.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA + audio.energy * 0.04})`;
         ctxA.fillRect(0, 0, w, h);
-        drawSceneTo(ctxA, currentScene, w, h, dc);
+        const oldDc: DrawCtx = {
+          ...dc,
+          cam: { ...dc.cam, z: camZ + off.oldCamZ },
+        };
+        drawSceneTo(ctxA, currentScene, w, h, oldDc, off.oldOffX, off.oldOffY);
 
+        // New scene: same treatment, opposite offset
         ctxB.fillStyle = `rgba(0, 0, 0, ${TRAIL_ALPHA + audio.energy * 0.04})`;
         ctxB.fillRect(0, 0, w, h);
-        drawSceneTo(ctxB, nextScene, w, h, dc);
+        const newDc: DrawCtx = {
+          ...dc,
+          cam: { ...dc.cam, z: camZ + off.newCamZ },
+        };
+        drawSceneTo(ctxB, nextScene, w, h, newDc, off.newOffX, off.newOffY);
 
-        // Composite with camera-movement transforms
-        const off = getTransitionOffsets(transition.dir, eased, w, h);
-        compositeBuffer(
-          ctx,
-          bufA,
-          w,
-          h,
-          off.oldDx,
-          off.oldDy,
-          off.oldScale,
-          off.oldAlpha,
-        );
-        compositeBuffer(
-          ctx,
-          bufB,
-          w,
-          h,
-          off.newDx,
-          off.newDy,
-          off.newScale,
-          off.newAlpha,
-        );
+        // Composite at full position — no buffer transforms, shared bg
+        ctx.globalAlpha = off.oldAlpha;
+        ctx.drawImage(bufA, 0, 0, w, h);
+        ctx.globalAlpha = off.newAlpha;
+        ctx.drawImage(bufB, 0, 0, w, h);
+        ctx.globalAlpha = 1;
 
         if (fadePct >= 1) {
           ctxA.save();
