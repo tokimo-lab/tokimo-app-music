@@ -19,15 +19,11 @@ import {
   useMusicPlayer,
 } from "../../contexts/MusicPlayerContext";
 import { useLyrics } from "../../hooks/useLyrics";
+import { resolveStoragePath } from "../../lib/storage-url";
 import { FullScreenPlayer } from "./FullScreenPlayer";
 import { NowPlayingPanel } from "./NowPlayingPanel";
 
 export const MUSIC_MINI_PLAYER_HEIGHT_PX = 76;
-
-const API_BASE =
-  (typeof window !== "undefined" &&
-    (import.meta.env as Record<string, string>).VITE_API_URL) ||
-  "";
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -39,7 +35,7 @@ function formatTime(seconds: number): string {
 function getCoverUrl(coverPath: string | null | undefined): string | null {
   if (!coverPath) return null;
   if (coverPath.startsWith("http")) return coverPath;
-  return `${API_BASE}${coverPath.startsWith("/") ? "" : "/"}${coverPath}`;
+  return resolveStoragePath(coverPath);
 }
 
 // ── Karaoke text for mini player — reads progressRef via RAF ─────────────────

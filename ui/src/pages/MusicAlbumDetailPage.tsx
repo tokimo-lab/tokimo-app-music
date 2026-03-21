@@ -12,6 +12,7 @@ import { useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
+import { resolveStoragePath } from "../../lib/storage-url";
 import { PersonCard, SectionTitle } from "./media-detail-shared";
 import { formatDuration, formatTotalDuration } from "./music-shared";
 
@@ -237,7 +238,7 @@ export default function MusicAlbumDetailPage() {
           <div className="relative w-[200px] flex-shrink-0 overflow-hidden rounded-xl shadow-2xl md:w-[250px]">
             {album.coverPath ? (
               <img
-                src={album.coverPath}
+                src={resolveStoragePath(album.coverPath)}
                 alt={album.title}
                 className="aspect-square w-full object-cover"
               />

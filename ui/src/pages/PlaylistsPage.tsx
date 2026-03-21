@@ -7,16 +7,12 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";
-
-const API_BASE =
-  (typeof window !== "undefined" &&
-    (import.meta.env as Record<string, string>).VITE_API_URL) ||
-  "";
+import { resolveStoragePath } from "../../lib/storage-url";
 
 function getCoverUrl(coverPath: string | null | undefined): string | null {
   if (!coverPath) return null;
   if (coverPath.startsWith("http")) return coverPath;
-  return `${API_BASE}${coverPath.startsWith("/") ? "" : "/"}${coverPath}`;
+  return resolveStoragePath(coverPath);
 }
 
 function formatTotalDuration(seconds: number | null | undefined): string {

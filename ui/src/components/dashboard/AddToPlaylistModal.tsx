@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";
+import { resolveStoragePath } from "../../lib/storage-url";
 
 interface AddToPlaylistModalProps {
   open: boolean;
@@ -13,15 +14,10 @@ interface AddToPlaylistModalProps {
   trackIds: string[];
 }
 
-const API_BASE =
-  (typeof window !== "undefined" &&
-    (import.meta.env as Record<string, string>).VITE_API_URL) ||
-  "";
-
 function getCoverUrl(coverPath: string | null | undefined): string | null {
   if (!coverPath) return null;
   if (coverPath.startsWith("http")) return coverPath;
-  return `${API_BASE}${coverPath.startsWith("/") ? "" : "/"}${coverPath}`;
+  return resolveStoragePath(coverPath);
 }
 
 // ── Playlist Row ─────────────────────────────────────────────────────────────

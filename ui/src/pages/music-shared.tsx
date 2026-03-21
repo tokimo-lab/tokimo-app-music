@@ -1,6 +1,7 @@
 import type { MusicAlbumOutput, MusicArtistOutput } from "@tokiomo/types";
 import { Disc3, Heart, Play, User } from "lucide-react";
 import { memo } from "react";
+import { resolveStoragePath } from "../../lib/storage-url";
 
 export function formatDuration(seconds: number | null | undefined): string {
   if (!seconds) return "--:--";
@@ -36,7 +37,7 @@ export const AlbumCard = memo(function AlbumCard({
       <div className="relative aspect-square overflow-hidden bg-[var(--bg-skeleton)]">
         {album.coverPath ? (
           <img
-            src={album.coverPath}
+            src={resolveStoragePath(album.coverPath)}
             alt={album.title}
             decoding="async"
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
@@ -98,7 +99,7 @@ export const ArtistCard = memo(function ArtistCard({
       <div className="relative aspect-square w-full overflow-hidden rounded-full bg-[var(--bg-skeleton)]">
         {artist.profilePath ? (
           <img
-            src={artist.profilePath}
+            src={resolveStoragePath(artist.profilePath)}
             alt={artist.name}
             decoding="async"
             className="h-full w-full object-cover transition-transform group-hover:scale-105"

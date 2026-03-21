@@ -2,6 +2,7 @@ import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokiomo/components";
 import { User } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../generated/rust-api";
+import { resolveStoragePath } from "../../lib/storage-url";
 import { SectionTitle } from "./media-detail-shared";
 import { AlbumCard } from "./music-shared";
 
@@ -58,7 +59,7 @@ export default function MusicArtistPage() {
           <div className="relative h-[200px] w-[200px] flex-shrink-0 overflow-hidden rounded-full shadow-2xl">
             {artist.profilePath ? (
               <img
-                src={artist.profilePath}
+                src={resolveStoragePath(artist.profilePath)}
                 alt={artist.name}
                 className="h-full w-full object-cover"
               />
