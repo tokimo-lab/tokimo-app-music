@@ -347,7 +347,7 @@ function AlbumsGrid({
           key={album.id}
           album={album}
           onClick={() =>
-            navigate(`/dashboard/library/${libraryId}/music/album/${album.id}`)
+            navigate(`/dashboard/library/${libraryId}/album/${album.id}`)
           }
         />
       ))}
@@ -372,9 +372,7 @@ function ArtistsGrid({
           key={artist.id}
           artist={artist}
           onClick={() =>
-            navigate(
-              `/dashboard/library/${libraryId}/music/artist/${artist.id}`,
-            )
+            navigate(`/dashboard/library/${libraryId}/artist/${artist.id}`)
           }
         />
       ))}

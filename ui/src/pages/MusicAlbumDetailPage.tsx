@@ -183,9 +183,7 @@ export default function MusicAlbumDetailPage() {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
         <p className="text-neutral-500">未找到该专辑</p>
-        <Button
-          onClick={() => navigate(`/dashboard/library/${id}/music?tab=albums`)}
-        >
+        <Button onClick={() => navigate(`/dashboard/library/${id}?tab=albums`)}>
           返回
         </Button>
       </div>
@@ -225,9 +223,7 @@ export default function MusicAlbumDetailPage() {
         <div className="mb-6">
           <Button
             icon={<ArrowLeftOutlined />}
-            onClick={() =>
-              navigate(`/dashboard/library/${id}/music?tab=albums`)
-            }
+            onClick={() => navigate(`/dashboard/library/${id}?tab=albums`)}
           >
             返回
           </Button>
@@ -285,7 +281,7 @@ export default function MusicAlbumDetailPage() {
                   );
                   if (artist) {
                     navigate(
-                      `/dashboard/library/${id}/music/artist/${artist.person.id}`,
+                      `/dashboard/library/${id}/artist/${artist.person.id}`,
                     );
                   }
                 }}

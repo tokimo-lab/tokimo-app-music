@@ -29,7 +29,7 @@ export default function MusicArtistPage() {
       <div className="flex h-96 flex-col items-center justify-center gap-4">
         <p className="text-neutral-500">未找到该艺术家</p>
         <Button
-          onClick={() => navigate(`/dashboard/library/${id}/music?tab=artists`)}
+          onClick={() => navigate(`/dashboard/library/${id}?tab=artists`)}
         >
           返回
         </Button>
@@ -46,9 +46,7 @@ export default function MusicArtistPage() {
         <div className="mb-6">
           <Button
             icon={<ArrowLeftOutlined />}
-            onClick={() =>
-              navigate(`/dashboard/library/${id}/music?tab=artists`)
-            }
+            onClick={() => navigate(`/dashboard/library/${id}?tab=artists`)}
           >
             返回
           </Button>
@@ -115,7 +113,7 @@ export default function MusicArtistPage() {
                 key={album.id}
                 album={album}
                 onClick={() =>
-                  navigate(`/dashboard/library/${id}/music/album/${album.id}`)
+                  navigate(`/dashboard/library/${id}/album/${album.id}`)
                 }
               />
             ))}
