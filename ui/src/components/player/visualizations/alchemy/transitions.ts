@@ -160,7 +160,7 @@ export function createTransition(): TransitionEffect {
   const cam = CAMS[Math.floor(Math.random() * CAMS.length)];
   const scale = 0.7 + Math.random() * 0.6;
   return {
-    duration: 50 + Math.floor(Math.random() * 70),
+    duration: 120 + Math.floor(Math.random() * 120),
     morph,
     camRotX: cam.rx * scale,
     camRotY: cam.ry * scale,
