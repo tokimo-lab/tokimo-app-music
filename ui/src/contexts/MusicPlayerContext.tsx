@@ -192,7 +192,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   const startPlayback = useCallback(
     async (track: MusicTrackOutput) => {
-      if (!track.fileId) return;
+      const fid = track.fileId ?? track.file?.id;
+      if (!fid) return;
       setIsLoading(true);
       try {
         // Pause the video player when music starts
@@ -200,7 +201,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
           videoPlayer.setIsPlaying(false);
         }
 
-        const url = await resolveStreamUrl(track.fileId);
+        const url = await resolveStreamUrl(fid);
         const engine = getEngine();
         await engine.loadAndPlay(url, track.codec);
         setIsPlaying(true);
