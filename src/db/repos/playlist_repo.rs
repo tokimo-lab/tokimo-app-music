@@ -1,3 +1,4 @@
+use crate::db::ApiDateTimeExt;
 use sea_orm::prelude::Expr;
 use sea_orm::*;
 use serde::Serialize;
@@ -88,7 +89,11 @@ impl PlaylistRepo {
                     .iter()
                     .filter_map(|t| t.duration.map(|d| d as i64))
                     .sum();
-                if sum > 0 { Some(sum) } else { None }
+                if sum > 0 {
+                    Some(sum)
+                } else {
+                    None
+                }
             } else {
                 None
             };
@@ -101,8 +106,8 @@ impl PlaylistRepo {
                 is_public: p.is_public,
                 track_count: item_count,
                 total_duration,
-                created_at: p.created_at.to_rfc3339(),
-                updated_at: p.updated_at.to_rfc3339(),
+                created_at: p.created_at.to_api_datetime(),
+                updated_at: p.updated_at.to_api_datetime(),
             });
         }
         Ok(results)
@@ -156,10 +161,7 @@ impl PlaylistRepo {
                     Some(MusicTrackDto {
                         id: track.id.to_string(),
                         album_id: track.album_id.to_string(),
-                        album_title: album
-                            .as_ref()
-                            .map(|a| a.title.clone())
-                            .unwrap_or_default(),
+                        album_title: album.as_ref().map(|a| a.title.clone()).unwrap_or_default(),
                         title: track.title.clone(),
                         artist_name: None,
                         track_number: track.track_number,
@@ -178,7 +180,7 @@ impl PlaylistRepo {
             item_dtos.push(PlaylistItemDto {
                 id: item.id.to_string(),
                 sort_order: item.sort_order,
-                added_at: item.added_at.to_rfc3339(),
+                added_at: item.added_at.to_api_datetime(),
                 track: track_dto,
             });
         }
@@ -197,8 +199,8 @@ impl PlaylistRepo {
                 } else {
                     None
                 },
-                created_at: playlist.created_at.to_rfc3339(),
-                updated_at: playlist.updated_at.to_rfc3339(),
+                created_at: playlist.created_at.to_api_datetime(),
+                updated_at: playlist.updated_at.to_api_datetime(),
             },
             items: item_dtos,
         }))
@@ -231,8 +233,8 @@ impl PlaylistRepo {
             is_public: false,
             track_count: 0,
             total_duration: None,
-            created_at: now.to_rfc3339(),
-            updated_at: now.to_rfc3339(),
+            created_at: now.to_api_datetime(),
+            updated_at: now.to_api_datetime(),
         })
     }
 
@@ -283,8 +285,8 @@ impl PlaylistRepo {
             is_public: updated.is_public,
             track_count: item_count,
             total_duration: None,
-            created_at: updated.created_at.to_rfc3339(),
-            updated_at: updated.updated_at.to_rfc3339(),
+            created_at: updated.created_at.to_api_datetime(),
+            updated_at: updated.updated_at.to_api_datetime(),
         }))
     }
 
@@ -413,10 +415,7 @@ impl PlaylistRepo {
             let uid = Uuid::parse_str(id_str)
                 .map_err(|_| AppError::BadRequest("无效的 item ID".into()))?;
             playlist_items::Entity::update_many()
-                .col_expr(
-                    playlist_items::Column::SortOrder,
-                    Expr::value(idx as i32),
-                )
+                .col_expr(playlist_items::Column::SortOrder, Expr::value(idx as i32))
                 .filter(playlist_items::Column::Id.eq(uid))
                 .exec(db)
                 .await?;

@@ -1,6 +1,5 @@
 use axum::{
     extract::{Path, State},
-    http::HeaderMap,
     response::{IntoResponse, Response},
     Json,
 };
@@ -10,7 +9,7 @@ use uuid::Uuid;
 
 use crate::db::repos::playlist_repo::PlaylistRepo;
 use crate::error::AppError;
-use crate::handlers::{ok, ok_empty, user::extract_session_auth};
+use crate::handlers::{ok, ok_empty, user::AuthUser};
 use crate::AppState;
 
 // ── Request bodies ───────────────────────────────────────────────────────────
@@ -53,12 +52,8 @@ pub struct ReorderInput {
 
 pub async fn list_playlists(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    AuthUser(auth): AuthUser,
 ) -> Response {
-    let auth = match extract_session_auth(&state.db, &headers).await {
-        Ok(a) => a,
-        Err(e) => return e.into_response(),
-    };
     let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => return AppError::BadRequest("无效的用户 ID".into()).into_response(),
@@ -71,13 +66,9 @@ pub async fn list_playlists(
 
 pub async fn get_playlist(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    AuthUser(auth): AuthUser,
     Path(id): Path<String>,
 ) -> Response {
-    let auth = match extract_session_auth(&state.db, &headers).await {
-        Ok(a) => a,
-        Err(e) => return e.into_response(),
-    };
     let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => return AppError::BadRequest("无效的用户 ID".into()).into_response(),
@@ -95,13 +86,9 @@ pub async fn get_playlist(
 
 pub async fn create_playlist(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    AuthUser(auth): AuthUser,
     Json(input): Json<CreatePlaylistInput>,
 ) -> Response {
-    let auth = match extract_session_auth(&state.db, &headers).await {
-        Ok(a) => a,
-        Err(e) => return e.into_response(),
-    };
     let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => return AppError::BadRequest("无效的用户 ID".into()).into_response(),
@@ -114,14 +101,10 @@ pub async fn create_playlist(
 
 pub async fn update_playlist(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    AuthUser(auth): AuthUser,
     Path(id): Path<String>,
     Json(input): Json<UpdatePlaylistInput>,
 ) -> Response {
-    let auth = match extract_session_auth(&state.db, &headers).await {
-        Ok(a) => a,
-        Err(e) => return e.into_response(),
-    };
     let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => return AppError::BadRequest("无效的用户 ID".into()).into_response(),
@@ -149,13 +132,9 @@ pub async fn update_playlist(
 
 pub async fn delete_playlist(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    AuthUser(auth): AuthUser,
     Path(id): Path<String>,
 ) -> Response {
-    let auth = match extract_session_auth(&state.db, &headers).await {
-        Ok(a) => a,
-        Err(e) => return e.into_response(),
-    };
     let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => return AppError::BadRequest("无效的用户 ID".into()).into_response(),
@@ -173,14 +152,10 @@ pub async fn delete_playlist(
 
 pub async fn add_tracks(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    AuthUser(auth): AuthUser,
     Path(id): Path<String>,
     Json(input): Json<AddTracksInput>,
 ) -> Response {
-    let auth = match extract_session_auth(&state.db, &headers).await {
-        Ok(a) => a,
-        Err(e) => return e.into_response(),
-    };
     let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => return AppError::BadRequest("无效的用户 ID".into()).into_response(),
@@ -197,14 +172,10 @@ pub async fn add_tracks(
 
 pub async fn remove_items(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    AuthUser(auth): AuthUser,
     Path(id): Path<String>,
     Json(input): Json<RemoveItemsInput>,
 ) -> Response {
-    let auth = match extract_session_auth(&state.db, &headers).await {
-        Ok(a) => a,
-        Err(e) => return e.into_response(),
-    };
     let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => return AppError::BadRequest("无效的用户 ID".into()).into_response(),
@@ -221,14 +192,10 @@ pub async fn remove_items(
 
 pub async fn reorder_items(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    AuthUser(auth): AuthUser,
     Path(id): Path<String>,
     Json(input): Json<ReorderInput>,
 ) -> Response {
-    let auth = match extract_session_auth(&state.db, &headers).await {
-        Ok(a) => a,
-        Err(e) => return e.into_response(),
-    };
     let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => return AppError::BadRequest("无效的用户 ID".into()).into_response(),
