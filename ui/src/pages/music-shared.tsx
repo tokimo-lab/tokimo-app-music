@@ -1,6 +1,6 @@
-import type { MusicAlbumOutput, MusicArtistOutput } from "@tokiomo/types";
 import { Disc3, Heart, Play, User } from "lucide-react";
 import { memo } from "react";
+import type { MusicAlbumOutput, MusicArtistOutput } from "@/types";
 import { resolveStoragePath } from "../../lib/storage-url";
 
 export function formatDuration(seconds: number | null | undefined): string {

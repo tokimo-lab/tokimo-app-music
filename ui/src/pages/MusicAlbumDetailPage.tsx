@@ -6,10 +6,10 @@ import {
   Spin,
   Tag,
 } from "@tokiomo/components";
-import type { CreditOutput, MusicTrackOutput } from "@tokiomo/types";
 import { Clock, Disc3, Heart, ListPlus, Pause, Play } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import type { CreditOutput, MusicTrackOutput } from "@/types";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
 import { resolveStoragePath } from "../../lib/storage-url";

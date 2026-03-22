@@ -1,9 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Modal, Spin } from "@tokiomo/components";
-import type { PlaylistOutput } from "@tokiomo/types";
 import { Music, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { PlaylistOutput } from "@/types";
 import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";
 import { resolveStoragePath } from "../../lib/storage-url";

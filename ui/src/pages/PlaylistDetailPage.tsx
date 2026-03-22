@@ -1,6 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Empty, Popconfirm, Spin } from "@tokiomo/components";
-import type { MusicTrackOutput, PlaylistDetailOutput } from "@tokiomo/types";
 import {
   ArrowDown,
   ArrowUp,
@@ -16,6 +15,7 @@ import {
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
+import type { MusicTrackOutput, PlaylistDetailOutput } from "@/types";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";

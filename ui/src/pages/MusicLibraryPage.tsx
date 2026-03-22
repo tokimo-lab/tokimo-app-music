@@ -1,9 +1,4 @@
 import { Button, Empty, Spin, Tag } from "@tokiomo/components";
-import type {
-  MusicAlbumOutput,
-  MusicArtistOutput,
-  MusicTrackOutput,
-} from "@tokiomo/types";
 import {
   Clock,
   Disc3,
@@ -15,6 +10,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import type {
+  MusicAlbumOutput,
+  MusicArtistOutput,
+  MusicTrackOutput,
+} from "@/types";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
 import { AlbumCard, ArtistCard, formatDuration } from "./music-shared";

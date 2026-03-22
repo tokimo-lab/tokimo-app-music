@@ -1,4 +1,3 @@
-import type { MusicTrackOutput } from "@tokiomo/types";
 import {
   createContext,
   type ReactNode,
@@ -9,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { MusicTrackOutput } from "@/types";
 import { WasmAudioEngine } from "../components/player/WasmAudioEngine";
 import { api } from "../generated/rust-api";
 import { usePlayer } from "./PlayerContext";
