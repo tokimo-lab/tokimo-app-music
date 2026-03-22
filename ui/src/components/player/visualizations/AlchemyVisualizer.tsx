@@ -46,7 +46,7 @@ export type { AlchemySceneInfo };
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const SCENE_DURATION = 900;
+const SCENE_DURATION = 1800;
 const TRAIL_ALPHA = 0.12;
 
 // ── Main component ───────────────────────────────────────────────────────────
