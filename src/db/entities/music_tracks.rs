@@ -14,16 +14,16 @@ pub struct Model {
     pub track_number: Option<i32>,
     pub disc_number: Option<i32>,
     pub duration: Option<i32>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub genre: Option<String>,
+    pub bitrate: Option<i32>,
+    pub sample_rate: Option<i32>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub codec: Option<String>,
     #[sea_orm(column_type = "Text", nullable, unique)]
     pub mb_track_id: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
     pub lyrics_path: Option<String>,
-    pub bitrate: Option<i32>,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub codec: Option<String>,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub genre: Option<String>,
-    pub sample_rate: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
