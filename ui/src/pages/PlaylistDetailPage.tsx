@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
 import type { MusicTrackOutput, PlaylistDetailOutput } from "@/types";
+import { useWindowNav } from "../../components/window-manager/WindowNavContext";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";
@@ -314,9 +314,9 @@ function TrackRow({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PlaylistDetailPage() {
-  const { playlistId } = useParams<{ playlistId: string }>();
+  const { params, goBack } = useWindowNav();
+  const playlistId = params.playlistId as string | undefined;
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const message = useMessage();
   const qc = useQueryClient();
   const { playTracks } = useMusicPlayer();
@@ -346,7 +346,7 @@ export default function PlaylistDetailPage() {
         key: "pl-delete",
       });
       api.playlists.list.invalidate(qc);
-      navigate("../playlists", { replace: true });
+      goBack();
     },
     onError: (err) =>
       message.error({ content: err.message, key: "pl-delete-err" }),

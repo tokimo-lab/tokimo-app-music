@@ -3,8 +3,8 @@ import { Button, Empty, Modal, Spin } from "@tokiomo/components";
 import { ListMusic, Music, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import type { PlaylistOutput } from "@/types";
+import { useWindowNav } from "../../components/window-manager/WindowNavContext";
 import { api } from "../../generated/rust-api";
 import { useMessage } from "../../hooks";
 import { resolveStoragePath } from "../../lib/storage-url";
@@ -161,7 +161,7 @@ function CreatePlaylistDialog({
 
 export default function PlaylistsPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { navigate: navInWindow } = useWindowNav();
   const [createOpen, setCreateOpen] = useState(false);
   const qc = useQueryClient();
 
@@ -211,7 +211,9 @@ export default function PlaylistsPage() {
             <PlaylistCard
               key={pl.id}
               playlist={pl}
-              onClick={() => navigate(`playlists/${pl.id}`)}
+              onClick={() =>
+                navInWindow(pl.name ?? "Playlist", { playlistId: pl.id })
+              }
             />
           ))}
         </div>

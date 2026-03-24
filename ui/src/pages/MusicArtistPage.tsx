@@ -1,6 +1,6 @@
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokiomo/components";
 import { User } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useWindowNav } from "../../components/window-manager/WindowNavContext";
 import { api } from "../../generated/rust-api";
 import { resolveStoragePath } from "../../lib/storage-url";
 import { SectionTitle } from "./media-detail-shared";
@@ -8,8 +8,9 @@ import { AlbumCard } from "./music-shared";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicArtistPage() {
-  const { id, personId } = useParams<{ id: string; personId: string }>();
-  const navigate = useNavigate();
+  const { params, goBack, navigate: navInWindow } = useWindowNav();
+  const id = params.appId as string | undefined;
+  const personId = params.artistPersonId as string | undefined;
 
   const { data: artist, isLoading } = api.app.getArtistDetail.useQuery(
     { personId: personId!, appId: id! },
@@ -28,9 +29,7 @@ export default function MusicArtistPage() {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
         <p className="text-neutral-500">未找到该艺术家</p>
-        <Button onClick={() => navigate(`/dashboard/app/${id}?tab=artists`)}>
-          返回
-        </Button>
+        <Button onClick={() => goBack()}>返回</Button>
       </div>
     );
   }
@@ -38,14 +37,11 @@ export default function MusicArtistPage() {
   const albums = artist.albums ?? [];
 
   return (
-    <div className="-mx-3 -mt-3 -mb-3 min-h-full lg:-mx-6 lg:-mt-6 lg:-mb-6">
+    <div className="-mx-3 -mt-3 -mb-3 min-h-full lg:-mx-4 lg:-mt-4 lg:-mb-4">
       {/* Header */}
       <div className="relative z-10 px-6 pt-6 pb-6">
         <div className="mb-6">
-          <Button
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate(`/dashboard/app/${id}?tab=artists`)}
-          >
+          <Button icon={<ArrowLeftOutlined />} onClick={() => goBack()}>
             返回
           </Button>
         </div>
@@ -111,7 +107,7 @@ export default function MusicArtistPage() {
                 key={album.id}
                 album={album}
                 onClick={() =>
-                  navigate(`/dashboard/app/${id}/album/${album.id}`)
+                  navInWindow(album.title ?? "Album", { albumId: album.id })
                 }
               />
             ))}

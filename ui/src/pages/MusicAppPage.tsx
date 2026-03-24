@@ -9,12 +9,12 @@ import {
   Search,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type {
   MusicAlbumOutput,
   MusicArtistOutput,
   MusicTrackOutput,
 } from "@/types";
+import { useWindowNav } from "../../components/window-manager/WindowNavContext";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
 import { AlbumCard, ArtistCard, formatDuration } from "./music-shared";
@@ -104,20 +104,16 @@ function TrackRow({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicAppPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { params, navigate: navInWindow } = useWindowNav();
+  const id = params.appId as string | undefined;
   const { playTrack, playTracks } = useMusicPlayer();
 
-  const tab = (searchParams.get("tab") as TabKey) || "albums";
-  const setTab = useCallback(
-    (t: TabKey) => {
-      setSearchParams({ tab: t }, { replace: true });
-      setPage(1);
-      setSearch("");
-    },
-    [setSearchParams],
-  );
+  const [tab, setTabRaw] = useState<TabKey>((params.tab as TabKey) || "albums");
+  const setTab = useCallback((t: TabKey) => {
+    setTabRaw(t);
+    setPage(1);
+    setSearch("");
+  }, []);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -285,14 +281,14 @@ export default function MusicAppPage() {
       ) : tab === "albums" ? (
         <AlbumsGrid
           albums={(albumsQuery.data?.items as MusicAlbumOutput[]) ?? []}
-          appId={id!}
-          navigate={navigate}
+          onAlbumClick={(albumId) => navInWindow("Album", { albumId })}
         />
       ) : tab === "artists" ? (
         <ArtistsGrid
           artists={(artistsQuery.data?.items as MusicArtistOutput[]) ?? []}
-          appId={id!}
-          navigate={navigate}
+          onArtistClick={(artistId) =>
+            navInWindow("Artist", { artistPersonId: artistId })
+          }
         />
       ) : (
         <TracksTable
@@ -329,12 +325,10 @@ export default function MusicAppPage() {
 
 function AlbumsGrid({
   albums,
-  appId,
-  navigate,
+  onAlbumClick,
 }: {
   albums: MusicAlbumOutput[];
-  appId: string;
-  navigate: ReturnType<typeof useNavigate>;
+  onAlbumClick: (albumId: string) => void;
 }) {
   if (!albums.length) return <Empty description="暂无专辑" />;
   return (
@@ -343,7 +337,7 @@ function AlbumsGrid({
         <AlbumCard
           key={album.id}
           album={album}
-          onClick={() => navigate(`/dashboard/app/${appId}/album/${album.id}`)}
+          onClick={() => onAlbumClick(album.id)}
         />
       ))}
     </div>
@@ -352,12 +346,10 @@ function AlbumsGrid({
 
 function ArtistsGrid({
   artists,
-  appId,
-  navigate,
+  onArtistClick,
 }: {
   artists: MusicArtistOutput[];
-  appId: string;
-  navigate: ReturnType<typeof useNavigate>;
+  onArtistClick: (artistId: string) => void;
 }) {
   if (!artists.length) return <Empty description="暂无艺术家" />;
   return (
@@ -366,9 +358,7 @@ function ArtistsGrid({
         <ArtistCard
           key={artist.id}
           artist={artist}
-          onClick={() =>
-            navigate(`/dashboard/app/${appId}/artist/${artist.id}`)
-          }
+          onClick={() => onArtistClick(artist.id)}
         />
       ))}
     </div>

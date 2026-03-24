@@ -8,8 +8,8 @@ import {
 } from "@tokiomo/components";
 import { Clock, Disc3, Heart, ListPlus, Pause, Play } from "lucide-react";
 import { useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
 import type { CreditOutput, MusicTrackOutput } from "@/types";
+import { useWindowNav } from "../../components/window-manager/WindowNavContext";
 import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
 import { resolveStoragePath } from "../../lib/storage-url";
@@ -161,8 +161,8 @@ function CreditsSection({ credits }: { credits: CreditOutput[] }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicAlbumDetailPage() {
-  const { id, albumId } = useParams<{ id: string; albumId: string }>();
-  const navigate = useNavigate();
+  const { params, goBack, navigate: navInWindow } = useWindowNav();
+  const albumId = params.albumId as string | undefined;
   const { playTracks, addToQueue } = useMusicPlayer();
 
   const { data: album, isLoading } = api.app.getAlbumDetail.useQuery(
@@ -182,9 +182,7 @@ export default function MusicAlbumDetailPage() {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
         <p className="text-neutral-500">未找到该专辑</p>
-        <Button onClick={() => navigate(`/dashboard/app/${id}?tab=albums`)}>
-          返回
-        </Button>
+        <Button onClick={() => goBack()}>返回</Button>
       </div>
     );
   }
@@ -216,14 +214,11 @@ export default function MusicAlbumDetailPage() {
   };
 
   return (
-    <div className="-mx-3 -mt-3 -mb-3 min-h-full lg:-mx-6 lg:-mt-6 lg:-mb-6">
+    <div className="-mx-3 -mt-3 -mb-3 min-h-full lg:-mx-4 lg:-mt-4 lg:-mb-4">
       {/* Header */}
       <div className="relative z-10 px-6 pt-6 pb-6">
         <div className="mb-6">
-          <Button
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate(`/dashboard/app/${id}?tab=albums`)}
-          >
+          <Button icon={<ArrowLeftOutlined />} onClick={() => goBack()}>
             返回
           </Button>
         </div>
@@ -279,7 +274,9 @@ export default function MusicAlbumDetailPage() {
                       ["artist", "album_artist", "performer"].includes(c.role),
                   );
                   if (artist) {
-                    navigate(`/dashboard/app/${id}/artist/${artist.person.id}`);
+                    navInWindow(artist.person.name, {
+                      artistPersonId: artist.person.id,
+                    });
                   }
                 }}
               >
