@@ -25,9 +25,8 @@ function FavoriteButton({
   albumId: string;
 }) {
   const qc = useQueryClient();
-  const toggle = api.mediaLibrary.toggleAlbumFavorite.useMutation({
-    onSuccess: () =>
-      void api.mediaLibrary.getAlbumDetail.invalidate(qc, { albumId }),
+  const toggle = api.app.toggleAlbumFavorite.useMutation({
+    onSuccess: () => void api.app.getAlbumDetail.invalidate(qc, { albumId }),
   });
   return (
     <button
@@ -166,7 +165,7 @@ export default function MusicAlbumDetailPage() {
   const navigate = useNavigate();
   const { playTracks, addToQueue } = useMusicPlayer();
 
-  const { data: album, isLoading } = api.mediaLibrary.getAlbumDetail.useQuery(
+  const { data: album, isLoading } = api.app.getAlbumDetail.useQuery(
     { albumId: albumId! },
     { enabled: !!albumId },
   );
@@ -183,7 +182,7 @@ export default function MusicAlbumDetailPage() {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
         <p className="text-neutral-500">未找到该专辑</p>
-        <Button onClick={() => navigate(`/dashboard/library/${id}?tab=albums`)}>
+        <Button onClick={() => navigate(`/dashboard/app/${id}?tab=albums`)}>
           返回
         </Button>
       </div>
@@ -223,7 +222,7 @@ export default function MusicAlbumDetailPage() {
         <div className="mb-6">
           <Button
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate(`/dashboard/library/${id}?tab=albums`)}
+            onClick={() => navigate(`/dashboard/app/${id}?tab=albums`)}
           >
             返回
           </Button>
@@ -280,9 +279,7 @@ export default function MusicAlbumDetailPage() {
                       ["artist", "album_artist", "performer"].includes(c.role),
                   );
                   if (artist) {
-                    navigate(
-                      `/dashboard/library/${id}/artist/${artist.person.id}`,
-                    );
+                    navigate(`/dashboard/app/${id}/artist/${artist.person.id}`);
                   }
                 }}
               >

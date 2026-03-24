@@ -11,8 +11,8 @@ export default function MusicArtistPage() {
   const { id, personId } = useParams<{ id: string; personId: string }>();
   const navigate = useNavigate();
 
-  const { data: artist, isLoading } = api.mediaLibrary.getArtistDetail.useQuery(
-    { personId: personId!, libraryId: id! },
+  const { data: artist, isLoading } = api.app.getArtistDetail.useQuery(
+    { personId: personId!, appId: id! },
     { enabled: !!personId && !!id },
   );
 
@@ -28,9 +28,7 @@ export default function MusicArtistPage() {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
         <p className="text-neutral-500">未找到该艺术家</p>
-        <Button
-          onClick={() => navigate(`/dashboard/library/${id}?tab=artists`)}
-        >
+        <Button onClick={() => navigate(`/dashboard/app/${id}?tab=artists`)}>
           返回
         </Button>
       </div>
@@ -46,7 +44,7 @@ export default function MusicArtistPage() {
         <div className="mb-6">
           <Button
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate(`/dashboard/library/${id}?tab=artists`)}
+            onClick={() => navigate(`/dashboard/app/${id}?tab=artists`)}
           >
             返回
           </Button>
@@ -113,7 +111,7 @@ export default function MusicArtistPage() {
                 key={album.id}
                 album={album}
                 onClick={() =>
-                  navigate(`/dashboard/library/${id}/album/${album.id}`)
+                  navigate(`/dashboard/app/${id}/album/${album.id}`)
                 }
               />
             ))}

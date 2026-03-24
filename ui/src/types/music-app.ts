@@ -1,8 +1,8 @@
-import type { CreditOutput, MediaFileOutput } from "./media-library";
+import type { CreditOutput, MediaFileOutput } from "./app";
 
 export interface MusicAlbumOutput {
   id: string;
-  libraryId: string;
+  appId: string;
   title: string;
   sortTitle?: string | null;
   artistName?: string | null;

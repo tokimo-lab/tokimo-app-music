@@ -103,7 +103,7 @@ function TrackRow({
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-export default function MusicLibraryPage() {
+export default function MusicAppPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -140,16 +140,13 @@ export default function MusicLibraryPage() {
     setDebouncedSearch("");
   }, [id]);
 
-  const libraryQuery = api.mediaLibrary.getById.useQuery(
-    { id: id! },
-    { enabled: !!id },
-  );
+  const libraryQuery = api.app.getById.useQuery({ id: id! }, { enabled: !!id });
 
   const albumSortParams = parseAlbumSort(albumSort);
 
-  const albumsQuery = api.mediaLibrary.listAlbums.useQuery(
+  const albumsQuery = api.app.listAlbums.useQuery(
     {
-      libraryId: id!,
+      appId: id!,
       page,
       pageSize: PAGE_SIZE,
       ...albumSortParams,
@@ -158,9 +155,9 @@ export default function MusicLibraryPage() {
     { enabled: !!id && tab === "albums" },
   );
 
-  const artistsQuery = api.mediaLibrary.listArtists.useQuery(
+  const artistsQuery = api.app.listArtists.useQuery(
     {
-      libraryId: id!,
+      appId: id!,
       page,
       pageSize: PAGE_SIZE,
       search: debouncedSearch || undefined,
@@ -168,9 +165,9 @@ export default function MusicLibraryPage() {
     { enabled: !!id && tab === "artists" },
   );
 
-  const tracksQuery = api.mediaLibrary.listTracks.useQuery(
+  const tracksQuery = api.app.listTracks.useQuery(
     {
-      libraryId: id!,
+      appId: id!,
       page,
       pageSize: PAGE_SIZE,
       search: debouncedSearch || undefined,
@@ -288,13 +285,13 @@ export default function MusicLibraryPage() {
       ) : tab === "albums" ? (
         <AlbumsGrid
           albums={(albumsQuery.data?.items as MusicAlbumOutput[]) ?? []}
-          libraryId={id!}
+          appId={id!}
           navigate={navigate}
         />
       ) : tab === "artists" ? (
         <ArtistsGrid
           artists={(artistsQuery.data?.items as MusicArtistOutput[]) ?? []}
-          libraryId={id!}
+          appId={id!}
           navigate={navigate}
         />
       ) : (
@@ -332,11 +329,11 @@ export default function MusicLibraryPage() {
 
 function AlbumsGrid({
   albums,
-  libraryId,
+  appId,
   navigate,
 }: {
   albums: MusicAlbumOutput[];
-  libraryId: string;
+  appId: string;
   navigate: ReturnType<typeof useNavigate>;
 }) {
   if (!albums.length) return <Empty description="暂无专辑" />;
@@ -346,9 +343,7 @@ function AlbumsGrid({
         <AlbumCard
           key={album.id}
           album={album}
-          onClick={() =>
-            navigate(`/dashboard/library/${libraryId}/album/${album.id}`)
-          }
+          onClick={() => navigate(`/dashboard/app/${appId}/album/${album.id}`)}
         />
       ))}
     </div>
@@ -357,11 +352,11 @@ function AlbumsGrid({
 
 function ArtistsGrid({
   artists,
-  libraryId,
+  appId,
   navigate,
 }: {
   artists: MusicArtistOutput[];
-  libraryId: string;
+  appId: string;
   navigate: ReturnType<typeof useNavigate>;
 }) {
   if (!artists.length) return <Empty description="暂无艺术家" />;
@@ -372,7 +367,7 @@ function ArtistsGrid({
           key={artist.id}
           artist={artist}
           onClick={() =>
-            navigate(`/dashboard/library/${libraryId}/artist/${artist.id}`)
+            navigate(`/dashboard/app/${appId}/artist/${artist.id}`)
           }
         />
       ))}

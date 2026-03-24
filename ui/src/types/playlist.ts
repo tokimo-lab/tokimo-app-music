@@ -1,4 +1,4 @@
-import type { MusicTrackOutput } from "./music-library";
+import type { MusicTrackOutput } from "./music-app";
 
 export interface PlaylistOutput {
   id: string;

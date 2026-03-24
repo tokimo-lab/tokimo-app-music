@@ -28,7 +28,7 @@ export function useLyrics(
   trackId: string | null | undefined,
   getCurrentTime: () => number,
 ): UseLyricsResult {
-  const { data, isLoading } = api.mediaLibrary.getTrackLyrics.useQuery(
+  const { data, isLoading } = api.app.getTrackLyrics.useQuery(
     { trackId: trackId! },
     { enabled: !!trackId, staleTime: Number.POSITIVE_INFINITY },
   );
