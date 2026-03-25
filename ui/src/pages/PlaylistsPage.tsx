@@ -191,10 +191,13 @@ export default function PlaylistsPage() {
             {t("media.playlist.title")}
           </h1>
         </div>
-        <Button variant="primary" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1 h-4 w-4" />
-          {t("media.playlist.createPlaylist")}
-        </Button>
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 dark:bg-white/[0.08] dark:hover:bg-white/[0.15] border border-[var(--glass-border)] text-[var(--text-secondary)] transition-colors cursor-pointer"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Content */}
