@@ -8,9 +8,8 @@ import {
 } from "@tokiomo/components";
 import { Clock, Disc3, Heart, ListPlus, Pause, Play } from "lucide-react";
 import { useCallback } from "react";
+import { useMusicPlayer, useWindowNav } from "@/system";
 import type { CreditOutput, MusicTrackOutput } from "@/types";
-import { useWindowNav } from "../../components/window-manager/WindowNavContext";
-import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
 import { resolveStoragePath } from "../../lib/storage-url";
 import { PersonCard, SectionTitle } from "./media-detail-shared";

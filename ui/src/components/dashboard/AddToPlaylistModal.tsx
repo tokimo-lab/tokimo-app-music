@@ -3,9 +3,9 @@ import { Button, Modal, Spin } from "@tokiomo/components";
 import { Music, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useMessage } from "@/system";
 import type { PlaylistOutput } from "@/types";
 import { api } from "../../generated/rust-api";
-import { useMessage } from "../../hooks";
 import { resolveStoragePath } from "../../lib/storage-url";
 
 interface AddToPlaylistModalProps {

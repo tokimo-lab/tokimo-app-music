@@ -6,11 +6,14 @@
  */
 
 import { Music, Pause, Play, Volume1, Volume2, VolumeX } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMediaSessionOptional, useMediaSessionRegister } from "@/system";
 
 interface AudioPlayerProps {
   src: string;
   fileName: string;
+  /** Unique ID for media session registration (e.g. window ID). */
+  id?: string;
 }
 
 function formatTime(sec: number): string {
@@ -20,7 +23,8 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function AudioPlayer({ src, fileName }: AudioPlayerProps) {
+export function AudioPlayer({ src, fileName, id }: AudioPlayerProps) {
+  const mediaSession = useMediaSessionOptional();
   const audioRef = useRef<HTMLAudioElement>(null);
   const seekRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -62,12 +66,19 @@ export function AudioPlayer({ src, fileName }: AudioPlayerProps) {
     };
   }, [seeking]);
 
+  const sourceId = id ?? `audio-${src}`;
+
   const togglePlay = useCallback(() => {
     const el = audioRef.current;
     if (!el) return;
-    if (el.paused) el.play();
-    else el.pause();
-  }, []);
+    if (el.paused) {
+      mediaSession?.requestPlay(sourceId);
+      el.play();
+    } else {
+      el.pause();
+      mediaSession?.notifyPause(sourceId);
+    }
+  }, [mediaSession, sourceId]);
 
   const toggleMute = useCallback(() => {
     const el = audioRef.current;
@@ -156,6 +167,38 @@ export function AudioPlayer({ src, fileName }: AudioPlayerProps) {
 
   // Strip extension for cleaner display
   const displayName = fileName.replace(/\.[^.]+$/, "");
+
+  // ── MediaSession registration ──────────────────────────────────────────────
+  const currentTimeRef = useRef(currentTime);
+  currentTimeRef.current = currentTime;
+  const durationRefMs = useRef(duration);
+  durationRefMs.current = duration;
+  const getCurrentTime = useCallback(() => currentTimeRef.current, []);
+  const getDuration = useCallback(() => durationRefMs.current, []);
+
+  const audioMediaSource = useMemo(
+    () => ({
+      id: sourceId,
+      type: "audio" as const,
+      title: displayName,
+      isPlaying: playing,
+      getCurrentTime,
+      getDuration,
+      volume,
+      play: () => audioRef.current?.play(),
+      pause: () => audioRef.current?.pause(),
+      seek: (t: number) => {
+        if (audioRef.current) audioRef.current.currentTime = t;
+      },
+      setVolume: (v: number) => {
+        if (audioRef.current) audioRef.current.volume = v;
+        setVolume(v);
+      },
+    }),
+    [sourceId, displayName, playing, getCurrentTime, getDuration, volume],
+  );
+
+  useMediaSessionRegister(audioMediaSource);
 
   return (
     <div className="flex h-full flex-col bg-surface-base">

@@ -9,13 +9,12 @@ import {
   Search,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMusicPlayer, useWindowNav } from "@/system";
 import type {
   MusicAlbumOutput,
   MusicArtistOutput,
   MusicTrackOutput,
 } from "@/types";
-import { useWindowNav } from "../../components/window-manager/WindowNavContext";
-import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
 import { AlbumCard, ArtistCard, formatDuration } from "./music-shared";
 

@@ -8,10 +8,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { WasmAudioEngine } from "@/components/player/WasmAudioEngine";
+import { api } from "@/generated/rust-api";
+import { resolveStoragePath } from "@/lib/storage-url";
 import type { MusicTrackOutput } from "@/types";
-import { WasmAudioEngine } from "../components/player/WasmAudioEngine";
-import { api } from "../generated/rust-api";
-import { usePlayer } from "./PlayerContext";
+import {
+  useMediaSessionOptional,
+  useMediaSessionRegister,
+} from "./MediaSessionContext";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -146,7 +150,7 @@ function buildShuffleOrder(length: number, currentIdx: number): number[] {
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export function MusicPlayerProvider({ children }: { children: ReactNode }) {
-  const videoPlayer = usePlayer();
+  const mediaSession = useMediaSessionOptional();
 
   // Core state
   const [queue, setQueue] = useState<MusicTrackOutput[]>([]);
@@ -196,10 +200,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       if (!fid) return;
       setIsLoading(true);
       try {
-        // Pause the video player when music starts
-        if (videoPlayer.isPlaying) {
-          videoPlayer.setIsPlaying(false);
-        }
+        // Notify media session — pauses all other sources (video, audio, etc.)
+        mediaSession?.requestPlay("music");
 
         const url = await resolveStreamUrl(fid);
         const engine = getEngine();
@@ -213,7 +215,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     },
-    [videoPlayer.isPlaying, videoPlayer.setIsPlaying, getEngine],
+    [mediaSession, getEngine],
   );
 
   // ── Audio engine event listeners ─────────────────────────────────────────
@@ -510,17 +512,16 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     if (!engine) return;
 
     if (engine.paused) {
-      // Pause video when resuming music
-      if (videoPlayer.isPlaying) {
-        videoPlayer.setIsPlaying(false);
-      }
+      // Notify media session — pauses all other sources
+      mediaSession?.requestPlay("music");
       engine.resume();
       setIsPlaying(true);
     } else {
       engine.pause();
       setIsPlaying(false);
+      mediaSession?.notifyPause("music");
     }
-  }, [videoPlayer.isPlaying, videoPlayer.setIsPlaying]);
+  }, [mediaSession]);
 
   const seek = useCallback((time: number) => {
     engineRef.current?.seek(time);
@@ -559,6 +560,56 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     if (currentIndex < 0 || currentIndex >= queue.length) return null;
     return queue[currentIndex] ?? null;
   }, [queue, currentIndex]);
+
+  // ── MediaSession registration ──────────────────────────────────────────────
+  const musicMediaSource = useMemo(() => {
+    if (!currentTrack) return null;
+    const coverPath = currentTrack.coverPath;
+    const artwork = coverPath
+      ? coverPath.startsWith("http")
+        ? coverPath
+        : resolveStoragePath(coverPath)
+      : undefined;
+    return {
+      id: "music" as const,
+      type: "music" as const,
+      title: currentTrack.title,
+      artist: currentTrack.artistName ?? undefined,
+      album: currentTrack.albumTitle ?? undefined,
+      artwork,
+      isPlaying,
+      getCurrentTime,
+      getDuration,
+      volume,
+      play: () => {
+        const engine = engineRef.current;
+        if (engine?.paused) {
+          engine.resume();
+          setIsPlaying(true);
+        }
+      },
+      pause: () => {
+        engineRef.current?.pause();
+        setIsPlaying(false);
+      },
+      seek,
+      setVolume,
+      next,
+      previous,
+    };
+  }, [
+    currentTrack,
+    isPlaying,
+    getCurrentTime,
+    getDuration,
+    volume,
+    seek,
+    setVolume,
+    next,
+    previous,
+  ]);
+
+  useMediaSessionRegister(musicMediaSource);
 
   const value = useMemo<MusicPlayerContextValue>(
     () => ({

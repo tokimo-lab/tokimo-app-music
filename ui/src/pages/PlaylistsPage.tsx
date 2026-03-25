@@ -3,10 +3,9 @@ import { Button, Empty, Modal, Spin } from "@tokiomo/components";
 import { ListMusic, Music, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useMessage, useWindowNav } from "@/system";
 import type { PlaylistOutput } from "@/types";
-import { useWindowNav } from "../../components/window-manager/WindowNavContext";
 import { api } from "../../generated/rust-api";
-import { useMessage } from "../../hooks";
 import { resolveStoragePath } from "../../lib/storage-url";
 
 function getCoverUrl(coverPath: string | null | undefined): string | null {

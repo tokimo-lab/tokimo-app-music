@@ -2,7 +2,7 @@
  * AudioContent — Window content adapter for audio files.
  */
 
-import type { WindowState } from "../../../contexts/WindowManagerContext";
+import type { WindowState } from "@/system";
 import { buildFileUrl } from "../../file-manager/types";
 import { AudioPlayer } from "../AudioPlayer";
 import { buildSshFileUrl } from "../file-url";
@@ -16,5 +16,7 @@ export default function AudioContent({ win }: { win: WindowState }) {
     buildFileUrl(filePath, fileSystemId) ??
     buildSshFileUrl(win.metadata.sshTerminalId, filePath);
 
-  return audioSrc ? <AudioPlayer src={audioSrc} fileName={fileName} /> : null;
+  return audioSrc ? (
+    <AudioPlayer id={win.id} src={audioSrc} fileName={fileName} />
+  ) : null;
 }

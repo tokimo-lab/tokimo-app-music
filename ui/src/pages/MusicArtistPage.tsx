@@ -1,6 +1,6 @@
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokiomo/components";
 import { User } from "lucide-react";
-import { useWindowNav } from "../../components/window-manager/WindowNavContext";
+import { useWindowNav } from "@/system";
 import { api } from "../../generated/rust-api";
 import { resolveStoragePath } from "../../lib/storage-url";
 import { SectionTitle } from "./media-detail-shared";

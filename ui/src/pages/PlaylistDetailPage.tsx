@@ -14,11 +14,9 @@ import {
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useMessage, useMusicPlayer, useWindowNav } from "@/system";
 import type { MusicTrackOutput, PlaylistDetailOutput } from "@/types";
-import { useWindowNav } from "../../components/window-manager/WindowNavContext";
-import { useMusicPlayer } from "../../contexts/MusicPlayerContext";
 import { api } from "../../generated/rust-api";
-import { useMessage } from "../../hooks";
 import { resolveStoragePath } from "../../lib/storage-url";
 
 function getCoverUrl(coverPath: string | null | undefined): string | null {
