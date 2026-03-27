@@ -28,7 +28,7 @@ export default function MusicArtistPage() {
   if (!artist) {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
-        <p className="text-neutral-500">未找到该艺术家</p>
+        <p className="text-[var(--text-muted)]">未找到该艺术家</p>
         <Button onClick={() => goBack()}>返回</Button>
       </div>
     );
@@ -57,29 +57,29 @@ export default function MusicArtistPage() {
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-[var(--bg-skeleton)]">
-                <User className="h-20 w-20 text-neutral-400" />
+                <User className="h-20 w-20 text-[var(--text-muted)]" />
               </div>
             )}
           </div>
 
           {/* Info */}
           <div className="min-w-0 flex-1 text-center md:text-left">
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
               艺术家
             </p>
-            <h1 className="mt-1 text-3xl font-bold text-neutral-900 dark:text-neutral-100">
+            <h1 className="mt-1 text-3xl font-bold text-[var(--text-primary)]">
               {artist.name}
             </h1>
 
             {artist.aliases && artist.aliases.length > 0 && (
-              <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
                 别名：{artist.aliases.join("、")}
               </p>
             )}
 
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-neutral-600 dark:text-neutral-300 md:justify-start">
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--text-secondary)] md:justify-start">
               <span>{artist.albumCount} 张专辑</span>
-              <span className="text-neutral-400">·</span>
+              <span className="text-[var(--text-muted)]">·</span>
               <span>{artist.trackCount} 首曲目</span>
             </div>
           </div>
@@ -92,7 +92,7 @@ export default function MusicArtistPage() {
         {artist.biography && (
           <div className="mb-8">
             <SectionTitle>简介</SectionTitle>
-            <p className="text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+            <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
               {artist.biography}
             </p>
           </div>

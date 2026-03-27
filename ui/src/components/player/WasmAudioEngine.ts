@@ -147,7 +147,7 @@ export class WasmAudioEngine {
 
       this.analyserNode = this.ctx.createAnalyser();
       this.analyserNode.fftSize = 256;
-      this.analyserNode.smoothingTimeConstant = 0.7;
+      this.analyserNode.smoothingTimeConstant = 0.4;
 
       this.gainNode.connect(this.analyserNode);
       this.analyserNode.connect(this.ctx.destination);

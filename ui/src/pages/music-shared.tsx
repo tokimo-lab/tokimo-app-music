@@ -31,7 +31,7 @@ export const AlbumCard = memo(function AlbumCard({
   return (
     <button
       type="button"
-      className="group w-full cursor-pointer overflow-hidden rounded-lg border border-[var(--glass-border)] bg-white text-left transition-shadow hover:shadow-md dark:bg-gray-800/50"
+      className="group w-full cursor-pointer overflow-hidden rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] text-left transition-shadow hover:shadow-md"
       onClick={onClick}
     >
       <div className="relative aspect-square overflow-hidden bg-[var(--bg-skeleton)]">
@@ -43,7 +43,7 @@ export const AlbumCard = memo(function AlbumCard({
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-neutral-400 dark:text-neutral-500">
+          <div className="flex h-full items-center justify-center text-[var(--text-muted)]">
             <Disc3 className="h-12 w-12" />
           </div>
         )}
@@ -66,13 +66,13 @@ export const AlbumCard = memo(function AlbumCard({
       </div>
       <div className="flex h-[52px] flex-col justify-center px-2.5 py-1.5">
         <p
-          className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100"
+          className="truncate text-sm font-medium text-[var(--text-primary)]"
           title={album.title}
         >
           {album.title}
         </p>
         <p
-          className="truncate text-xs text-neutral-500 dark:text-neutral-400"
+          className="truncate text-xs text-[var(--text-muted)]"
           title={album.artistName ?? undefined}
         >
           {album.artistName || "未知艺术家"}
@@ -93,7 +93,7 @@ export const ArtistCard = memo(function ArtistCard({
   return (
     <button
       type="button"
-      className="group flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-white p-4 text-center transition-shadow hover:shadow-md dark:bg-gray-800/50"
+      className="group flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] p-4 text-center transition-shadow hover:shadow-md"
       onClick={onClick}
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-full bg-[var(--bg-skeleton)]">
@@ -105,19 +105,19 @@ export const ArtistCard = memo(function ArtistCard({
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-neutral-400 dark:text-neutral-500">
+          <div className="flex h-full items-center justify-center text-[var(--text-muted)]">
             <User className="h-10 w-10" />
           </div>
         )}
       </div>
       <div className="w-full">
         <p
-          className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100"
+          className="truncate text-sm font-medium text-[var(--text-primary)]"
           title={artist.name}
         >
           {artist.name}
         </p>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+        <p className="text-xs text-[var(--text-muted)]">
           {artist.albumCount} 张专辑
         </p>
       </div>
