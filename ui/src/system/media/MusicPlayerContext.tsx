@@ -596,6 +596,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setVolume,
       next,
       previous,
+      getAnalyser,
     };
   }, [
     currentTrack,
@@ -607,6 +608,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     setVolume,
     next,
     previous,
+    getAnalyser,
   ]);
 
   useMediaSessionRegister(musicMediaSource);
