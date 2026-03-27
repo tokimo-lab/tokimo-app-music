@@ -138,7 +138,7 @@ function LiveProgressBar({
     >
       <div
         ref={fillRef}
-        className="absolute inset-y-0 left-0 bg-[var(--accent)]"
+        className="absolute inset-y-0 left-0 bg-[var(--accent)] transition-[width]"
         style={{ width: "0%" }}
       />
     </div>
