@@ -32,7 +32,7 @@ function FavoriteButton({
       type="button"
       title={isFavorite ? "取消收藏" : "收藏"}
       className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-transform hover:scale-110 ${
-        isFavorite ? "text-red-500" : "text-neutral-400 hover:text-red-400"
+        isFavorite ? "text-red-500" : "text-[var(--text-muted)] hover:text-red-400"
       }`}
       onClick={() => toggle.mutate({ albumId })}
     >
@@ -72,13 +72,13 @@ function TrackRow({
       type="button"
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
         isActive
-          ? "bg-[var(--accent)]/10 dark:bg-[var(--accent)]/20"
-          : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          ? "bg-[var(--accent)]/10"
+          : "hover:bg-[var(--fill-tertiary)]"
       }`}
       onClick={isActive ? togglePlay : handlePlay}
     >
       {/* Track number */}
-      <span className="w-8 flex-shrink-0 text-center text-sm text-neutral-500 dark:text-neutral-400">
+      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--text-muted)]">
         {isActive ? (
           isPlaying ? (
             <Pause className="mx-auto h-4 w-4 text-[var(--accent)]" />
@@ -107,20 +107,20 @@ function TrackRow({
           className={`truncate text-sm font-medium ${
             isActive
               ? "text-[var(--accent)]"
-              : "text-neutral-900 dark:text-neutral-100"
+              : "text-[var(--text-primary)]"
           }`}
         >
           {track.title}
         </p>
         {track.artistName && (
-          <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
+          <p className="truncate text-xs text-[var(--text-muted)]">
             {track.artistName}
           </p>
         )}
       </div>
 
       {/* Duration */}
-      <span className="w-[50px] flex-shrink-0 text-right text-xs text-neutral-500 dark:text-neutral-400">
+      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--text-muted)]">
         {formatDuration(track.duration)}
       </span>
 
@@ -128,10 +128,10 @@ function TrackRow({
       <button
         type="button"
         title="添加到队列"
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-700"
+        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-[var(--fill-tertiary)] group-hover:opacity-100"
         onClick={handleAddToQueue}
       >
-        <ListPlus className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+        <ListPlus className="h-4 w-4 text-[var(--text-muted)]" />
       </button>
     </button>
   );
@@ -180,7 +180,7 @@ export default function MusicAlbumDetailPage() {
   if (!album) {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
-        <p className="text-neutral-500">未找到该专辑</p>
+        <p className="text-[var(--text-muted)]">未找到该专辑</p>
         <Button onClick={() => goBack()}>返回</Button>
       </div>
     );
@@ -233,7 +233,7 @@ export default function MusicAlbumDetailPage() {
               />
             ) : (
               <div className="flex aspect-square w-full items-center justify-center bg-[var(--bg-skeleton)]">
-                <Disc3 className="h-20 w-20 text-neutral-400" />
+                <Disc3 className="h-20 w-20 text-[var(--text-muted)]" />
               </div>
             )}
             {/* Play overlay */}
@@ -252,7 +252,7 @@ export default function MusicAlbumDetailPage() {
           {/* Info */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold leading-tight text-neutral-900 dark:text-neutral-100">
+              <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
                 {album.title}
               </h1>
               <FavoriteButton
@@ -284,23 +284,23 @@ export default function MusicAlbumDetailPage() {
             )}
 
             {/* Meta line */}
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
               {album.year && <span>{album.year}</span>}
               {album.albumType && (
                 <>
-                  <span className="text-neutral-400">·</span>
+                  <span className="text-[var(--text-muted)]">·</span>
                   <span>{album.albumType}</span>
                 </>
               )}
               {album.trackCount > 0 && (
                 <>
-                  <span className="text-neutral-400">·</span>
+                  <span className="text-[var(--text-muted)]">·</span>
                   <span>{album.trackCount} 首曲目</span>
                 </>
               )}
               {album.totalDuration && (
                 <>
-                  <span className="text-neutral-400">·</span>
+                  <span className="text-[var(--text-muted)]">·</span>
                   <span>{formatTotalDuration(album.totalDuration)}</span>
                 </>
               )}
@@ -329,7 +329,7 @@ export default function MusicAlbumDetailPage() {
               </button>
               <button
                 type="button"
-                className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-glass-hover)]"
                 onClick={handleAddAllToQueue}
               >
                 <ListPlus className="h-4 w-4" />
@@ -345,16 +345,16 @@ export default function MusicAlbumDetailPage() {
         {album.overview && (
           <div className="mb-6">
             <SectionTitle>简介</SectionTitle>
-            <p className="text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+            <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
               {album.overview}
             </p>
           </div>
         )}
 
         <SectionTitle>曲目列表</SectionTitle>
-        <div className="rounded-lg border border-[var(--glass-border)] bg-white dark:bg-gray-800/50">
+        <div className="rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)]">
           {/* Table header */}
-          <div className="flex items-center gap-3 border-b border-[var(--glass-border)] px-3 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+          <div className="flex items-center gap-3 border-b border-[var(--glass-border)] px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
             <span className="w-8 flex-shrink-0 text-center">#</span>
             <span className="min-w-0 flex-1">标题</span>
             <span className="w-[50px] flex-shrink-0 text-right">
@@ -375,7 +375,7 @@ export default function MusicAlbumDetailPage() {
             return (
               <div key={discNum}>
                 {hasMultiDisc && (
-                  <div className="border-b border-[var(--glass-border)] bg-neutral-50 px-4 py-1.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-400">
+                  <div className="border-b border-[var(--glass-border)] bg-[var(--fill-tertiary)] px-4 py-1.5 text-xs font-semibold text-[var(--text-secondary)]">
                     光碟 {discNum}
                   </div>
                 )}

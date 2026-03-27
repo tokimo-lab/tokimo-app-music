@@ -277,7 +277,7 @@ export function MusicMiniPlayer() {
   return (
     <>
       <div
-        className="fixed inset-x-0 bottom-0 z-[880] flex flex-col border-t border-neutral-200 bg-white/95 backdrop-blur-md dark:border-neutral-700 dark:bg-neutral-900/95 select-none"
+        className="flex shrink-0 flex-col border-t border-neutral-200 bg-white/95 backdrop-blur-md dark:border-neutral-700 dark:bg-neutral-900/95 select-none"
         style={{ height: `${MUSIC_MINI_PLAYER_HEIGHT_PX}px` }}
       >
         {/* Top progress bar */}

@@ -58,12 +58,12 @@ function TrackRow({
       type="button"
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
         isActive
-          ? "bg-[var(--accent)]/10 dark:bg-[var(--accent)]/20"
-          : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          ? "bg-[var(--accent)]/10"
+          : "hover:bg-[var(--fill-tertiary)]"
       }`}
       onClick={isActive ? togglePlay : onPlay}
     >
-      <span className="w-8 flex-shrink-0 text-center text-sm text-neutral-500 dark:text-neutral-400">
+      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--text-muted)]">
         {isActive ? (
           isPlaying ? (
             <Pause className="mx-auto h-4 w-4 text-[var(--accent)]" />
@@ -85,18 +85,18 @@ function TrackRow({
       </span>
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-sm font-medium ${isActive ? "text-[var(--accent)]" : "text-neutral-900 dark:text-neutral-100"}`}
+          className={`truncate text-sm font-medium ${isActive ? "text-[var(--accent)]" : "text-[var(--text-primary)]"}`}
         >
           {track.title}
         </p>
       </div>
-      <span className="hidden w-[140px] flex-shrink-0 truncate text-xs text-neutral-500 dark:text-neutral-400 sm:block">
+      <span className="hidden w-[140px] flex-shrink-0 truncate text-xs text-[var(--text-muted)] sm:block">
         {track.artistName || "未知"}
       </span>
-      <span className="hidden w-[180px] flex-shrink-0 truncate text-xs text-neutral-500 dark:text-neutral-400 md:block">
+      <span className="hidden w-[180px] flex-shrink-0 truncate text-xs text-[var(--text-muted)] md:block">
         {track.albumTitle || ""}
       </span>
-      <span className="w-[50px] flex-shrink-0 text-right text-xs text-neutral-500 dark:text-neutral-400">
+      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--text-muted)]">
         {formatDuration(track.duration)}
       </span>
     </button>
@@ -274,7 +274,7 @@ export default function MusicAppPage() {
                 className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium transition-all duration-200 ${
                   active
                     ? "bg-white/90 text-neutral-900 shadow-sm dark:bg-white/15 dark:text-white"
-                    : "text-neutral-600 hover:bg-black/5 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-white/[0.06] dark:hover:text-neutral-200"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--fill-tertiary)] hover:text-[var(--text-primary)]"
                 }`}
                 onClick={() => setTab(t.key)}
               >
@@ -293,7 +293,7 @@ export default function MusicAppPage() {
       {/* Sort bar for albums */}
       {tab === "albums" && (
         <div className="flex flex-wrap items-center justify-center gap-1.5">
-          <span className="mr-0.5 text-xs text-neutral-400 dark:text-neutral-500">
+          <span className="mr-0.5 text-xs text-[var(--text-muted)]">
             排序
           </span>
           {SORT_OPTIONS_ALBUM.map((opt) => (
@@ -307,7 +307,7 @@ export default function MusicAppPage() {
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 albumSort === opt.value
                   ? "bg-[var(--accent)] text-white"
-                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700"
+                  : "bg-[var(--fill-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-glass-hover)]"
               }`}
             >
               {opt.label}
@@ -349,7 +349,7 @@ export default function MusicAppPage() {
           >
             上一页
           </Button>
-          <span className="text-sm text-neutral-500 dark:text-neutral-400">
+          <span className="text-sm text-[var(--text-muted)]">
             {page} / {totalPages}
           </span>
           <Button
@@ -417,9 +417,9 @@ function TracksTable({
 }) {
   if (!tracks.length) return <Empty description="暂无曲目" />;
   return (
-    <div className="rounded-lg border border-[var(--glass-border)] bg-white dark:bg-gray-800/50">
+    <div className="rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)]">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-[var(--glass-border)] px-3 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+      <div className="flex items-center gap-3 border-b border-[var(--glass-border)] px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
         <span className="w-8 flex-shrink-0 text-center">#</span>
         <span className="min-w-0 flex-1">标题</span>
         <span className="hidden w-[140px] flex-shrink-0 sm:block">艺术家</span>
