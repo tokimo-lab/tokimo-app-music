@@ -1,15 +1,17 @@
-import { Button, Empty, Spin, Tag } from "@tokiomo/components";
+import { Button, Checkbox, Empty, Modal, Spin, Tag } from "@tokiomo/components";
 import {
   Clock,
   Disc3,
+  FolderSync,
   ListMusic,
   Mic2,
   Pause,
   Play,
-  Search,
+  RefreshCw,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useMusicPlayer, useWindowNav } from "@/system";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MenuBarConfig } from "@/system";
+import { useMenuBar, useMessage, useMusicPlayer, useWindowNav } from "@/system";
 import type {
   MusicAlbumOutput,
   MusicArtistOutput,
@@ -106,36 +108,24 @@ export default function MusicAppPage() {
   const { params, navigate: navInWindow } = useWindowNav();
   const id = params.appId as string | undefined;
   const { playTrack, playTracks } = useMusicPlayer();
+  const message = useMessage();
 
   const [tab, setTabRaw] = useState<TabKey>((params.tab as TabKey) || "albums");
   const setTab = useCallback((t: TabKey) => {
     setTabRaw(t);
     setPage(1);
-    setSearch("");
   }, []);
 
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
   const [albumSort, setAlbumSort] = useState<AlbumSortValue>("addedAt");
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-
-  useEffect(() => {
-    searchTimerRef.current = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [search]);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncClearData, setSyncClearData] = useState(false);
 
   // Reset on library change
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on id change
   useEffect(() => {
     setPage(1);
-    setSearch("");
-    setDebouncedSearch("");
   }, [id]);
-
-  const libraryQuery = api.app.getById.useQuery({ id: id! }, { enabled: !!id });
 
   const albumSortParams = parseAlbumSort(albumSort);
 
@@ -145,7 +135,6 @@ export default function MusicAppPage() {
       page,
       pageSize: PAGE_SIZE,
       ...albumSortParams,
-      search: debouncedSearch || undefined,
     },
     { enabled: !!id && tab === "albums" },
   );
@@ -155,7 +144,6 @@ export default function MusicAppPage() {
       appId: id!,
       page,
       pageSize: PAGE_SIZE,
-      search: debouncedSearch || undefined,
     },
     { enabled: !!id && tab === "artists" },
   );
@@ -165,7 +153,6 @@ export default function MusicAppPage() {
       appId: id!,
       page,
       pageSize: PAGE_SIZE,
-      search: debouncedSearch || undefined,
     },
     { enabled: !!id && tab === "tracks" },
   );
@@ -198,57 +185,114 @@ export default function MusicAppPage() {
     { key: "tracks", label: "曲目", icon: ListMusic },
   ];
 
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <h2 className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
-          {libraryQuery.data?.name ?? "音乐库"}
-        </h2>
-        {total > 0 && <Tag>{total}</Tag>}
-      </div>
+  // ── Sync ──────────────────────────────────────────────────────────────────
+  const syncMutation = api.app.sync.useMutation({
+    onSuccess: () => {
+      message.success("同步已开始");
+      setPage(1);
+      void activeQuery.refetch();
+    },
+    onError: (e) => message.error(e.message || "同步失败"),
+  });
 
-      {/* Tabs + Search */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1 rounded-lg border border-[var(--glass-border)] bg-neutral-100 p-1 dark:bg-neutral-800">
+  // ── MenuBar (macOS-style) ─────────────────────────────────────────────────
+  const menuBarConfig: MenuBarConfig | null = useMemo(() => {
+    if (!id) return null;
+    return {
+      menus: [
+        {
+          key: "actions",
+          label: "操作",
+          items: [
+            {
+              key: "refresh",
+              label: "刷新",
+              icon: <RefreshCw size={14} />,
+              onClick: () => void activeQuery.refetch(),
+            },
+            { type: "divider" as const },
+            {
+              key: "sync",
+              label: "同步资料库",
+              icon: <FolderSync size={14} />,
+              disabled: syncMutation.isPending,
+              onClick: () => {
+                setSyncClearData(false);
+                setSyncModalOpen(true);
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }, [id, activeQuery.refetch, syncMutation.isPending]);
+
+  useMenuBar(menuBarConfig);
+
+  return (
+    <div className="space-y-3">
+      <Modal
+        open={syncModalOpen}
+        title="同步资料库"
+        okText="开始同步"
+        cancelText="取消"
+        confirmLoading={syncMutation.isPending}
+        onCancel={() => setSyncModalOpen(false)}
+        onOk={async () => {
+          if (!id) return;
+          try {
+            await syncMutation.mutateAsync({
+              id,
+              clearData: syncClearData,
+            });
+          } finally {
+            setSyncModalOpen(false);
+          }
+        }}
+      >
+        <Checkbox
+          checked={syncClearData}
+          onChange={(e) => setSyncClearData(e.target.checked)}
+        >
+          清空数据重新同步
+        </Checkbox>
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
+          勾选后将删除所有音乐数据并重新完整同步，适合修复数据异常。
+        </p>
+      </Modal>
+
+      {/* Tab bar — iOS 26 style pill, centered */}
+      <div className="relative flex items-center justify-center">
+        <div className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-black/20 p-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]">
           {tabs.map((t) => {
             const Icon = t.icon;
+            const active = tab === t.key;
             return (
               <button
                 key={t.key}
                 type="button"
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  tab === t.key
-                    ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-neutral-100"
-                    : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium transition-all duration-200 ${
+                  active
+                    ? "bg-white/90 text-neutral-900 shadow-sm dark:bg-white/15 dark:text-white"
+                    : "text-neutral-600 hover:bg-black/5 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-white/[0.06] dark:hover:text-neutral-200"
                 }`}
                 onClick={() => setTab(t.key)}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3.5 w-3.5" />
                 {t.label}
               </button>
             );
           })}
         </div>
-
-        <div className="relative">
-          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="搜索..."
-            className="h-9 w-full rounded-lg border border-[var(--glass-border)] bg-white pr-3 pl-9 text-sm text-neutral-900 outline-none focus:border-[var(--accent)] dark:bg-neutral-800 dark:text-neutral-100 sm:w-64"
-          />
+        {/* Count — right-aligned */}
+        <div className="absolute right-4 text-right">
+          {total > 0 && <Tag>{total}</Tag>}
         </div>
       </div>
 
       {/* Sort bar for albums */}
       {tab === "albums" && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
           <span className="mr-0.5 text-xs text-neutral-400 dark:text-neutral-500">
             排序
           </span>
@@ -331,7 +375,7 @@ function AlbumsGrid({
 }) {
   if (!albums.length) return <Empty description="暂无专辑" />;
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
       {albums.map((album) => (
         <AlbumCard
           key={album.id}
@@ -352,7 +396,7 @@ function ArtistsGrid({
 }) {
   if (!artists.length) return <Empty description="暂无艺术家" />;
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
       {artists.map((artist) => (
         <ArtistCard
           key={artist.id}

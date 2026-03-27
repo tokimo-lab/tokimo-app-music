@@ -2,6 +2,7 @@ use crate::db::ApiDateTimeExt;
 use sea_orm::prelude::Expr;
 use sea_orm::*;
 use serde::Serialize;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::db::entities::{music_albums, music_tracks, playlist_items, playlists};
@@ -66,50 +67,72 @@ impl PlaylistRepo {
             .all(db)
             .await?;
 
-        let mut results = Vec::new();
-        for p in playlists_list {
-            let item_count = playlist_items::Entity::find()
-                .filter(playlist_items::Column::PlaylistId.eq(p.id))
-                .count(db)
-                .await? as i64;
-
-            let items = playlist_items::Entity::find()
-                .filter(playlist_items::Column::PlaylistId.eq(p.id))
-                .filter(playlist_items::Column::TrackId.is_not_null())
-                .all(db)
-                .await?;
-
-            let track_ids: Vec<Uuid> = items.iter().filter_map(|i| i.track_id).collect();
-            let total_duration = if !track_ids.is_empty() {
-                let tracks = music_tracks::Entity::find()
-                    .filter(music_tracks::Column::Id.is_in(track_ids))
-                    .all(db)
-                    .await?;
-                let sum: i64 = tracks
-                    .iter()
-                    .filter_map(|t| t.duration.map(|d| d as i64))
-                    .sum();
-                if sum > 0 {
-                    Some(sum)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            results.push(PlaylistDto {
-                id: p.id.to_string(),
-                name: p.name,
-                description: p.description,
-                cover_path: p.cover_path,
-                is_public: p.is_public,
-                track_count: item_count,
-                total_duration,
-                created_at: p.created_at.to_api_datetime(),
-                updated_at: p.updated_at.to_api_datetime(),
-            });
+        if playlists_list.is_empty() {
+            return Ok(Vec::new());
         }
+
+        let playlist_ids: Vec<Uuid> = playlists_list.iter().map(|p| p.id).collect();
+
+        // Batch: count items per playlist
+        let all_items = playlist_items::Entity::find()
+            .filter(playlist_items::Column::PlaylistId.is_in(playlist_ids.clone()))
+            .all(db)
+            .await?;
+
+        let mut count_map: HashMap<Uuid, i64> = HashMap::new();
+        let mut track_ids_by_playlist: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+        for item in &all_items {
+            *count_map.entry(item.playlist_id).or_default() += 1;
+            if let Some(tid) = item.track_id {
+                track_ids_by_playlist
+                    .entry(item.playlist_id)
+                    .or_default()
+                    .push(tid);
+            }
+        }
+
+        // Batch: fetch all referenced tracks at once
+        let all_track_ids: Vec<Uuid> = track_ids_by_playlist.values().flatten().copied().collect();
+        let duration_map: HashMap<Uuid, i32> = if !all_track_ids.is_empty() {
+            music_tracks::Entity::find()
+                .filter(music_tracks::Column::Id.is_in(all_track_ids))
+                .all(db)
+                .await?
+                .into_iter()
+                .filter_map(|t| t.duration.map(|d| (t.id, d)))
+                .collect()
+        } else {
+            HashMap::new()
+        };
+
+        let results = playlists_list
+            .into_iter()
+            .map(|p| {
+                let item_count = count_map.get(&p.id).copied().unwrap_or(0);
+                let total_duration = track_ids_by_playlist
+                    .get(&p.id)
+                    .map(|tids| {
+                        tids.iter()
+                            .filter_map(|tid| duration_map.get(tid))
+                            .map(|&d| d as i64)
+                            .sum::<i64>()
+                    })
+                    .filter(|&sum| sum > 0);
+
+                PlaylistDto {
+                    id: p.id.to_string(),
+                    name: p.name,
+                    description: p.description,
+                    cover_path: p.cover_path,
+                    is_public: p.is_public,
+                    track_count: item_count,
+                    total_duration,
+                    created_at: p.created_at.to_api_datetime(),
+                    updated_at: p.updated_at.to_api_datetime(),
+                }
+            })
+            .collect();
+
         Ok(results)
     }
 
