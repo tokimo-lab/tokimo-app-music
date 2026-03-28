@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::{music_albums, music_tracks};
+use crate::db::entities::{media_credits, music_albums, music_tracks, persons};
 use crate::error::AppError;
 use crate::queue::handlers::file_scrape::artwork::upload_image_buffer;
 use crate::AppState;
@@ -273,6 +273,323 @@ impl MusicScrapeService {
         Self::scrape_album_by_mb_id(db, state, album_id, &mb_release_id, &artist_name, &clean_title).await
     }
 
+    /// Upsert persons and rebuild media_credits for an album's artist-credits list.
+    ///
+    /// For each artist:
+    /// 1. Find existing person by `mb_artist_id`, or by name; create if absent.
+    /// 2. If birthday/birthplace not set, fetch from MusicBrainz artist endpoint.
+    /// 3. If no profile photo: try Spotify (if configured) → Deezer (free fallback).
+    /// 4. If no biography: fetch from Wikipedia (via MB url-rels, free).
+    /// 5. Dispatch a TMDB person scrape job for each artist (gets richer bio/photo if TMDB configured).
+    /// 6. Rebuild `media_credits` for the album (delete-then-insert).
+    async fn save_album_artists(
+        db: &DatabaseConnection,
+        state: &Arc<AppState>,
+        album_id: Uuid,
+        artist_credits: &[rust_client_api::types::ArtistCredit],
+    ) {
+        use rust_client_api::metadata_providers::deezer::DeezerClient;
+        use rust_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
+        use rust_client_api::metadata_providers::spotify::{SpotifyClient, SpotifyConfig};
+        use rust_client_api::metadata_providers::wikipedia::fetch_artist_biography;
+
+        if artist_credits.is_empty() {
+            return;
+        }
+
+        // Load Spotify config once
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .user_agent("tokimo/1.0 (https://tokimo.io; music-scraper)")
+            .build()
+            .unwrap_or_default();
+        let spotify_client: Option<SpotifyClient> = {
+            use crate::db::repos::config_repo::{ConfigRepo, SpotifySettings};
+            if let Ok(cfg) = ConfigRepo::get::<SpotifySettings>(db).await {
+                if let (Some(client_id), Some(client_secret)) = (cfg.client_id, cfg.client_secret) {
+                    if !client_id.is_empty() && !client_secret.is_empty() {
+                        Some(SpotifyClient::new(SpotifyConfig {
+                            client_id,
+                            client_secret,
+                            cache_ttl: None,
+                            http_client: http.clone(),
+                        }))
+                    } else { None }
+                } else { None }
+            } else { None }
+        };
+        let mb = MusicBrainzClient::new();
+        let deezer = DeezerClient::new();
+
+        let now = Utc::now().fixed_offset();
+        let mut person_ids: Vec<Uuid> = Vec::new();
+
+        for credit in artist_credits {
+            // Find by mb_artist_id first, then by name
+            let existing = persons::Entity::find()
+                .filter(persons::Column::MbArtistId.eq(&credit.mb_id))
+                .one(db)
+                .await
+                .unwrap_or(None)
+                .or_else(|| None); // placeholder for name fallback below
+
+            let existing = if existing.is_none() {
+                persons::Entity::find()
+                    .filter(persons::Column::Name.eq(&credit.name))
+                    .one(db)
+                    .await
+                    .unwrap_or(None)
+            } else {
+                existing
+            };
+
+            let person_id = if let Some(mut p) = existing {
+                // Update mb_artist_id if missing
+                let mut active: persons::ActiveModel = p.clone().into();
+                let mut changed = false;
+
+                if p.mb_artist_id.is_none() {
+                    active.mb_artist_id = Set(Some(credit.mb_id.clone()));
+                    p.mb_artist_id = Some(credit.mb_id.clone());
+                    changed = true;
+                }
+
+                // Fetch MB detail if any field is missing (birthday, birthplace, or biography)
+                // biography requires wikipedia_url which only comes from get_artist_detail
+                let mb_detail: Option<rust_client_api::metadata_providers::musicbrainz::ArtistDetail> =
+                    if p.birthday.is_none() || p.birthplace.is_none() || p.biography.is_none() {
+                        match mb.get_artist_detail(&credit.mb_id).await {
+                            Ok(detail) => {
+                                if p.birthday.is_none() {
+                                    if let Some(bd_str) = detail.birthday.as_deref() {
+                                        if let Ok(bd) = chrono::NaiveDate::parse_from_str(bd_str, "%Y-%m-%d") {
+                                            active.birthday = Set(Some(bd));
+                                            changed = true;
+                                        }
+                                    }
+                                }
+                                if p.birthplace.is_none() {
+                                    if let Some(bp) = detail.birthplace.as_deref() {
+                                        active.birthplace = Set(Some(bp.to_string()));
+                                        changed = true;
+                                    }
+                                }
+                                Some(detail)
+                            }
+                            Err(e) => {
+                                warn!("[music_scrape] Failed to fetch MB artist detail for {}: {}", credit.mb_id, e);
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                let mb_spotify_id = mb_detail.as_ref().and_then(|d| d.spotify_id.clone());
+
+                // Fetch biography from Wikipedia if missing
+                if p.biography.is_none() {
+                    if let Some(ref wiki_url) = mb_detail.as_ref().and_then(|d| d.wikipedia_url.clone()) {
+                        if let Some(bio) = fetch_artist_biography(&http, wiki_url).await {
+                            active.biography = Set(Some(bio));
+                            changed = true;
+                        }
+                    }
+                }
+
+                // Fetch photo independently: Spotify → Deezer (runs even if MB detail was skipped)
+                if p.profile_path.is_none() {
+                    let spotify_photo = if let Some(ref spotify) = spotify_client {
+                        if let Some(ref sid) = mb_spotify_id {
+                            spotify.get_artist_photo_by_id(sid).await.unwrap_or(None)
+                        } else {
+                            spotify.get_artist_photo(&credit.name).await.unwrap_or(None)
+                        }
+                    } else {
+                        None
+                    };
+                    let photo_url = if spotify_photo.is_some() {
+                        spotify_photo
+                    } else {
+                        deezer.get_artist_photo(&credit.name).await.unwrap_or(None)
+                    };
+                    if let Some(url) = photo_url {
+                        active.profile_path = Set(Some(match Self::download_and_store_image(state, &url).await {
+                            Some(stored) => stored,
+                            None => url,
+                        }));
+                        changed = true;
+                    }
+                }
+
+                if changed {
+                    active.updated_at = Set(Some(now));
+                    match active.update(db).await {
+                        Ok(_) => {}
+                        Err(e) => error!("[music_scrape] Failed to update person {}: {}", credit.name, e),
+                    }
+                }
+
+                p.id
+            } else {
+                // Create new person record
+                let new_id = Uuid::new_v4();
+                let mut birthday = None;
+                let mut birthplace = None;
+                let mut profile_path: Option<String> = None;
+                let mut biography: Option<String> = None;
+
+                match mb.get_artist_detail(&credit.mb_id).await {
+                    Ok(detail) => {
+                        birthday = detail.birthday
+                            .as_deref()
+                            .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+                        birthplace = detail.birthplace.clone();
+                        // Biography from Wikipedia
+                        if let Some(ref wiki_url) = detail.wikipedia_url {
+                            biography = fetch_artist_biography(&http, wiki_url).await;
+                        }
+                        // Photo: Spotify → Deezer
+                        let spotify_photo = if let Some(ref spotify) = spotify_client {
+                            if let Some(sid) = &detail.spotify_id {
+                                spotify.get_artist_photo_by_id(sid).await.unwrap_or(None)
+                            } else {
+                                spotify.get_artist_photo(&credit.name).await.unwrap_or(None)
+                            }
+                        } else {
+                            None
+                        };
+                        let photo_url = if spotify_photo.is_some() {
+                            spotify_photo
+                        } else {
+                            deezer.get_artist_photo(&credit.name).await.unwrap_or(None)
+                        };
+                        if let Some(url) = photo_url {
+                            profile_path = match Self::download_and_store_image(state, &url).await {
+                                Some(stored) => Some(stored),
+                                None => Some(url),
+                            };
+                        }
+                    }
+                    Err(e) => {
+                        warn!("[music_scrape] Failed to fetch MB artist detail for new person {}: {}", credit.mb_id, e);
+                    }
+                }
+
+                let active = persons::ActiveModel {
+                    id: Set(new_id),
+                    name: Set(credit.name.clone()),
+                    original_name: Set(None),
+                    aliases: Set(None),
+                    gender: Set(None),
+                    birthday: Set(birthday),
+                    birthplace: Set(birthplace),
+                    profile_path: Set(profile_path),
+                    profile_key: Set(None),
+                    biography: Set(biography),
+                    deathday: Set(None),
+                    known_for_dept: Set(Some("music".to_string())),
+                    popularity: Set(None),
+                    tmdb_id: Set(None),
+                    imdb_id: Set(None),
+                    javbus_id: Set(None),
+                    javdb_id: Set(None),
+                    tpdb_id: Set(None),
+                    mb_artist_id: Set(Some(credit.mb_id.clone())),
+                    metadata: Set(None),
+                    created_at: Set(Some(now)),
+                    updated_at: Set(Some(now)),
+                };
+
+                match persons::Entity::insert(active).exec(db).await {
+                    Ok(_) => new_id,
+                    Err(e) => {
+                        // Unique constraint race: re-fetch
+                        match persons::Entity::find()
+                            .filter(persons::Column::MbArtistId.eq(&credit.mb_id))
+                            .one(db)
+                            .await
+                            .unwrap_or(None)
+                        {
+                            Some(p) => p.id,
+                            None => {
+                                error!("[music_scrape] Failed to insert person {}: {}", credit.name, e);
+                                continue;
+                            }
+                        }
+                    }
+                }
+            };
+
+            person_ids.push(person_id);
+        }
+
+        if person_ids.is_empty() {
+            return;
+        }
+
+        // Dispatch TMDB person scrape for each artist (biography + richer photo via background job)
+        for pid in &person_ids {
+            let _ = crate::queue::handlers::common::force_dispatch_person_tmdb_scrape(
+                db,
+                *pid,
+                None,
+                None,
+            )
+            .await;
+        }
+
+        // Rebuild media_credits: delete old entries for this album, insert new ones
+        let _ = media_credits::Entity::delete_many()
+            .filter(media_credits::Column::AlbumId.eq(album_id))
+            .exec(db)
+            .await;
+
+        for (i, pid) in person_ids.iter().enumerate() {
+            let credit_model = media_credits::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                person_id: Set(*pid),
+                role: Set("artist".to_string()),
+                character: Set(None),
+                sort_order: Set(i as i32),
+                movie_id: Set(None),
+                tv_show_id: Set(None),
+                episode_id: Set(None),
+                album_id: Set(Some(album_id)),
+                novel_id: Set(None),
+            };
+            let _ = media_credits::Entity::insert(credit_model).exec(db).await;
+        }
+
+        info!(
+            "[music_scrape] Updated {} artist credits for album {}",
+            person_ids.len(),
+            album_id
+        );
+    }
+
+    /// Download an image from a URL and store it via the upload infrastructure.
+    /// Returns the stored path, or None on failure.
+    async fn download_and_store_image(
+        state: &Arc<AppState>,
+        url: &str,
+    ) -> Option<String> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .ok()?;
+        let response = client.get(url).send().await.ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let bytes = response.bytes().await.ok()?;
+        let key = format!("persons/{}.jpg", Uuid::new_v4());
+        match upload_image_buffer(state, &bytes, &key).await {
+            Ok(path) => Some(path),
+            Err(_) => None,
+        }
+    }
+
     /// Scrape a specific album using a known MusicBrainz release ID.
     pub async fn scrape_album_by_mb_id(
         db: &DatabaseConnection,
@@ -409,6 +726,9 @@ impl MusicScrapeService {
             // No MB tracks, still try to fetch lyrics
             Self::update_tracks(db, state, album_id, &[], None, artist_name, clean_title).await
         };
+
+        // Upsert artist persons and rebuild media_credits
+        Self::save_album_artists(db, state, album_id, &detail.artist_credits).await;
 
         info!(
             "[music_scrape] ✓ Scraped \"{}\" → year={:?} genres={:?} cover={} tracks_updated={}",

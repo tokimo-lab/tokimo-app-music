@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { MusicAudioEngine } from "@/components/player/MusicAudioEngine";
 import { WasmAudioEngine } from "@/components/player/WasmAudioEngine";
 import { api } from "@/generated/rust-api";
 import { rustUrl } from "@/lib/rust-api-runtime";
@@ -99,6 +100,52 @@ const MEDIAFS_BASE =
   (typeof window !== "undefined" &&
     (import.meta.env as Record<string, string>).RUST_SERVER) ||
   "";
+
+// ── Browser native codec detection ───────────────────────────────────────────
+
+type AudioEngine = MusicAudioEngine | WasmAudioEngine;
+
+let _testAudio: HTMLAudioElement | null = null;
+
+const CODEC_MIME_MAP: Record<string, string> = {
+  mp3: "audio/mpeg",
+  mpeg: "audio/mpeg",
+  aac: "audio/aac",
+  alac: 'audio/mp4; codecs="alac"',
+  wav: "audio/wav",
+  pcm_s16le: "audio/wav",
+  pcm_s24le: "audio/wav",
+  pcm_s32le: "audio/wav",
+  pcm_f32le: "audio/wav",
+  pcm_f64le: "audio/wav",
+  flac: "audio/flac",
+  vorbis: 'audio/ogg; codecs="vorbis"',
+  opus: 'audio/ogg; codecs="opus"',
+  m4a: "audio/mp4",
+};
+
+const _canPlayCache = new Map<string, boolean>();
+
+/**
+ * Test if the current browser can natively play the given codec
+ * via the HTML5 <audio> element (enabling streaming + Range-based seek).
+ */
+function canPlayNatively(codec?: string | null): boolean {
+  if (!codec) return false;
+  const key = codec.toLowerCase();
+  const cached = _canPlayCache.get(key);
+  if (cached !== undefined) return cached;
+  const mime = CODEC_MIME_MAP[key];
+  if (!mime) {
+    _canPlayCache.set(key, false);
+    return false;
+  }
+  if (!_testAudio) _testAudio = document.createElement("audio");
+  const result = _testAudio.canPlayType(mime);
+  const canPlay = result === "probably" || result === "maybe";
+  _canPlayCache.set(key, canPlay);
+  return canPlay;
+}
 
 /**
  * Normalise a stream URL returned by the backend so that `/api/media-files/*`
@@ -195,8 +242,14 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   // Real-time refs for currentTime / duration — always up-to-date, no re-render
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
-  const getCurrentTime = useCallback(() => currentTimeRef.current, []);
-  const getDuration = useCallback(() => durationRef.current, []);
+  const getCurrentTime = useCallback(
+    () => engineRef.current?.currentTime ?? currentTimeRef.current,
+    [],
+  );
+  const getDuration = useCallback(
+    () => engineRef.current?.audioDuration ?? durationRef.current,
+    [],
+  );
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -206,15 +259,62 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   // Current position within the shuffle order
   const shufflePosRef = useRef(0);
 
-  const engineRef = useRef<WasmAudioEngine | null>(null);
+  const engineRef = useRef<AudioEngine | null>(null);
+  const engineTypeRef = useRef<"native" | "wasm" | null>(null);
+  const handleEndedRef = useRef<(() => void) | undefined>(undefined);
 
-  const getEngine = useCallback((): WasmAudioEngine => {
-    if (!engineRef.current) {
-      engineRef.current = new WasmAudioEngine();
-      engineRef.current.setVolume(volumeRef.current);
-    }
-    return engineRef.current;
+  /** Wire event listeners to the given engine instance. */
+  const wireListeners = useCallback((engine: AudioEngine) => {
+    engine.onTimeUpdate((t) => {
+      currentTimeRef.current = t;
+      const d = engine.audioDuration;
+      if (d > 0) durationRef.current = d;
+    });
+    engine.onCanPlay(() => {
+      setIsLoading(false);
+      durationRef.current = engine.audioDuration;
+    });
+    engine.onLoadStart(() => {
+      setIsLoading(true);
+    });
+    engine.onError((err) => {
+      console.error("[MusicPlayer] audio error:", err);
+      setIsLoading(false);
+      setIsPlaying(false);
+    });
+    engine.onEnded(() => {
+      handleEndedRef.current?.();
+    });
   }, []);
+
+  /**
+   * Return the current engine, switching between native (<audio>) and
+   * WASM (AudioContext + decode) based on browser codec support.
+   */
+  const ensureEngine = useCallback(
+    (codec?: string | null): AudioEngine => {
+      const useNative = canPlayNatively(codec);
+      const targetType = useNative ? "native" : "wasm";
+
+      if (engineRef.current && engineTypeRef.current === targetType) {
+        return engineRef.current;
+      }
+
+      // Destroy old engine when switching types
+      engineRef.current?.destroy();
+
+      const engine: AudioEngine = useNative
+        ? new MusicAudioEngine()
+        : new WasmAudioEngine();
+      engine.setVolume(volumeRef.current);
+      engineRef.current = engine;
+      engineTypeRef.current = targetType;
+      wireListeners(engine);
+
+      return engine;
+    },
+    [wireListeners],
+  );
 
   // Cleanup on unmount
   useEffect(() => {
@@ -348,12 +448,25 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       const fid = track.fileId ?? track.file?.id;
       if (!fid) return;
       setIsLoading(true);
+
+      // Stop old playback and reset position immediately so the progress
+      // bar shows 0 during the async URL resolution below.
+      // getCurrentTime() reads engine.currentTime first, so we must also
+      // seek the engine to 0 — just resetting currentTimeRef is not enough.
+      const oldEngine = engineRef.current;
+      if (oldEngine) {
+        oldEngine.pause();
+        oldEngine.seek(0);
+      }
+      currentTimeRef.current = 0;
+      durationRef.current = track.duration ?? 0;
+
       try {
         // Notify media session — pauses all other sources (video, audio, etc.)
         mediaSession?.requestPlay("music");
 
         const url = await resolveStreamUrl(fid);
-        const engine = getEngine();
+        const engine = ensureEngine(track.codec);
         await engine.loadAndPlay(url, track.codec);
         setIsPlaying(true);
         durationRef.current = engine.audioDuration;
@@ -364,12 +477,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     },
-    [mediaSession, getEngine],
+    [mediaSession, ensureEngine],
   );
 
   // ── Audio engine event listeners ─────────────────────────────────────────
-
-  const handleEndedRef = useRef<(() => void) | undefined>(undefined);
 
   // Keep refs up-to-date for the ended handler
   const queueRef = useRef(queue);
@@ -381,42 +492,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   repeatModeRef.current = repeatMode;
   shuffleEnabledRef.current = shuffleEnabled;
 
-  // Set up audio engine event listeners once
-  useEffect(() => {
-    const engine = getEngine();
-
-    engine.onTimeUpdate((t) => {
-      currentTimeRef.current = t;
-      const d = engine.audioDuration;
-      if (d > 0) durationRef.current = d;
-    });
-
-    engine.onCanPlay(() => {
-      setIsLoading(false);
-      durationRef.current = engine.audioDuration;
-    });
-
-    engine.onLoadStart(() => {
-      setIsLoading(true);
-    });
-
-    engine.onError((err) => {
-      console.error("[MusicPlayer] audio error:", err);
-      setIsLoading(false);
-      setIsPlaying(false);
-    });
-
-    // The ended handler needs access to latest state via refs
-    const onEnded = () => {
-      handleEndedRef.current?.();
-    };
-    engine.onEnded(onEnded);
-
-    return () => {
-      engine.destroy();
-      engineRef.current = null;
-    };
-  }, [getEngine]);
+  // handleEndedRef is used by wireListeners above — no separate
+  // listener-setup effect needed; listeners are wired in ensureEngine().
 
   // Update the ended handler whenever relevant state changes
   useEffect(() => {

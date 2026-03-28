@@ -104,7 +104,7 @@ function TrackRow({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicAppPage() {
-  const { params, navigate: navInWindow } = useWindowNav();
+  const { params, navigate: navInWindow, updateMetadata } = useWindowNav();
   const id = params.appId as string | undefined;
   const { playTrack, playTracks } = useMusicPlayer();
   const message = useMessage();
@@ -113,7 +113,8 @@ export default function MusicAppPage() {
   const setTab = useCallback((t: TabKey) => {
     setTabRaw(t);
     setPage(1);
-  }, []);
+    updateMetadata({ tab: t });
+  }, [updateMetadata]);
 
   const [page, setPage] = useState(1);
   const [albumSort, setAlbumSort] = useState<AlbumSortValue>("addedAt");

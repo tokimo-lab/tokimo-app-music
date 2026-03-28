@@ -10,7 +10,7 @@ export class MusicAudioEngine {
     this.audio.preload = "auto";
   }
 
-  async loadAndPlay(url: string): Promise<void> {
+  async loadAndPlay(url: string, _codec?: string | null): Promise<void> {
     this.audio.src = url;
     this.audio.currentTime = 0;
     await this.audio.play();
@@ -76,6 +76,10 @@ export class MusicAudioEngine {
     const handler = () => cb(this.audio.error);
     this.audio.addEventListener("error", handler);
     this.listeners.push(() => this.audio.removeEventListener("error", handler));
+  }
+
+  getAnalyser(): AnalyserNode | null {
+    return null;
   }
 
   destroy(): void {

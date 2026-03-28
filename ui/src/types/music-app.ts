@@ -57,6 +57,10 @@ export interface MusicArtistOutput {
 
 export interface MusicArtistDetailOutput extends MusicArtistOutput {
   biography?: string | null;
+  birthday?: string | null;
+  birthplace?: string | null;
+  originalName?: string | null;
+  mbArtistId?: string | null;
   aliases?: string[];
   albums?: MusicAlbumOutput[];
 }

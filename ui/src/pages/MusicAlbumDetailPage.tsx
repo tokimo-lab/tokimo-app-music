@@ -15,9 +15,11 @@ import {
   Play,
   Sparkles,
 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
+  type MenuBarConfig,
   useBackgroundArt,
+  useMenuBar,
   useMessage,
   useMusicPlayer,
   useWindowNav,
@@ -182,6 +184,7 @@ export default function MusicAlbumDetailPage() {
   const albumId = params.albumId as string | undefined;
   const { playTracks, addToQueue } = useMusicPlayer();
   const message = useMessage();
+  const qc = useQueryClient();
 
   const scrapeAlbumMutation = api.app.scrapeAlbum.useMutation({
     onSuccess: () => {
@@ -206,6 +209,35 @@ export default function MusicAlbumDetailPage() {
     };
   }, [album?.coverPath, setBackgroundArt]);
 
+  // ── MenuBar ───────────────────────────────────────────────────────────
+  const menuBarConfig: MenuBarConfig | null = useMemo(() => {
+    if (!albumId) return null;
+    return {
+      menus: [
+        {
+          key: "actions",
+          label: "操作",
+          items: [
+            {
+              key: "scrape",
+              label: album?.scrapedAt ? "重新刮削" : "刮削元数据",
+              icon: <Sparkles size={14} />,
+              disabled: scrapeAlbumMutation.isPending,
+              onClick: () => scrapeAlbumMutation.mutate({ albumId }),
+            },
+          ],
+        },
+      ],
+    };
+  }, [
+    albumId,
+    album?.scrapedAt,
+    scrapeAlbumMutation.isPending,
+    scrapeAlbumMutation.mutate,
+  ]);
+
+  useMenuBar(menuBarConfig);
+
   if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -226,6 +258,14 @@ export default function MusicAlbumDetailPage() {
   const tracks = album.tracks ?? [];
   const credits = album.credits ?? [];
   const genres = album.genres ?? [];
+
+  // Derive artist name: prefer album.artistName, fallback to credits
+  const artistName =
+    album.artistName ||
+    credits.find((c) =>
+      ["artist", "album_artist", "performer"].includes(c.role),
+    )?.person.name ||
+    null;
 
   // Group tracks by disc
   const discs = new Map<number, MusicTrackOutput[]>();
@@ -299,14 +339,14 @@ export default function MusicAlbumDetailPage() {
             </div>
 
             {/* Artist (clickable) */}
-            {album.artistName && (
+            {artistName && (
               <button
                 type="button"
                 className="mt-1 cursor-pointer text-sm text-[var(--accent)] hover:underline"
                 onClick={() => {
                   const artist = credits.find(
                     (c) =>
-                      c.person.name === album.artistName &&
+                      c.person.name === artistName &&
                       ["artist", "album_artist", "performer"].includes(c.role),
                   );
                   if (artist) {
@@ -316,7 +356,7 @@ export default function MusicAlbumDetailPage() {
                   }
                 }}
               >
-                {album.artistName}
+                {artistName}
               </button>
             )}
 
@@ -385,21 +425,6 @@ export default function MusicAlbumDetailPage() {
               >
                 <ListPlus className="h-4 w-4" />
                 添加到队列
-              </button>
-              <button
-                type="button"
-                disabled={scrapeAlbumMutation.isPending}
-                className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-glass-hover)] disabled:opacity-50"
-                onClick={() =>
-                  albumId && scrapeAlbumMutation.mutate({ albumId })
-                }
-              >
-                <Sparkles className="h-4 w-4" />
-                {scrapeAlbumMutation.isPending
-                  ? "刮削中…"
-                  : album.scrapedAt
-                    ? "重新刮削"
-                    : "刮削元数据"}
               </button>
             </div>
           </div>

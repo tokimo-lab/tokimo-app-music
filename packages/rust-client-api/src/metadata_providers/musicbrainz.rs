@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::error::ClientError;
-use crate::types::{MusicMatchCandidate, MusicMatchDetail, MusicTrack};
+use crate::types::{ArtistCredit, MusicMatchCandidate, MusicMatchDetail, MusicTrack};
 
 const MB_BASE_URL: &str = "https://musicbrainz.org/ws/2";
 const CAA_BASE_URL: &str = "https://coverartarchive.org";
@@ -120,6 +120,7 @@ impl MusicBrainzClient {
             .await?;
 
         let artist_info = extract_artist_name(&data["artist-credit"]);
+        let artist_credits = extract_artist_credits(&data["artist-credit"]);
         let rg = &data["release-group"];
         let date = data["date"].as_str();
         let year = date.and_then(|d| d.get(..4)).and_then(|y| y.parse::<i32>().ok());
@@ -188,6 +189,7 @@ impl MusicBrainzClient {
             overview: None,
             spotify_id: None,
             tracks: if tracks.is_empty() { None } else { Some(tracks) },
+            artist_credits,
         })
     }
 
@@ -219,6 +221,97 @@ impl MusicBrainzClient {
         format!("{CAA_BASE_URL}/release-group/{mb_release_group_id}/front-500")
     }
 
+    /// Fetch artist details: birthday, birthplace, and external URLs (Spotify, Wikipedia, etc).
+    pub async fn get_artist_detail(&self, mb_id: &str) -> Result<ArtistDetail, ClientError> {
+        // Note: mb_fetch already appends fmt=json — do NOT include it in params
+        let data = self
+            .mb_fetch(
+                &format!("/artist/{mb_id}"),
+                &[("inc", "url-rels")],
+            )
+            .await?;
+
+        let birthday = data["life-span"]["begin"]
+            .as_str()
+            .map(String::from);
+
+        // Get area ID and English name — then try to resolve a Chinese alias
+        let area_id = data["begin-area"]["id"]
+            .as_str()
+            .or_else(|| data["area"]["id"].as_str());
+        let area_name_en = data["begin-area"]["name"]
+            .as_str()
+            .or_else(|| data["area"]["name"].as_str())
+            .map(String::from);
+
+        let birthplace = if let Some(area_id) = area_id {
+            // Try to get the Chinese (zh) alias from the area endpoint
+            match self.get_area_zh_name(area_id).await {
+                Some(zh_name) => Some(zh_name),
+                None => area_name_en,
+            }
+        } else {
+            area_name_en
+        };
+
+        let gender = data["gender"].as_str().map(String::from);
+
+        // Extract Spotify artist ID and Wikipedia URL from url-rels
+        let mut spotify_id = None;
+        let mut wikipedia_url = None;
+        if let Some(rels) = data["relations"].as_array() {
+            for rel in rels {
+                let rel_type = rel["type"].as_str().unwrap_or("");
+                if let Some(url) = rel["url"]["resource"].as_str() {
+                    match rel_type {
+                        "streaming music" | "free streaming" if url.contains("open.spotify.com/artist/") => {
+                            spotify_id = url.split('/').last().map(String::from);
+                        }
+                        "wikipedia" if wikipedia_url.is_none() => {
+                            wikipedia_url = Some(url.to_string());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Ok(ArtistDetail {
+            mb_id: mb_id.to_string(),
+            name: data["name"].as_str().unwrap_or("").to_string(),
+            gender,
+            birthday,
+            birthplace,
+            spotify_id,
+            wikipedia_url,
+        })
+    }
+
+    /// Fetch Chinese (zh) locale alias for a MusicBrainz area.
+    /// Returns None if no zh alias exists or on any error.
+    async fn get_area_zh_name(&self, area_id: &str) -> Option<String> {
+        let data = self
+            .mb_fetch(&format!("/area/{area_id}"), &[("inc", "aliases")])
+            .await
+            .ok()?;
+
+        let aliases = data["aliases"].as_array()?;
+        // MusicBrainz uses underscores: zh_Hans, zh_Hant (and sometimes zh-Hans / zh-Hant)
+        let is_zh = |locale: &str| -> bool {
+            matches!(
+                locale,
+                "zh" | "zh_Hans" | "zh_Hant" | "zh-Hans" | "zh-Hant"
+                    | "zh_CN" | "zh_TW" | "zh_HK"
+            ) || locale.starts_with("zh_")
+              || locale.starts_with("zh-")
+        };
+
+        aliases.iter()
+            .find(|a| a["locale"].as_str().map(is_zh).unwrap_or(false))
+            .and_then(|a| a["name"].as_str())
+            .map(String::from)
+    }
+
     pub async fn test_connection(&self) -> Result<bool, ClientError> {
         self.mb_fetch("/release", &[("query", "test"), ("limit", "1")])
             .await?;
@@ -239,29 +332,69 @@ pub struct ArtistSearchResult {
     pub artist_type: Option<String>,
 }
 
+/// Artist detail from MusicBrainz artist endpoint.
+#[derive(Debug, Clone)]
+pub struct ArtistDetail {
+    pub mb_id: String,
+    pub name: String,
+    pub gender: Option<String>,
+    pub birthday: Option<String>,
+    pub birthplace: Option<String>,
+    /// Spotify artist ID extracted from url-rels.
+    pub spotify_id: Option<String>,
+    /// Wikipedia article URL (any language) extracted from url-rels.
+    pub wikipedia_url: Option<String>,
+}
+
+/// Build display artist name from MB artist-credits (with joinphrases).
 fn extract_artist_name(credits: &serde_json::Value) -> (String, Option<String>) {
     let arr = match credits.as_array() {
         Some(a) if !a.is_empty() => a,
         _ => return ("Unknown Artist".to_string(), None),
     };
 
-    let parts: Vec<String> = arr
-        .iter()
-        .map(|c| {
-            c["name"]
-                .as_str()
-                .or_else(|| c["artist"]["name"].as_str())
-                .unwrap_or("")
-                .to_string()
-        })
-        .collect();
+    let mut display = String::new();
+    for c in arr {
+        let name = c["name"]
+            .as_str()
+            .or_else(|| c["artist"]["name"].as_str())
+            .unwrap_or("");
+        let joinphrase = c["joinphrase"].as_str().unwrap_or("");
+        display.push_str(name);
+        display.push_str(joinphrase);
+    }
 
     let mb_id = arr
         .first()
         .and_then(|c| c["artist"]["id"].as_str())
         .map(String::from);
 
-    (parts.join(""), mb_id)
+    (display, mb_id)
+}
+
+/// Extract individual artist credits from MB artist-credits array.
+/// Returns one entry per artist with their name and MB artist ID.
+fn extract_artist_credits(credits: &serde_json::Value) -> Vec<ArtistCredit> {
+    let arr = match credits.as_array() {
+        Some(a) => a,
+        None => return vec![],
+    };
+
+    arr.iter()
+        .filter_map(|c| {
+            let name = c["name"]
+                .as_str()
+                .or_else(|| c["artist"]["name"].as_str())
+                .unwrap_or("")
+                .to_string();
+            let mb_id = c["artist"]["id"].as_str().unwrap_or("").to_string();
+            if mb_id.is_empty() {
+                None
+            } else {
+                Some(ArtistCredit { name, mb_id })
+            }
+        })
+        .collect()
 }
 
 fn parse_release_list(data: &serde_json::Value) -> Vec<MusicMatchCandidate> {

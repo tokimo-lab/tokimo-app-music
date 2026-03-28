@@ -82,6 +82,7 @@ export const AlbumCard = memo(function AlbumCard({
           title={album.artistName ?? undefined}
         >
           {album.artistName || "未知艺术家"}
+          {album.trackCount > 0 && ` · ${album.trackCount} 首歌`}
         </p>
       </div>
     </button>
@@ -125,6 +126,7 @@ export const ArtistCard = memo(function ArtistCard({
         </p>
         <p className="text-xs text-[var(--text-muted)]">
           {artist.albumCount} 张专辑
+          {artist.trackCount > 0 && ` · ${artist.trackCount} 首歌`}
         </p>
       </div>
     </button>

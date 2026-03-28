@@ -83,6 +83,12 @@ export default function MusicArtistPage() {
               {artist.name}
             </h1>
 
+            {artist.originalName && artist.originalName !== artist.name && (
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                {artist.originalName}
+              </p>
+            )}
+
             {artist.aliases && artist.aliases.length > 0 && (
               <p className="mt-1 text-sm text-[var(--text-muted)]">
                 别名：{artist.aliases.join("、")}
@@ -94,6 +100,17 @@ export default function MusicArtistPage() {
               <span className="text-[var(--text-muted)]">·</span>
               <span>{artist.trackCount} 首曲目</span>
             </div>
+
+            {(artist.birthday || artist.birthplace) && (
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm text-[var(--text-secondary)] md:justify-start">
+                {artist.birthday && (
+                  <span>🎂 {artist.birthday}</span>
+                )}
+                {artist.birthplace && (
+                  <span>📍 {artist.birthplace}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

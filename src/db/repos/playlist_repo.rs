@@ -2,7 +2,7 @@ use crate::db::ApiDateTimeExt;
 use sea_orm::prelude::Expr;
 use sea_orm::*;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::db::entities::{music_albums, music_tracks, playlist_items, playlists};
@@ -173,6 +173,41 @@ impl PlaylistRepo {
             (music_tracks::Model, Option<music_albums::Model>),
         > = tracks.into_iter().map(|(t, a)| (t.id, (t, a))).collect();
 
+        // Batch-fetch artist names for all album IDs
+        let album_ids: Vec<Uuid> = track_map
+            .values()
+            .filter_map(|(_, a)| a.as_ref().map(|a| a.id))
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        let artist_map: HashMap<Uuid, String> = if !album_ids.is_empty() {
+            let placeholders: Vec<String> = album_ids
+                .iter()
+                .enumerate()
+                .map(|(i, _)| format!("${}", i + 1))
+                .collect();
+            let sql = format!(
+                "SELECT DISTINCT ON (mc.album_id) mc.album_id, p.name \
+                 FROM media_credits mc JOIN persons p ON p.id = mc.person_id \
+                 WHERE mc.album_id IN ({}) AND mc.role IN ('artist', 'albumArtist')",
+                placeholders.join(", ")
+            );
+            let params: Vec<sea_orm::Value> = album_ids.iter().map(|id| (*id).into()).collect();
+            let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &sql, params);
+            db.query_all_raw(stmt)
+                .await?
+                .iter()
+                .filter_map(|r| {
+                    let album_id: Uuid = r.try_get_by_index(0).ok()?;
+                    let name: String = r.try_get_by_index(1).ok()?;
+                    Some((album_id, name))
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        };
+
         let mut total_duration: i64 = 0;
         let mut item_dtos = Vec::new();
         for item in &items {
@@ -186,7 +221,7 @@ impl PlaylistRepo {
                         album_id: track.album_id.to_string(),
                         album_title: album.as_ref().map(|a| a.title.clone()).unwrap_or_default(),
                         title: track.title.clone(),
-                        artist_name: None,
+                        artist_name: album.as_ref().and_then(|a| artist_map.get(&a.id).cloned()),
                         track_number: track.track_number,
                         disc_number: track.disc_number,
                         duration: track.duration,
