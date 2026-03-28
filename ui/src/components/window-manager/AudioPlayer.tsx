@@ -194,8 +194,24 @@ export function AudioPlayer({ src, fileName, id }: AudioPlayerProps) {
         if (audioRef.current) audioRef.current.volume = v;
         setVolume(v);
       },
+      queue: [
+        {
+          id: sourceId,
+          title: displayName,
+          duration: duration > 0 ? duration : undefined,
+        },
+      ],
+      currentIndex: 0,
     }),
-    [sourceId, displayName, playing, getCurrentTime, getDuration, volume],
+    [
+      sourceId,
+      displayName,
+      playing,
+      getCurrentTime,
+      getDuration,
+      volume,
+      duration,
+    ],
   );
 
   useMediaSessionRegister(audioMediaSource);

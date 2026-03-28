@@ -122,7 +122,7 @@ impl MusicBrainzClient {
         let artist_info = extract_artist_name(&data["artist-credit"]);
         let rg = &data["release-group"];
         let date = data["date"].as_str();
-        let year = date.and_then(|d| d[..4].parse::<i32>().ok());
+        let year = date.and_then(|d| d.get(..4)).and_then(|y| y.parse::<i32>().ok());
 
         // Genres
         let mut genres: Vec<String> = Vec::new();

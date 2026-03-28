@@ -15,6 +15,7 @@ export interface MusicAlbumOutput {
   isFavorite: boolean;
   mbAlbumId?: string | null;
   spotifyId?: string | null;
+  scrapedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

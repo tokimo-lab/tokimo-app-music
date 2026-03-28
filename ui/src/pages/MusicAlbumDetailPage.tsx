@@ -6,9 +6,22 @@ import {
   Spin,
   Tag,
 } from "@tokiomo/components";
-import { Clock, Disc3, Heart, ListPlus, Pause, Play } from "lucide-react";
-import { useCallback } from "react";
-import { useMusicPlayer, useWindowNav } from "@/system";
+import {
+  Clock,
+  Disc3,
+  Heart,
+  ListPlus,
+  Pause,
+  Play,
+  Sparkles,
+} from "lucide-react";
+import { useCallback, useEffect } from "react";
+import {
+  useBackgroundArt,
+  useMessage,
+  useMusicPlayer,
+  useWindowNav,
+} from "@/system";
 import type { CreditOutput, MusicTrackOutput } from "@/types";
 import { api } from "../../generated/rust-api";
 import { resolveStoragePath } from "../../lib/storage-url";
@@ -32,7 +45,9 @@ function FavoriteButton({
       type="button"
       title={isFavorite ? "取消收藏" : "收藏"}
       className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-transform hover:scale-110 ${
-        isFavorite ? "text-red-500" : "text-[var(--text-muted)] hover:text-red-400"
+        isFavorite
+          ? "text-red-500"
+          : "text-[var(--text-muted)] hover:text-red-400"
       }`}
       onClick={() => toggle.mutate({ albumId })}
     >
@@ -68,14 +83,19 @@ function TrackRow({
   );
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
-        isActive
-          ? "bg-[var(--accent)]/10"
-          : "hover:bg-[var(--fill-tertiary)]"
+        isActive ? "bg-[var(--accent)]/10" : "hover:bg-[var(--fill-tertiary)]"
       }`}
       onClick={isActive ? togglePlay : handlePlay}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          (isActive ? togglePlay : handlePlay)();
+        }
+      }}
     >
       {/* Track number */}
       <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--text-muted)]">
@@ -105,9 +125,7 @@ function TrackRow({
       <div className="min-w-0 flex-1">
         <p
           className={`truncate text-sm font-medium ${
-            isActive
-              ? "text-[var(--accent)]"
-              : "text-[var(--text-primary)]"
+            isActive ? "text-[var(--accent)]" : "text-[var(--text-primary)]"
           }`}
         >
           {track.title}
@@ -133,7 +151,7 @@ function TrackRow({
       >
         <ListPlus className="h-4 w-4 text-[var(--text-muted)]" />
       </button>
-    </button>
+    </div>
   );
 }
 
@@ -163,11 +181,30 @@ export default function MusicAlbumDetailPage() {
   const { params, goBack, navigate: navInWindow } = useWindowNav();
   const albumId = params.albumId as string | undefined;
   const { playTracks, addToQueue } = useMusicPlayer();
+  const message = useMessage();
+
+  const scrapeAlbumMutation = api.app.scrapeAlbum.useMutation({
+    onSuccess: () => {
+      message.success("刮削成功");
+      void api.app.getAlbumDetail.invalidate(qc, { albumId: albumId! });
+    },
+    onError: (e) => message.error(e.message || "刮削失败"),
+  });
 
   const { data: album, isLoading } = api.app.getAlbumDetail.useQuery(
     { albumId: albumId! },
     { enabled: !!albumId },
   );
+
+  const { setBackgroundArt } = useBackgroundArt();
+  useEffect(() => {
+    if (album?.coverPath) {
+      setBackgroundArt(resolveStoragePath(album.coverPath));
+    }
+    return () => {
+      setBackgroundArt(null);
+    };
+  }, [album?.coverPath, setBackgroundArt]);
 
   if (isLoading) {
     return (
@@ -304,6 +341,20 @@ export default function MusicAlbumDetailPage() {
                   <span>{formatTotalDuration(album.totalDuration)}</span>
                 </>
               )}
+              {album.scrapedAt ? (
+                <>
+                  <span className="text-[var(--text-muted)]">·</span>
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
+                    <Sparkles className="h-3 w-3" />
+                    已刮削
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[var(--text-muted)]">·</span>
+                  <span className="text-xs text-orange-400">未刮削</span>
+                </>
+              )}
             </div>
 
             {/* Genre tags */}
@@ -318,7 +369,7 @@ export default function MusicAlbumDetailPage() {
             )}
 
             {/* Action buttons */}
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 className="flex cursor-pointer items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-2.5 font-semibold text-white hover:opacity-90"
@@ -334,6 +385,21 @@ export default function MusicAlbumDetailPage() {
               >
                 <ListPlus className="h-4 w-4" />
                 添加到队列
+              </button>
+              <button
+                type="button"
+                disabled={scrapeAlbumMutation.isPending}
+                className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-glass-hover)] disabled:opacity-50"
+                onClick={() =>
+                  albumId && scrapeAlbumMutation.mutate({ albumId })
+                }
+              >
+                <Sparkles className="h-4 w-4" />
+                {scrapeAlbumMutation.isPending
+                  ? "刮削中…"
+                  : album.scrapedAt
+                    ? "重新刮削"
+                    : "刮削元数据"}
               </button>
             </div>
           </div>

@@ -8,6 +8,7 @@ import {
   Pause,
   Play,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuBarConfig } from "@/system";
@@ -57,9 +58,7 @@ function TrackRow({
     <button
       type="button"
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
-        isActive
-          ? "bg-[var(--accent)]/10"
-          : "hover:bg-[var(--fill-tertiary)]"
+        isActive ? "bg-[var(--accent)]/10" : "hover:bg-[var(--fill-tertiary)]"
       }`}
       onClick={isActive ? togglePlay : onPlay}
     >
@@ -120,6 +119,7 @@ export default function MusicAppPage() {
   const [albumSort, setAlbumSort] = useState<AlbumSortValue>("addedAt");
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncClearData, setSyncClearData] = useState(false);
+  const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
 
   // Reset on library change
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on id change
@@ -195,6 +195,17 @@ export default function MusicAppPage() {
     onError: (e) => message.error(e.message || "同步失败"),
   });
 
+  const scrapeMutation = api.app.batchScrapeMusic.useMutation({
+    onSuccess: (res) => {
+      message.success(
+        `刮削完成：成功 ${res.success}，跳过 ${res.skipped}，失败 ${res.failed}`,
+      );
+      setScrapeModalOpen(false);
+      void albumsQuery.refetch();
+    },
+    onError: (e) => message.error(e.message || "刮削失败"),
+  });
+
   // ── MenuBar (macOS-style) ─────────────────────────────────────────────────
   const menuBarConfig: MenuBarConfig | null = useMemo(() => {
     if (!id) return null;
@@ -221,48 +232,38 @@ export default function MusicAppPage() {
                 setSyncModalOpen(true);
               },
             },
+            { type: "divider" as const },
+            {
+              key: "scrape",
+              label: "刮削音乐元数据",
+              icon: <Sparkles size={14} />,
+              disabled: scrapeMutation.isPending,
+              onClick: () => setScrapeModalOpen(true),
+            },
           ],
         },
       ],
+      search: {
+        appId: id,
+        searchType: "music" as const,
+        onSelect: (item) =>
+          navInWindow(item.title ?? "Album", { albumId: item.id }),
+      },
     };
-  }, [id, activeQuery.refetch, syncMutation.isPending]);
+  }, [
+    id,
+    navInWindow,
+    activeQuery.refetch,
+    syncMutation.isPending,
+    scrapeMutation.isPending,
+  ]);
 
   useMenuBar(menuBarConfig);
 
   return (
     <div className="space-y-3">
-      <Modal
-        open={syncModalOpen}
-        title="同步资料库"
-        okText="开始同步"
-        cancelText="取消"
-        confirmLoading={syncMutation.isPending}
-        onCancel={() => setSyncModalOpen(false)}
-        onOk={async () => {
-          if (!id) return;
-          try {
-            await syncMutation.mutateAsync({
-              id,
-              clearData: syncClearData,
-            });
-          } finally {
-            setSyncModalOpen(false);
-          }
-        }}
-      >
-        <Checkbox
-          checked={syncClearData}
-          onChange={(e) => setSyncClearData(e.target.checked)}
-        >
-          清空数据重新同步
-        </Checkbox>
-        <p className="mt-2 text-xs text-[var(--text-muted)]">
-          勾选后将删除所有音乐数据并重新完整同步，适合修复数据异常。
-        </p>
-      </Modal>
-
       {/* Tab bar — iOS 26 style pill, centered */}
-      <div className="relative flex items-center justify-center">
+      <div className="sticky top-0 z-10 flex items-center justify-center py-1">
         <div className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-black/20 p-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]">
           {tabs.map((t) => {
             const Icon = t.icon;
@@ -292,8 +293,8 @@ export default function MusicAppPage() {
 
       {/* Sort bar for albums */}
       {tab === "albums" && (
-        <div className="flex flex-wrap items-center justify-center gap-1.5">
-          <span className="mr-0.5 text-xs text-[var(--text-muted)]">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-xs text-zinc-600 dark:text-gray-500">
             排序
           </span>
           {SORT_OPTIONS_ALBUM.map((opt) => (
@@ -304,10 +305,10 @@ export default function MusicAppPage() {
                 setAlbumSort(opt.value);
                 setPage(1);
               }}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                 albumSort === opt.value
-                  ? "bg-[var(--accent)] text-white"
-                  : "bg-[var(--fill-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-glass-hover)]"
+                  ? "bg-primary text-white"
+                  : "bg-black/[0.05] text-gray-600 hover:bg-black/[0.1] dark:bg-white/[0.08] dark:text-zinc-300 dark:hover:bg-white/[0.14]"
               }`}
             >
               {opt.label}
@@ -315,6 +316,58 @@ export default function MusicAppPage() {
           ))}
         </div>
       )}
+
+      <Modal
+        open={scrapeModalOpen}
+        title="刮削音乐元数据"
+        okText="开始刮削"
+        cancelText="取消"
+        confirmLoading={scrapeMutation.isPending}
+        onCancel={() => setScrapeModalOpen(false)}
+        onOk={async () => {
+          if (!id) return;
+          await scrapeMutation.mutateAsync({ appId: id });
+        }}
+      >
+        <p className="text-sm text-[var(--text-secondary)]">
+          将通过 MusicBrainz
+          自动匹配专辑封面、发行年份、流派等元数据。已刮削的专辑将被跳过。
+        </p>
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
+          提示：刮削请求受 MusicBrainz
+          速率限制，专辑较多时耗时较长，请耐心等待。
+        </p>
+      </Modal>
+
+      <Modal
+        open={syncModalOpen}
+        title="同步资料库"
+        okText="开始同步"
+        cancelText="取消"
+        confirmLoading={syncMutation.isPending}
+        onCancel={() => setSyncModalOpen(false)}
+        onOk={async () => {
+          if (!id) return;
+          try {
+            await syncMutation.mutateAsync({
+              id,
+              clearData: syncClearData,
+            });
+          } finally {
+            setSyncModalOpen(false);
+          }
+        }}
+      >
+        <Checkbox
+          checked={syncClearData}
+          onChange={(e) => setSyncClearData(e.target.checked)}
+        >
+          清空数据重新同步
+        </Checkbox>
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
+          勾选后将删除所有音乐数据并重新完整同步，适合修复数据异常。
+        </p>
+      </Modal>
 
       {/* Content */}
       {isLoading ? (

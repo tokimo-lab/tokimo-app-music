@@ -2,11 +2,13 @@ use axum::{
     extract::{Path, Query, State},
     response::Json,
 };
+use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::db::repos::media::MediaContentRepo;
 use crate::error::AppError;
 use crate::handlers::{ok, ApiResponse};
+use crate::services::media::music_scrape::MusicScrapeService;
 use crate::AppState;
 
 use super::{parse_uuid, ArtistDetailQuery, ListMusicQuery};
@@ -129,6 +131,105 @@ pub async fn get_track_lyrics(
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
     let uid = parse_uuid(&id)?;
-    let result = MediaContentRepo::get_track_lyrics(&state.db, uid).await?;
-    Ok(ok(result))
+    let lyrics_path = MediaContentRepo::get_track_lyrics(&state.db, uid).await?;
+
+    let raw_lyrics = if let Some(ref path) = lyrics_path {
+        let storage_key = path.strip_prefix("/storage/").unwrap_or(path.as_str());
+        match state.storage.download(storage_key).await {
+            Ok(bytes) => String::from_utf8(bytes.to_vec()).ok(),
+            Err(_) => tokio::fs::read_to_string(path).await.ok(),
+        }
+    } else {
+        None
+    };
+
+    let (synced, plain) = match raw_lyrics {
+        Some(content) if content.contains('[') && content.contains(']') => (Some(content), None),
+        Some(content) => (None, Some(content)),
+        None => (None, None),
+    };
+
+    Ok(ok(serde_json::json!({
+        "syncedLyrics": synced,
+        "plainLyrics": plain,
+    })))
+}
+
+// ── Music Scrape Handlers ─────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchScrapeQuery {
+    /// Set to "1" to re-scrape already-scraped albums.
+    pub force: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScrapeAlbumInput {
+    pub mb_release_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMusicInput {
+    pub keyword: String,
+}
+
+/// POST /api/apps/{id}/scrape-music
+/// Batch auto-scrape all unscraped albums in a music app.
+pub async fn batch_scrape_music(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Query(q): Query<BatchScrapeQuery>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let app_id = parse_uuid(&id)?;
+    let force = q.force.as_deref() == Some("1");
+    let result = MusicScrapeService::batch_scrape_app(&state.db, &state, app_id, force).await?;
+    Ok(ok(serde_json::to_value(result).unwrap_or_default()))
+}
+
+/// POST /api/apps/album/{id}/scrape
+/// Scrape a specific album using a provided MusicBrainz release ID.
+pub async fn scrape_album(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(input): Json<ScrapeAlbumInput>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    use sea_orm::EntityTrait;
+    let album_id = parse_uuid(&id)?;
+    let artist = MusicScrapeService::get_album_artist_pub(&state.db, album_id).await;
+    let album = crate::db::entities::music_albums::Entity::find_by_id(album_id)
+        .one(&state.db)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("album {id} not found")))?;
+    let clean_title = MusicScrapeService::extract_clean_title(&album.title);
+    let result = MusicScrapeService::scrape_album_by_mb_id(
+        &state.db,
+        &state,
+        album_id,
+        &input.mb_release_id,
+        &artist,
+        &clean_title,
+    )
+    .await;
+    Ok(ok(serde_json::to_value(result).unwrap_or_default()))
+}
+
+/// POST /api/apps/album/{id}/search-music
+/// Search MusicBrainz for candidates for a specific album.
+pub async fn search_music_for_album(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(input): Json<SearchMusicInput>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let album_id = parse_uuid(&id)?;
+    let mb = rust_client_api::metadata_providers::musicbrainz::MusicBrainzClient::new();
+    let results = mb
+        .search_release_by_keyword(&input.keyword, 20)
+        .await
+        .map_err(|e| AppError::BadRequest(format!("MusicBrainz search failed: {e}")))?;
+    let _ = album_id; // future: save candidates to session
+    let _ = &state;
+    Ok(ok(serde_json::to_value(results).unwrap_or_default()))
 }

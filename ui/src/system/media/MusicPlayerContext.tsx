@@ -10,9 +10,11 @@ import {
 } from "react";
 import { WasmAudioEngine } from "@/components/player/WasmAudioEngine";
 import { api } from "@/generated/rust-api";
+import { rustUrl } from "@/lib/rust-api-runtime";
 import { resolveStoragePath } from "@/lib/storage-url";
 import type { MusicTrackOutput } from "@/types";
 import {
+  type MediaSessionQueueItem,
   useMediaSessionOptional,
   useMediaSessionRegister,
 } from "./MediaSessionContext";
@@ -147,6 +149,36 @@ function buildShuffleOrder(length: number, currentIdx: number): number[] {
   return currentIdx >= 0 && currentIdx < length ? [currentIdx, ...rest] : rest;
 }
 
+// ── Server-side state persistence ────────────────────────────────────────────
+
+const SAVE_DEBOUNCE_MS = 3000;
+
+interface PersistedMusicState {
+  queue: MusicTrackOutput[];
+  currentIndex: number;
+  currentTime: number;
+  repeatMode: RepeatMode;
+  shuffleEnabled: boolean;
+}
+
+function buildStatePayload(
+  queue: MusicTrackOutput[],
+  currentIndex: number,
+  currentTime: number,
+  repeatMode: RepeatMode,
+  shuffleEnabled: boolean,
+): PersistedMusicState {
+  return { queue, currentIndex, currentTime, repeatMode, shuffleEnabled };
+}
+
+function sendStateBeacon(state: PersistedMusicState): void {
+  const blob = new Blob(
+    [JSON.stringify({ stateData: { music: state } })],
+    { type: "application/json" },
+  );
+  navigator.sendBeacon(rustUrl("/api/playback/state"), blob);
+}
+
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export function MusicPlayerProvider({ children }: { children: ReactNode }) {
@@ -189,6 +221,123 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       engineRef.current?.destroy();
       engineRef.current = null;
+    };
+  }, []);
+
+  // ── Server-side state restore on mount ──────────────────────────────────
+  const didRestoreRef = useRef(false);
+  useEffect(() => {
+    if (didRestoreRef.current) return;
+    didRestoreRef.current = true;
+
+    api.playbackState.get
+      .fetch()
+      .then((data) => {
+        const music = data?.music;
+        if (
+          !music ||
+          !Array.isArray(music.queue) ||
+          music.queue.length === 0
+        )
+          return;
+        const restoredQueue = music.queue as MusicTrackOutput[];
+        const idx = Math.max(
+          0,
+          Math.min(music.currentIndex, restoredQueue.length - 1),
+        );
+        setQueue(restoredQueue);
+        setCurrentIndex(idx);
+        currentTimeRef.current = music.currentTime ?? 0;
+        // Restore duration from track metadata so progress bar shows correctly
+        // before the audio engine loads
+        const trackDuration = restoredQueue[idx]?.duration;
+        if (trackDuration && trackDuration > 0) {
+          durationRef.current = trackDuration;
+        }
+        setRepeatMode(
+          (music.repeatMode as RepeatMode) ?? "off",
+        );
+        setShuffleEnabled(music.shuffleEnabled ?? false);
+        if (music.shuffleEnabled) {
+          shuffleOrderRef.current = buildShuffleOrder(
+            restoredQueue.length,
+            idx,
+          );
+          shufflePosRef.current = 0;
+        }
+        // Restored in paused state — user must explicitly press play
+      })
+      .catch(() => {
+        /* ignore — first-time users have no state */
+      });
+  }, []);
+
+  // ── Server-side state save (debounced) ──────────────────────────────────
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep refs up-to-date for save logic
+  const saveQueueRef = useRef(queue);
+  saveQueueRef.current = queue;
+  const saveCurrentIndexRef = useRef(currentIndex);
+  saveCurrentIndexRef.current = currentIndex;
+  const saveRepeatModeRef = useRef(repeatMode);
+  saveRepeatModeRef.current = repeatMode;
+  const saveShuffleEnabledRef = useRef(shuffleEnabled);
+  saveShuffleEnabledRef.current = shuffleEnabled;
+
+  const scheduleSave = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const state = buildStatePayload(
+        saveQueueRef.current,
+        saveCurrentIndexRef.current,
+        currentTimeRef.current,
+        saveRepeatModeRef.current,
+        saveShuffleEnabledRef.current,
+      );
+      api.playbackState.save.mutate({ stateData: { music: state } }).catch(() => {
+        /* ignore save failures */
+      });
+    }, SAVE_DEBOUNCE_MS);
+  }, []);
+
+  // Trigger debounced save when queue or current track changes
+  useEffect(() => {
+    if (!didRestoreRef.current) return;
+    scheduleSave();
+  }, [queue, currentIndex, repeatMode, shuffleEnabled, scheduleSave]);
+
+  // Save via sendBeacon on page unload / visibility hidden
+  useEffect(() => {
+    const flushState = () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      if (saveQueueRef.current.length === 0) return;
+      sendStateBeacon(
+        buildStatePayload(
+          saveQueueRef.current,
+          saveCurrentIndexRef.current,
+          currentTimeRef.current,
+          saveRepeatModeRef.current,
+          saveShuffleEnabledRef.current,
+        ),
+      );
+    };
+    const handleBeforeUnload = () => flushState();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushState();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);
 
@@ -437,6 +586,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     durationRef.current = 0;
     shuffleOrderRef.current = [];
     shufflePosRef.current = 0;
+    // Clear persisted state on server
+    api.playbackState.save
+      .mutate({ stateData: {} })
+      .catch(() => {});
   }, []);
 
   const skipToIndex = useCallback(
@@ -509,7 +662,18 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   const togglePlay = useCallback(() => {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine || (engine.paused && engine.audioDuration === 0)) {
+      // Engine not yet initialized or has no loaded audio
+      // (e.g. restored from server state). Load and play the current track.
+      const track = queueRef.current[currentIndexRef.current];
+      if (track) {
+        const savedPos = currentTimeRef.current;
+        startPlayback(track).then(() => {
+          if (savedPos > 0) engineRef.current?.seek(savedPos);
+        });
+      }
+      return;
+    }
 
     if (engine.paused) {
       // Notify media session — pauses all other sources
@@ -521,7 +685,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       setIsPlaying(false);
       mediaSession?.notifyPause("music");
     }
-  }, [mediaSession]);
+  }, [mediaSession, startPlayback]);
 
   const seek = useCallback((time: number) => {
     engineRef.current?.seek(time);
@@ -562,6 +726,26 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   }, [queue, currentIndex]);
 
   // ── MediaSession registration ──────────────────────────────────────────────
+
+  const queueItems = useMemo<MediaSessionQueueItem[]>(
+    () =>
+      queue.map((t) => {
+        const cover = t.coverPath;
+        return {
+          id: t.id,
+          title: t.title,
+          artist: t.artistName ?? undefined,
+          artwork: cover
+            ? cover.startsWith("http")
+              ? cover
+              : resolveStoragePath(cover)
+            : undefined,
+          duration: t.duration ?? undefined,
+        };
+      }),
+    [queue],
+  );
+
   const musicMediaSource = useMemo(() => {
     if (!currentTrack) return null;
     const coverPath = currentTrack.coverPath;
@@ -583,7 +767,16 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       volume,
       play: () => {
         const engine = engineRef.current;
-        if (engine?.paused) {
+        if (!engine || (engine.paused && engine.audioDuration === 0)) {
+          // No engine or no loaded audio — load the track from saved position
+          const track = queueRef.current[currentIndexRef.current];
+          if (track) {
+            const savedPos = currentTimeRef.current;
+            startPlayback(track).then(() => {
+              if (savedPos > 0) engineRef.current?.seek(savedPos);
+            });
+          }
+        } else if (engine.paused) {
           engine.resume();
           setIsPlaying(true);
         }
@@ -597,6 +790,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       next,
       previous,
       getAnalyser,
+      queue: queueItems,
+      currentIndex,
+      skipToIndex,
+      removeFromQueue,
     };
   }, [
     currentTrack,
@@ -609,6 +806,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     next,
     previous,
     getAnalyser,
+    queueItems,
+    currentIndex,
+    skipToIndex,
+    removeFromQueue,
   ]);
 
   useMediaSessionRegister(musicMediaSource);

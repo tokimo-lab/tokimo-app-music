@@ -58,6 +58,12 @@ export const AlbumCard = memo(function AlbumCard({
             <Heart className="h-4 w-4 fill-red-500 text-red-500" />
           </span>
         )}
+        {!album.scrapedAt && (
+          <span
+            className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-orange-400 ring-1 ring-black/30"
+            title="未刮削"
+          />
+        )}
         {album.year && (
           <span className="absolute right-0 bottom-2 inline-flex items-center rounded-l-md border border-r-0 border-white/12 bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-md">
             {album.year}

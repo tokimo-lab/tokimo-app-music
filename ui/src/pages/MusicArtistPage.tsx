@@ -1,6 +1,7 @@
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokiomo/components";
 import { User } from "lucide-react";
-import { useWindowNav } from "@/system";
+import { useEffect } from "react";
+import { useBackgroundArt, useWindowNav } from "@/system";
 import { api } from "../../generated/rust-api";
 import { resolveStoragePath } from "../../lib/storage-url";
 import { SectionTitle } from "./media-detail-shared";
@@ -12,10 +13,21 @@ export default function MusicArtistPage() {
   const id = params.appId as string | undefined;
   const personId = params.artistPersonId as string | undefined;
 
+  const { setBackgroundArt } = useBackgroundArt();
+
   const { data: artist, isLoading } = api.app.getArtistDetail.useQuery(
     { personId: personId!, appId: id! },
     { enabled: !!personId && !!id },
   );
+
+  useEffect(() => {
+    if (artist?.profilePath) {
+      setBackgroundArt(resolveStoragePath(artist.profilePath));
+    }
+    return () => {
+      setBackgroundArt(null);
+    };
+  }, [artist?.profilePath, setBackgroundArt]);
 
   if (isLoading) {
     return (
