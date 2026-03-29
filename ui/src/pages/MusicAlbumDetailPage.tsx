@@ -85,8 +85,8 @@ function TrackRow({
   );
 
   return (
-    <div
-      role="button"
+    <button
+      type="button"
       tabIndex={0}
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
         isActive ? "bg-[var(--accent)]/10" : "hover:bg-[var(--fill-tertiary)]"
@@ -153,7 +153,7 @@ function TrackRow({
       >
         <ListPlus className="h-4 w-4 text-[var(--text-muted)]" />
       </button>
-    </div>
+    </button>
   );
 }
 

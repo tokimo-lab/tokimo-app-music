@@ -110,11 +110,14 @@ export default function MusicAppPage() {
   const message = useMessage();
 
   const [tab, setTabRaw] = useState<TabKey>((params.tab as TabKey) || "albums");
-  const setTab = useCallback((t: TabKey) => {
-    setTabRaw(t);
-    setPage(1);
-    updateMetadata({ tab: t });
-  }, [updateMetadata]);
+  const setTab = useCallback(
+    (t: TabKey) => {
+      setTabRaw(t);
+      setPage(1);
+      updateMetadata({ tab: t });
+    },
+    [updateMetadata],
+  );
 
   const [page, setPage] = useState(1);
   const [albumSort, setAlbumSort] = useState<AlbumSortValue>("addedAt");

@@ -339,7 +339,8 @@ export function MusicMiniPlayer() {
               <button
                 type="button"
                 onClick={previous}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
                 <SkipBack className="h-4 w-4" />
               </button>
             </Tooltip>

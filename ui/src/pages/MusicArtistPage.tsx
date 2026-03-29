@@ -103,12 +103,8 @@ export default function MusicArtistPage() {
 
             {(artist.birthday || artist.birthplace) && (
               <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm text-[var(--text-secondary)] md:justify-start">
-                {artist.birthday && (
-                  <span>🎂 {artist.birthday}</span>
-                )}
-                {artist.birthplace && (
-                  <span>📍 {artist.birthplace}</span>
-                )}
+                {artist.birthday && <span>🎂 {artist.birthday}</span>}
+                {artist.birthplace && <span>📍 {artist.birthplace}</span>}
               </div>
             )}
           </div>
