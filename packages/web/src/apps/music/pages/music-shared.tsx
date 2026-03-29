@@ -1,4 +1,3 @@
-import { Button } from "@tokiomo/components";
 import { Disc3, Heart, Play, User } from "lucide-react";
 import { memo } from "react";
 import { resolveStoragePath } from "@/lib/storage-url";
@@ -30,8 +29,8 @@ export const AlbumCard = memo(function AlbumCard({
   onClick: () => void;
 }) {
   return (
-    <Button
-      variant="unstyled"
+    <button
+      type="button"
       className="group w-full cursor-pointer overflow-hidden rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] text-left transition-shadow hover:shadow-md"
       onClick={onClick}
     >
@@ -86,7 +85,7 @@ export const AlbumCard = memo(function AlbumCard({
           {album.trackCount > 0 && ` · ${album.trackCount} 首歌`}
         </p>
       </div>
-    </Button>
+    </button>
   );
 });
 
@@ -99,8 +98,8 @@ export const ArtistCard = memo(function ArtistCard({
   onClick: () => void;
 }) {
   return (
-    <Button
-      variant="unstyled"
+    <button
+      type="button"
       className="group flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] p-4 text-center transition-shadow hover:shadow-md"
       onClick={onClick}
     >
@@ -130,6 +129,6 @@ export const ArtistCard = memo(function ArtistCard({
           {artist.trackCount > 0 && ` · ${artist.trackCount} 首歌`}
         </p>
       </div>
-    </Button>
+    </button>
   );
 });
