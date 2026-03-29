@@ -1,10 +1,10 @@
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokiomo/components";
 import { User } from "lucide-react";
 import { useEffect } from "react";
+import { SectionTitle } from "@/apps/media/pages/media-detail-shared";
+import { api } from "@/generated/rust-api";
+import { resolveStoragePath } from "@/lib/storage-url";
 import { useBackgroundArt, useWindowNav } from "@/system";
-import { api } from "../../generated/rust-api";
-import { resolveStoragePath } from "../../lib/storage-url";
-import { SectionTitle } from "./media-detail-shared";
 import { AlbumCard } from "./music-shared";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────

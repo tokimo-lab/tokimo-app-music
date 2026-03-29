@@ -17,6 +17,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
 import {
+  PersonCard,
+  SectionTitle,
+} from "@/apps/media/pages/media-detail-shared";
+import { api } from "@/generated/rust-api";
+import { resolveStoragePath } from "@/lib/storage-url";
+import {
   type MenuBarConfig,
   useBackgroundArt,
   useMenuBar,
@@ -25,9 +31,6 @@ import {
   useWindowNav,
 } from "@/system";
 import type { CreditOutput, MusicTrackOutput } from "@/types";
-import { api } from "../../generated/rust-api";
-import { resolveStoragePath } from "../../lib/storage-url";
-import { PersonCard, SectionTitle } from "./media-detail-shared";
 import { formatDuration, formatTotalDuration } from "./music-shared";
 
 // ── Favorite Button ───────────────────────────────────────────────────────────

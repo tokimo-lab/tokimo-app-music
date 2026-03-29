@@ -1,8 +1,8 @@
 import { Button } from "@tokiomo/components";
 import { Disc3, Heart, Play, User } from "lucide-react";
 import { memo } from "react";
+import { resolveStoragePath } from "@/lib/storage-url";
 import type { MusicAlbumOutput, MusicArtistOutput } from "@/types";
-import { resolveStoragePath } from "../../lib/storage-url";
 
 export function formatDuration(seconds: number | null | undefined): string {
   if (!seconds) return "--:--";

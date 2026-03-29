@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/generated/rust-api";
 import type { MenuBarConfig } from "@/system";
 import { useMenuBar, useMessage, useMusicPlayer, useWindowNav } from "@/system";
 import type {
@@ -18,7 +19,6 @@ import type {
   MusicArtistOutput,
   MusicTrackOutput,
 } from "@/types";
-import { api } from "../../generated/rust-api";
 import { AlbumCard, ArtistCard, formatDuration } from "./music-shared";
 
 type TabKey = "albums" | "artists" | "tracks";
