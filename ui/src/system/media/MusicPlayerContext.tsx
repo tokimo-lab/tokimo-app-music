@@ -834,6 +834,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     return {
       id: "music" as const,
       type: "music" as const,
+      label: "音乐",
       title: currentTrack.title,
       artist: currentTrack.artistName ?? undefined,
       album: currentTrack.albumTitle ?? undefined,

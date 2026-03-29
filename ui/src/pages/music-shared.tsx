@@ -1,3 +1,4 @@
+import { Button } from "@tokiomo/components";
 import { Disc3, Heart, Play, User } from "lucide-react";
 import { memo } from "react";
 import type { MusicAlbumOutput, MusicArtistOutput } from "@/types";
@@ -29,8 +30,8 @@ export const AlbumCard = memo(function AlbumCard({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="unstyled"
       className="group w-full cursor-pointer overflow-hidden rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] text-left transition-shadow hover:shadow-md"
       onClick={onClick}
     >
@@ -85,7 +86,7 @@ export const AlbumCard = memo(function AlbumCard({
           {album.trackCount > 0 && ` · ${album.trackCount} 首歌`}
         </p>
       </div>
-    </button>
+    </Button>
   );
 });
 
@@ -98,8 +99,8 @@ export const ArtistCard = memo(function ArtistCard({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="unstyled"
       className="group flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] p-4 text-center transition-shadow hover:shadow-md"
       onClick={onClick}
     >
@@ -129,6 +130,6 @@ export const ArtistCard = memo(function ArtistCard({
           {artist.trackCount > 0 && ` · ${artist.trackCount} 首歌`}
         </p>
       </div>
-    </button>
+    </Button>
   );
 });

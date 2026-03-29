@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useMusicPlayerOptional } from "@/system";
+import { useMediaSessionOptional, useMusicPlayerOptional } from "@/system";
 import { useLyrics } from "../../hooks/useLyrics";
 
 // ── Karaoke text — reads progressRef via RAF, zero re-renders ────────────────
@@ -51,6 +51,10 @@ function KaraokeText({
 
 export function MenuBarLyrics() {
   const player = useMusicPlayerOptional();
+  const mediaSession = useMediaSessionOptional();
+  const activeSource = mediaSession?.activeSource;
+
+  // For local music: use synced lyrics
   const trackId = player?.currentTrack?.id;
   const getCurrentTime = player?.getCurrentTime ?? (() => 0);
 
@@ -59,34 +63,68 @@ export function MenuBarLyrics() {
     getCurrentTime,
   );
 
-  // Nothing to show if no player or no track
-  if (!player?.currentTrack || !hasSyncedLyrics) return null;
+  // Determine if local music player is active (has synced lyrics)
+  const isLocalMusicActive = activeSource?.id === "music";
+  const showLyrics =
+    isLocalMusicActive && player?.currentTrack && hasSyncedLyrics;
 
-  const track = player.currentTrack;
-  const hasLyricLine = currentIdx >= 0 && currentIdx < lines.length;
-  const lyricText = hasLyricLine ? lines[currentIdx].text : null;
+  // For non-local sources (Apple Music, etc.), show title · artist fallback
+  const isExternalMusicActive =
+    activeSource &&
+    activeSource.id !== "music" &&
+    activeSource.type === "music";
 
-  // Before the first lyric line appears, show "title · artist"
-  const fallbackText = [track.title, track.artistName]
-    .filter(Boolean)
-    .join(" · ");
+  if (!showLyrics && !isExternalMusicActive) return null;
 
-  const displayText = lyricText ?? fallbackText;
+  // Local music with synced lyrics
+  if (showLyrics && player?.currentTrack) {
+    const track = player.currentTrack;
+    const hasLyricLine = currentIdx >= 0 && currentIdx < lines.length;
+    const lyricText = hasLyricLine ? lines[currentIdx].text : null;
+    const fallbackText = [track.title, track.artistName]
+      .filter(Boolean)
+      .join(" · ");
+    const displayText = lyricText ?? fallbackText;
 
-  return (
-    <button
-      type="button"
-      className="mx-1 flex h-5 max-w-[260px] shrink items-center cursor-pointer overflow-hidden rounded px-1.5 transition-colors hover:bg-white/10"
-      onClick={player.togglePlay}
-      title={player.isPlaying ? "暂停" : "播放"}
-    >
-      {lyricText ? (
-        <KaraokeText text={lyricText} progressRef={progressRef} />
-      ) : (
+    return (
+      <button
+        type="button"
+        className="mx-1 flex h-5 max-w-[260px] shrink items-center cursor-pointer overflow-hidden rounded px-1.5 transition-colors hover:bg-white/10"
+        onClick={player.togglePlay}
+        title={player.isPlaying ? "暂停" : "播放"}
+      >
+        {lyricText ? (
+          <KaraokeText text={lyricText} progressRef={progressRef} />
+        ) : (
+          <span className="max-w-full truncate text-xs text-[var(--accent)]">
+            {displayText}
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  // External music source (Apple Music, QQ Music, etc.) — show title · artist
+  if (isExternalMusicActive && activeSource) {
+    const displayText = [activeSource.title, activeSource.artist]
+      .filter(Boolean)
+      .join(" · ");
+
+    return (
+      <button
+        type="button"
+        className="mx-1 flex h-5 max-w-[260px] shrink items-center cursor-pointer overflow-hidden rounded px-1.5 transition-colors hover:bg-white/10"
+        onClick={() =>
+          activeSource.isPlaying ? activeSource.pause() : activeSource.play()
+        }
+        title={activeSource.isPlaying ? "暂停" : "播放"}
+      >
         <span className="max-w-full truncate text-xs text-[var(--accent)]">
           {displayText}
         </span>
-      )}
-    </button>
-  );
+      </button>
+    );
+  }
+
+  return null;
 }
