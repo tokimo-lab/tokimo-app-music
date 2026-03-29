@@ -267,7 +267,7 @@ export default function MusicAppPage() {
   return (
     <div className="space-y-3">
       {/* Tab bar — iOS 26 style pill, centered */}
-      <div className="sticky top-0 z-10 flex items-center justify-center py-1">
+      <div className="relative flex items-center justify-center">
         <div className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-black/20 p-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]">
           {tabs.map((t) => {
             const Icon = t.icon;
