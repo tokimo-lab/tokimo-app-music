@@ -219,10 +219,9 @@ function buildStatePayload(
 }
 
 function sendStateBeacon(state: PersistedMusicState): void {
-  const blob = new Blob(
-    [JSON.stringify({ stateData: { music: state } })],
-    { type: "application/json" },
-  );
+  const blob = new Blob([JSON.stringify({ stateData: { music: state } })], {
+    type: "application/json",
+  });
   navigator.sendBeacon(rustUrl("/api/playback/state"), blob);
 }
 
@@ -334,11 +333,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       .fetch()
       .then((data) => {
         const music = data?.music;
-        if (
-          !music ||
-          !Array.isArray(music.queue) ||
-          music.queue.length === 0
-        )
+        if (!music || !Array.isArray(music.queue) || music.queue.length === 0)
           return;
         const restoredQueue = music.queue as MusicTrackOutput[];
         const idx = Math.max(
@@ -354,9 +349,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         if (trackDuration && trackDuration > 0) {
           durationRef.current = trackDuration;
         }
-        setRepeatMode(
-          (music.repeatMode as RepeatMode) ?? "off",
-        );
+        setRepeatMode((music.repeatMode as RepeatMode) ?? "off");
         setShuffleEnabled(music.shuffleEnabled ?? false);
         if (music.shuffleEnabled) {
           shuffleOrderRef.current = buildShuffleOrder(
@@ -395,13 +388,16 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         saveRepeatModeRef.current,
         saveShuffleEnabledRef.current,
       );
-      api.playbackState.save.mutate({ stateData: { music: state } }).catch(() => {
-        /* ignore save failures */
-      });
+      api.playbackState.save
+        .mutate({ stateData: { music: state } })
+        .catch(() => {
+          /* ignore save failures */
+        });
     }, SAVE_DEBOUNCE_MS);
   }, []);
 
   // Trigger debounced save when queue or current track changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally re-save when queue/position/mode change
   useEffect(() => {
     if (!didRestoreRef.current) return;
     scheduleSave();
@@ -433,10 +429,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);
@@ -664,9 +657,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     shuffleOrderRef.current = [];
     shufflePosRef.current = 0;
     // Clear persisted state on server
-    api.playbackState.save
-      .mutate({ stateData: {} })
-      .catch(() => {});
+    api.playbackState.save.mutate({ stateData: {} }).catch(() => {});
   }, []);
 
   const skipToIndex = useCallback(
@@ -888,6 +879,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     currentIndex,
     skipToIndex,
     removeFromQueue,
+    startPlayback,
   ]);
 
   useMediaSessionRegister(musicMediaSource);
