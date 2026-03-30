@@ -31,6 +31,7 @@ import {
   useWindowNav,
 } from "@/system";
 import type { CreditOutput, MusicTrackOutput } from "@/types";
+import { MusicLayout } from "../components/MusicLayout";
 import { formatDuration, formatTotalDuration } from "./music-shared";
 
 // ── Favorite Button ───────────────────────────────────────────────────────────
@@ -293,204 +294,208 @@ export default function MusicAlbumDetailPage() {
   };
 
   return (
-    <div className="-mx-3 -mt-3 -mb-3 min-h-full lg:-mx-4 lg:-mt-4 lg:-mb-4">
-      {/* Header */}
-      <div className="relative z-10 px-6 pt-6 pb-6">
-        <div className="mb-6">
-          <Button icon={<ArrowLeftOutlined />} onClick={() => goBack()}>
-            返回
-          </Button>
-        </div>
-
-        <div className="flex flex-col items-start gap-6 md:flex-row">
-          {/* Cover */}
-          <div className="relative w-[200px] flex-shrink-0 overflow-hidden rounded-xl shadow-2xl md:w-[250px]">
-            {album.coverPath ? (
-              <img
-                src={resolveStoragePath(album.coverPath)}
-                alt={album.title}
-                className="aspect-square w-full object-cover"
-              />
-            ) : (
-              <div className="flex aspect-square w-full items-center justify-center bg-[var(--bg-skeleton)]">
-                <Disc3 className="h-20 w-20 text-[var(--text-muted)]" />
-              </div>
-            )}
-            {/* Play overlay */}
-            <button
-              type="button"
-              aria-label="播放全部"
-              className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-xl bg-black/30 opacity-0 transition-opacity hover:opacity-100"
-              onClick={handlePlayAll}
-            >
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] shadow-lg">
-                <Play className="h-7 w-7 text-white" fill="white" />
-              </span>
-            </button>
+    <MusicLayout>
+      <div className="-mx-3 -mt-3 -mb-3 min-h-full lg:-mx-4 lg:-mt-4 lg:-mb-4">
+        {/* Header */}
+        <div className="relative z-10 px-6 pt-6 pb-6">
+          <div className="mb-6">
+            <Button icon={<ArrowLeftOutlined />} onClick={() => goBack()}>
+              返回
+            </Button>
           </div>
 
-          {/* Info */}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
-                {album.title}
-              </h1>
-              <FavoriteButton
-                isFavorite={album.isFavorite}
-                albumId={album.id}
-              />
-            </div>
-
-            {/* Artist (clickable) */}
-            {artistName && (
-              <button
-                type="button"
-                className="mt-1 cursor-pointer text-sm text-[var(--accent)] hover:underline"
-                onClick={() => {
-                  const artist = credits.find(
-                    (c) =>
-                      c.person.name === artistName &&
-                      ["artist", "album_artist", "performer"].includes(c.role),
-                  );
-                  if (artist) {
-                    navInWindow(artist.person.name, {
-                      artistPersonId: artist.person.id,
-                    });
-                  }
-                }}
-              >
-                {artistName}
-              </button>
-            )}
-
-            {/* Meta line */}
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-              {album.year && <span>{album.year}</span>}
-              {album.albumType && (
-                <>
-                  <span className="text-[var(--text-muted)]">·</span>
-                  <span>{album.albumType}</span>
-                </>
-              )}
-              {album.trackCount > 0 && (
-                <>
-                  <span className="text-[var(--text-muted)]">·</span>
-                  <span>{album.trackCount} 首曲目</span>
-                </>
-              )}
-              {album.totalDuration && (
-                <>
-                  <span className="text-[var(--text-muted)]">·</span>
-                  <span>{formatTotalDuration(album.totalDuration)}</span>
-                </>
-              )}
-              {album.scrapedAt ? (
-                <>
-                  <span className="text-[var(--text-muted)]">·</span>
-                  <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
-                    <Sparkles className="h-3 w-3" />
-                    已刮削
-                  </span>
-                </>
+          <div className="flex flex-col items-start gap-6 md:flex-row">
+            {/* Cover */}
+            <div className="relative w-[200px] flex-shrink-0 overflow-hidden rounded-xl shadow-2xl md:w-[250px]">
+              {album.coverPath ? (
+                <img
+                  src={resolveStoragePath(album.coverPath)}
+                  alt={album.title}
+                  className="aspect-square w-full object-cover"
+                />
               ) : (
-                <>
-                  <span className="text-[var(--text-muted)]">·</span>
-                  <span className="text-xs text-orange-400">未刮削</span>
-                </>
+                <div className="flex aspect-square w-full items-center justify-center bg-[var(--bg-skeleton)]">
+                  <Disc3 className="h-20 w-20 text-[var(--text-muted)]" />
+                </div>
               )}
-            </div>
-
-            {/* Genre tags */}
-            {genres.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {genres.map((g) => (
-                  <Tag key={g} color="default">
-                    {g}
-                  </Tag>
-                ))}
-              </div>
-            )}
-
-            {/* Action buttons */}
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {/* Play overlay */}
               <button
                 type="button"
-                className="flex cursor-pointer items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-2.5 font-semibold text-white hover:opacity-90"
+                aria-label="播放全部"
+                className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-xl bg-black/30 opacity-0 transition-opacity hover:opacity-100"
                 onClick={handlePlayAll}
               >
-                <Play className="h-5 w-5" fill="white" />
-                播放全部
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] shadow-lg">
+                  <Play className="h-7 w-7 text-white" fill="white" />
+                </span>
               </button>
-              <button
-                type="button"
-                className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-glass-hover)]"
-                onClick={handleAddAllToQueue}
-              >
-                <ListPlus className="h-4 w-4" />
-                添加到队列
-              </button>
+            </div>
+
+            {/* Info */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
+                  {album.title}
+                </h1>
+                <FavoriteButton
+                  isFavorite={album.isFavorite}
+                  albumId={album.id}
+                />
+              </div>
+
+              {/* Artist (clickable) */}
+              {artistName && (
+                <button
+                  type="button"
+                  className="mt-1 cursor-pointer text-sm text-[var(--accent)] hover:underline"
+                  onClick={() => {
+                    const artist = credits.find(
+                      (c) =>
+                        c.person.name === artistName &&
+                        ["artist", "album_artist", "performer"].includes(
+                          c.role,
+                        ),
+                    );
+                    if (artist) {
+                      navInWindow(artist.person.name, {
+                        artistPersonId: artist.person.id,
+                      });
+                    }
+                  }}
+                >
+                  {artistName}
+                </button>
+              )}
+
+              {/* Meta line */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
+                {album.year && <span>{album.year}</span>}
+                {album.albumType && (
+                  <>
+                    <span className="text-[var(--text-muted)]">·</span>
+                    <span>{album.albumType}</span>
+                  </>
+                )}
+                {album.trackCount > 0 && (
+                  <>
+                    <span className="text-[var(--text-muted)]">·</span>
+                    <span>{album.trackCount} 首曲目</span>
+                  </>
+                )}
+                {album.totalDuration && (
+                  <>
+                    <span className="text-[var(--text-muted)]">·</span>
+                    <span>{formatTotalDuration(album.totalDuration)}</span>
+                  </>
+                )}
+                {album.scrapedAt ? (
+                  <>
+                    <span className="text-[var(--text-muted)]">·</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
+                      <Sparkles className="h-3 w-3" />
+                      已刮削
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[var(--text-muted)]">·</span>
+                    <span className="text-xs text-orange-400">未刮削</span>
+                  </>
+                )}
+              </div>
+
+              {/* Genre tags */}
+              {genres.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {genres.map((g) => (
+                    <Tag key={g} color="default">
+                      {g}
+                    </Tag>
+                  ))}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="flex cursor-pointer items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-2.5 font-semibold text-white hover:opacity-90"
+                  onClick={handlePlayAll}
+                >
+                  <Play className="h-5 w-5" fill="white" />
+                  播放全部
+                </button>
+                <button
+                  type="button"
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-glass-hover)]"
+                  onClick={handleAddAllToQueue}
+                >
+                  <ListPlus className="h-4 w-4" />
+                  添加到队列
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Track List */}
-      <div className="relative z-10 px-6 pb-6">
-        {album.overview && (
-          <div className="mb-6">
-            <SectionTitle>简介</SectionTitle>
-            <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-              {album.overview}
-            </p>
-          </div>
-        )}
+        {/* Track List */}
+        <div className="relative z-10 px-6 pb-6">
+          {album.overview && (
+            <div className="mb-6">
+              <SectionTitle>简介</SectionTitle>
+              <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                {album.overview}
+              </p>
+            </div>
+          )}
 
-        <SectionTitle>曲目列表</SectionTitle>
-        <div className="rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)]">
-          {/* Table header */}
-          <div className="flex items-center gap-3 border-b border-[var(--glass-border)] px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
-            <span className="w-8 flex-shrink-0 text-center">#</span>
-            <span className="min-w-0 flex-1">标题</span>
-            <span className="w-[50px] flex-shrink-0 text-right">
-              <Clock className="ml-auto h-3.5 w-3.5" />
-            </span>
-            <span className="w-7 flex-shrink-0" />
-          </div>
+          <SectionTitle>曲目列表</SectionTitle>
+          <div className="rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)]">
+            {/* Table header */}
+            <div className="flex items-center gap-3 border-b border-[var(--glass-border)] px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
+              <span className="w-8 flex-shrink-0 text-center">#</span>
+              <span className="min-w-0 flex-1">标题</span>
+              <span className="w-[50px] flex-shrink-0 text-right">
+                <Clock className="ml-auto h-3.5 w-3.5" />
+              </span>
+              <span className="w-7 flex-shrink-0" />
+            </div>
 
-          {/* Tracks grouped by disc */}
-          {sortedDiscNumbers.map((discNum) => {
-            const discTracks = discs.get(discNum) ?? [];
-            // Calculate start index within full tracks array
-            let trackOffset = 0;
-            for (const dn of sortedDiscNumbers) {
-              if (dn === discNum) break;
-              trackOffset += discs.get(dn)?.length ?? 0;
-            }
-            return (
-              <div key={discNum}>
-                {hasMultiDisc && (
-                  <div className="border-b border-[var(--glass-border)] bg-[var(--fill-tertiary)] px-4 py-1.5 text-xs font-semibold text-[var(--text-secondary)]">
-                    光碟 {discNum}
+            {/* Tracks grouped by disc */}
+            {sortedDiscNumbers.map((discNum) => {
+              const discTracks = discs.get(discNum) ?? [];
+              // Calculate start index within full tracks array
+              let trackOffset = 0;
+              for (const dn of sortedDiscNumbers) {
+                if (dn === discNum) break;
+                trackOffset += discs.get(dn)?.length ?? 0;
+              }
+              return (
+                <div key={discNum}>
+                  {hasMultiDisc && (
+                    <div className="border-b border-[var(--glass-border)] bg-[var(--fill-tertiary)] px-4 py-1.5 text-xs font-semibold text-[var(--text-secondary)]">
+                      光碟 {discNum}
+                    </div>
+                  )}
+                  <div className="divide-y divide-[var(--glass-border)]">
+                    {discTracks.map((track, i) => (
+                      <TrackRow
+                        key={track.id}
+                        track={track}
+                        tracks={tracks}
+                        startIndex={trackOffset + i}
+                      />
+                    ))}
                   </div>
-                )}
-                <div className="divide-y divide-[var(--glass-border)]">
-                  {discTracks.map((track, i) => (
-                    <TrackRow
-                      key={track.id}
-                      track={track}
-                      tracks={tracks}
-                      startIndex={trackOffset + i}
-                    />
-                  ))}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
 
-        {/* Credits */}
-        <CreditsSection credits={credits} />
+          {/* Credits */}
+          <CreditsSection credits={credits} />
+        </div>
       </div>
-    </div>
+    </MusicLayout>
   );
 }

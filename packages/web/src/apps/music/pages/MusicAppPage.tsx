@@ -19,6 +19,7 @@ import type {
   MusicArtistOutput,
   MusicTrackOutput,
 } from "@/types";
+import { MusicLayout } from "../components/MusicLayout";
 import { AlbumCard, ArtistCard, formatDuration } from "./music-shared";
 
 type TabKey = "albums" | "artists" | "tracks";
@@ -265,159 +266,161 @@ export default function MusicAppPage() {
   useMenuBar(menuBarConfig);
 
   return (
-    <div className="space-y-3">
-      {/* Tab bar — iOS 26 style pill, centered */}
-      <div className="relative flex items-center justify-center">
-        <div className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-black/20 p-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.key;
-            return (
+    <MusicLayout>
+      <div className="space-y-3">
+        {/* Tab bar — iOS 26 style pill, centered */}
+        <div className="relative flex items-center justify-center">
+          <div className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-black/20 p-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]">
+            {tabs.map((t) => {
+              const Icon = t.icon;
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium transition-all duration-200 ${
+                    active
+                      ? "bg-white/90 text-neutral-900 shadow-sm dark:bg-white/15 dark:text-white"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--fill-tertiary)] hover:text-[var(--text-primary)]"
+                  }`}
+                  onClick={() => setTab(t.key)}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Count — right-aligned */}
+          <div className="absolute right-4 text-right">
+            {total > 0 && <Tag>{total}</Tag>}
+          </div>
+        </div>
+
+        {/* Sort bar for albums */}
+        {tab === "albums" && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-0.5 text-xs text-zinc-600 dark:text-gray-500">
+              排序
+            </span>
+            {SORT_OPTIONS_ALBUM.map((opt) => (
               <button
-                key={t.key}
+                key={opt.value}
                 type="button"
-                className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium transition-all duration-200 ${
-                  active
-                    ? "bg-white/90 text-neutral-900 shadow-sm dark:bg-white/15 dark:text-white"
-                    : "text-[var(--text-secondary)] hover:bg-[var(--fill-tertiary)] hover:text-[var(--text-primary)]"
+                onClick={() => {
+                  setAlbumSort(opt.value);
+                  setPage(1);
+                }}
+                className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  albumSort === opt.value
+                    ? "bg-primary text-white"
+                    : "bg-black/[0.05] text-gray-600 hover:bg-black/[0.1] dark:bg-white/[0.08] dark:text-zinc-300 dark:hover:bg-white/[0.14]"
                 }`}
-                onClick={() => setTab(t.key)}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {t.label}
+                {opt.label}
               </button>
-            );
-          })}
-        </div>
-        {/* Count — right-aligned */}
-        <div className="absolute right-4 text-right">
-          {total > 0 && <Tag>{total}</Tag>}
-        </div>
-      </div>
+            ))}
+          </div>
+        )}
 
-      {/* Sort bar for albums */}
-      {tab === "albums" && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-0.5 text-xs text-zinc-600 dark:text-gray-500">
-            排序
-          </span>
-          {SORT_OPTIONS_ALBUM.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                setAlbumSort(opt.value);
-                setPage(1);
-              }}
-              className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                albumSort === opt.value
-                  ? "bg-primary text-white"
-                  : "bg-black/[0.05] text-gray-600 hover:bg-black/[0.1] dark:bg-white/[0.08] dark:text-zinc-300 dark:hover:bg-white/[0.14]"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <Modal
-        open={scrapeModalOpen}
-        title="刮削音乐元数据"
-        okText="开始刮削"
-        cancelText="取消"
-        confirmLoading={scrapeMutation.isPending}
-        onCancel={() => setScrapeModalOpen(false)}
-        onOk={async () => {
-          if (!id) return;
-          await scrapeMutation.mutateAsync({ appId: id });
-        }}
-      >
-        <p className="text-sm text-[var(--text-secondary)]">
-          将通过 MusicBrainz
-          自动匹配专辑封面、发行年份、流派等元数据。已刮削的专辑将被跳过。
-        </p>
-        <p className="mt-2 text-xs text-[var(--text-muted)]">
-          提示：刮削请求受 MusicBrainz
-          速率限制，专辑较多时耗时较长，请耐心等待。
-        </p>
-      </Modal>
-
-      <Modal
-        open={syncModalOpen}
-        title="同步资料库"
-        okText="开始同步"
-        cancelText="取消"
-        confirmLoading={syncMutation.isPending}
-        onCancel={() => setSyncModalOpen(false)}
-        onOk={async () => {
-          if (!id) return;
-          try {
-            await syncMutation.mutateAsync({
-              id,
-              clearData: syncClearData,
-            });
-          } finally {
-            setSyncModalOpen(false);
-          }
-        }}
-      >
-        <Checkbox
-          checked={syncClearData}
-          onChange={(e) => setSyncClearData(e.target.checked)}
+        <Modal
+          open={scrapeModalOpen}
+          title="刮削音乐元数据"
+          okText="开始刮削"
+          cancelText="取消"
+          confirmLoading={scrapeMutation.isPending}
+          onCancel={() => setScrapeModalOpen(false)}
+          onOk={async () => {
+            if (!id) return;
+            await scrapeMutation.mutateAsync({ appId: id });
+          }}
         >
-          清空数据重新同步
-        </Checkbox>
-        <p className="mt-2 text-xs text-[var(--text-muted)]">
-          勾选后将删除所有音乐数据并重新完整同步，适合修复数据异常。
-        </p>
-      </Modal>
+          <p className="text-sm text-[var(--text-secondary)]">
+            将通过 MusicBrainz
+            自动匹配专辑封面、发行年份、流派等元数据。已刮削的专辑将被跳过。
+          </p>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
+            提示：刮削请求受 MusicBrainz
+            速率限制，专辑较多时耗时较长，请耐心等待。
+          </p>
+        </Modal>
 
-      {/* Content */}
-      {isLoading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Spin />
-        </div>
-      ) : tab === "albums" ? (
-        <AlbumsGrid
-          albums={(albumsQuery.data?.items as MusicAlbumOutput[]) ?? []}
-          onAlbumClick={(albumId) => navInWindow("Album", { albumId })}
-        />
-      ) : tab === "artists" ? (
-        <ArtistsGrid
-          artists={(artistsQuery.data?.items as MusicArtistOutput[]) ?? []}
-          onArtistClick={(artistId) =>
-            navInWindow("Artist", { artistPersonId: artistId })
-          }
-        />
-      ) : (
-        <TracksTable
-          tracks={(tracksQuery.data?.items as MusicTrackOutput[]) ?? []}
-          onPlayTrack={handlePlayTrack}
-        />
-      )}
+        <Modal
+          open={syncModalOpen}
+          title="同步资料库"
+          okText="开始同步"
+          cancelText="取消"
+          confirmLoading={syncMutation.isPending}
+          onCancel={() => setSyncModalOpen(false)}
+          onOk={async () => {
+            if (!id) return;
+            try {
+              await syncMutation.mutateAsync({
+                id,
+                clearData: syncClearData,
+              });
+            } finally {
+              setSyncModalOpen(false);
+            }
+          }}
+        >
+          <Checkbox
+            checked={syncClearData}
+            onChange={(e) => setSyncClearData(e.target.checked)}
+          >
+            清空数据重新同步
+          </Checkbox>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
+            勾选后将删除所有音乐数据并重新完整同步，适合修复数据异常。
+          </p>
+        </Modal>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pb-4">
-          <Button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            上一页
-          </Button>
-          <span className="text-sm text-[var(--text-muted)]">
-            {page} / {totalPages}
-          </span>
-          <Button
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            下一页
-          </Button>
-        </div>
-      )}
-    </div>
+        {/* Content */}
+        {isLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <Spin />
+          </div>
+        ) : tab === "albums" ? (
+          <AlbumsGrid
+            albums={(albumsQuery.data?.items as MusicAlbumOutput[]) ?? []}
+            onAlbumClick={(albumId) => navInWindow("Album", { albumId })}
+          />
+        ) : tab === "artists" ? (
+          <ArtistsGrid
+            artists={(artistsQuery.data?.items as MusicArtistOutput[]) ?? []}
+            onArtistClick={(artistId) =>
+              navInWindow("Artist", { artistPersonId: artistId })
+            }
+          />
+        ) : (
+          <TracksTable
+            tracks={(tracksQuery.data?.items as MusicTrackOutput[]) ?? []}
+            onPlayTrack={handlePlayTrack}
+          />
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pb-4">
+            <Button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              上一页
+            </Button>
+            <span className="text-sm text-[var(--text-muted)]">
+              {page} / {totalPages}
+            </span>
+            <Button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              下一页
+            </Button>
+          </div>
+        )}
+      </div>
+    </MusicLayout>
   );
 }
 
