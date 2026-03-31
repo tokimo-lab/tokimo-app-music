@@ -109,7 +109,8 @@ function LiveProgressBar({
     let raf: number;
     const tick = () => {
       const d = getDuration();
-      const pct = d > 0 ? (getCurrentTime() / d) * 100 : 0;
+      const t = getCurrentTime();
+      const pct = d > 0 ? (t / d) * 100 : 0;
       if (fillRef.current) fillRef.current.style.width = `${pct}%`;
       raf = requestAnimationFrame(tick);
     };

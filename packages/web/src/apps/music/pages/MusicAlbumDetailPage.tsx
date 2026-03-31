@@ -15,21 +15,14 @@ import {
   Play,
   Sparkles,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import {
   PersonCard,
   SectionTitle,
 } from "@/apps/media/pages/media-detail-shared";
 import { api } from "@/generated/rust-api";
 import { resolveStoragePath } from "@/lib/storage-url";
-import {
-  type MenuBarConfig,
-  useBackgroundArt,
-  useMenuBar,
-  useMessage,
-  useMusicPlayer,
-  useWindowNav,
-} from "@/system";
+import { useBackgroundArt, useMusicPlayer, useWindowNav } from "@/system";
 import type { CreditOutput, MusicTrackOutput } from "@/types";
 import { MusicLayout } from "../components/MusicLayout";
 import { formatDuration, formatTotalDuration } from "./music-shared";
@@ -188,16 +181,6 @@ export default function MusicAlbumDetailPage() {
   const { params, goBack, navigate: navInWindow } = useWindowNav();
   const albumId = params.albumId as string | undefined;
   const { playTracks, addToQueue } = useMusicPlayer();
-  const message = useMessage();
-  const qc = useQueryClient();
-
-  const scrapeAlbumMutation = api.app.scrapeAlbum.useMutation({
-    onSuccess: () => {
-      message.success("刮削成功");
-      void api.app.getAlbumDetail.invalidate(qc, { albumId: albumId! });
-    },
-    onError: (e) => message.error(e.message || "刮削失败"),
-  });
 
   const { data: album, isLoading } = api.app.getAlbumDetail.useQuery(
     { albumId: albumId! },
@@ -213,35 +196,6 @@ export default function MusicAlbumDetailPage() {
       setBackgroundArt(null);
     };
   }, [album?.coverPath, setBackgroundArt]);
-
-  // ── MenuBar ───────────────────────────────────────────────────────────
-  const menuBarConfig: MenuBarConfig | null = useMemo(() => {
-    if (!albumId) return null;
-    return {
-      menus: [
-        {
-          key: "actions",
-          label: "操作",
-          items: [
-            {
-              key: "scrape",
-              label: album?.scrapedAt ? "重新刮削" : "刮削元数据",
-              icon: <Sparkles size={14} />,
-              disabled: scrapeAlbumMutation.isPending,
-              onClick: () => scrapeAlbumMutation.mutate({ albumId }),
-            },
-          ],
-        },
-      ],
-    };
-  }, [
-    albumId,
-    album?.scrapedAt,
-    scrapeAlbumMutation.isPending,
-    scrapeAlbumMutation.mutate,
-  ]);
-
-  useMenuBar(menuBarConfig);
 
   if (isLoading) {
     return (
