@@ -32,6 +32,11 @@ export const manifest: AppManifest = {
   supportedTypes: ["music", "audiobook", "podcast"],
   defaultSize: { width: 1200, height: 800 },
   component: () => import("./pages/MusicAppPage"),
+  views: {
+    "/": () => import("./pages/MusicAppPage"),
+    "/albums/:albumId": () => import("./pages/MusicAlbumDetailPage"),
+    "/artists/:personId": () => import("./pages/MusicArtistPage"),
+  },
   menuBar: () => import("./components/MusicMenuBar"),
 
   settings: audioLibrarySettings(),

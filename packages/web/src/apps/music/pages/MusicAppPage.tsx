@@ -102,11 +102,13 @@ function TrackRow({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicAppPage() {
-  const { params, navigate: navInWindow, updateMetadata } = useWindowNav();
-  const id = params.appId as string | undefined;
+  const { metadata, navigate, updateMetadata } = useWindowNav();
+  const id = metadata.appId as string | undefined;
   const { playTrack, playTracks } = useMusicPlayer();
 
-  const [tab, setTabRaw] = useState<TabKey>((params.tab as TabKey) || "albums");
+  const [tab, setTabRaw] = useState<TabKey>(
+    (metadata.tab as TabKey) || "albums",
+  );
   const setTab = useCallback(
     (t: TabKey) => {
       setTabRaw(t);
@@ -215,13 +217,15 @@ export default function MusicAppPage() {
           ) : tab === "albums" ? (
             <AlbumsGrid
               albums={(albumsQuery.data?.items as MusicAlbumOutput[]) ?? []}
-              onAlbumClick={(albumId) => navInWindow("Album", { albumId })}
+              onAlbumClick={(albumId) =>
+                navigate(`/albums/${albumId}`, "Album")
+              }
             />
           ) : tab === "artists" ? (
             <ArtistsGrid
               artists={(artistsQuery.data?.items as MusicArtistOutput[]) ?? []}
               onArtistClick={(artistId) =>
-                navInWindow("Artist", { artistPersonId: artistId })
+                navigate(`/artists/${artistId}`, "Artist")
               }
             />
           ) : (

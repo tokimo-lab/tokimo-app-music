@@ -7,8 +7,8 @@ import type { MenuBarConfig } from "@/system";
 import { useMenuBar, useMessage, useWindowNav } from "@/system";
 
 export default function MusicMenuBar({ children }: { children: ReactNode }) {
-  const { params, navigate: navInWindow } = useWindowNav();
-  const id = params.appId as string | undefined;
+  const { metadata, navigate } = useWindowNav();
+  const id = metadata.appId as string | undefined;
   const message = useMessage();
   const qc = useQueryClient();
 
@@ -81,10 +81,10 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
         appId: id,
         searchType: "music" as const,
         onSelect: (item) =>
-          navInWindow(item.title ?? "Album", { albumId: item.id }),
+          navigate(`/albums/${item.id}`, item.title ?? "Album"),
       },
     };
-  }, [id, qc, navInWindow, syncMutation.isPending, scrapeMutation.isPending]);
+  }, [id, qc, navigate, syncMutation.isPending, scrapeMutation.isPending]);
 
   useMenuBar(menuBarConfig);
 

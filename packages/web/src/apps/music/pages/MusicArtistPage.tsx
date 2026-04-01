@@ -10,9 +10,9 @@ import { AlbumCard } from "./music-shared";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicArtistPage() {
-  const { params, goBack, navigate: navInWindow } = useWindowNav();
-  const id = params.appId as string | undefined;
-  const personId = params.artistPersonId as string | undefined;
+  const { params, metadata, goBack, navigate } = useWindowNav();
+  const id = metadata.appId as string | undefined;
+  const personId = params.personId;
 
   const { setBackgroundArt } = useBackgroundArt();
 
@@ -134,7 +134,7 @@ export default function MusicArtistPage() {
                   key={album.id}
                   album={album}
                   onClick={() =>
-                    navInWindow(album.title ?? "Album", { albumId: album.id })
+                    navigate(`/albums/${album.id}`, album.title ?? "Album")
                   }
                 />
               ))}

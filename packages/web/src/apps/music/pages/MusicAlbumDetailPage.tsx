@@ -178,8 +178,8 @@ function CreditsSection({ credits }: { credits: CreditOutput[] }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicAlbumDetailPage() {
-  const { params, goBack, navigate: navInWindow } = useWindowNav();
-  const albumId = params.albumId as string | undefined;
+  const { params, goBack, navigate } = useWindowNav();
+  const albumId = params.albumId;
   const { playTracks, addToQueue } = useMusicPlayer();
 
   const { data: album, isLoading } = api.app.getAlbumDetail.useQuery(
@@ -312,9 +312,10 @@ export default function MusicAlbumDetailPage() {
                         ),
                     );
                     if (artist) {
-                      navInWindow(artist.person.name, {
-                        artistPersonId: artist.person.id,
-                      });
+                      navigate(
+                        `/artists/${artist.person.id}`,
+                        artist.person.name,
+                      );
                     }
                   }}
                 >
