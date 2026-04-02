@@ -165,7 +165,6 @@ function CreditsSection({ credits }: { credits: CreditOutput[] }) {
         {credits.map((c) => (
           <PersonCard
             key={c.id}
-            personId={c.person.id}
             name={c.person.name}
             sub={c.role}
             profilePath={c.person.profilePath}
