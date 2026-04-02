@@ -149,7 +149,7 @@ function LyricsScroller({
 
   if (lines.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-neutral-400 dark:text-neutral-500">
+      <div className="flex h-full items-center justify-center text-fg-muted">
         <p className="text-lg">暂无歌词</p>
       </div>
     );
@@ -173,7 +173,7 @@ function LyricsScroller({
               "w-full cursor-pointer px-2 py-2.5 text-center transition-all duration-300",
               isActive
                 ? "scale-105 text-lg font-bold"
-                : "text-base font-normal text-neutral-400 hover:text-neutral-200 dark:text-neutral-500 dark:hover:text-neutral-300",
+                : "text-base font-normal text-fg-muted hover:text-neutral-200 dark:text-neutral-500 dark:hover:text-neutral-300",
             )}
           >
             {isActive ? (
@@ -225,7 +225,7 @@ function VinylDisc({
               className="h-full w-full object-cover"
             />
           ) : (
-            <Disc3 className="h-16 w-16 text-neutral-600" />
+            <Disc3 className="h-16 w-16 text-fg-muted" />
           )}
         </div>
 
@@ -351,7 +351,7 @@ const FullScreenLyrics = memo(function FullScreenLyrics({
   if (plainText) {
     return (
       <div className="flex h-full items-start justify-center overflow-y-auto py-[20vh]">
-        <p className="max-w-md whitespace-pre-wrap text-center text-base leading-relaxed text-neutral-400">
+        <p className="max-w-md whitespace-pre-wrap text-center text-base leading-relaxed text-fg-muted">
           {plainText}
         </p>
       </div>
@@ -360,7 +360,7 @@ const FullScreenLyrics = memo(function FullScreenLyrics({
 
   return (
     <div className="flex h-full items-center justify-center">
-      <p className="text-lg text-neutral-500">暂无歌词</p>
+      <p className="text-lg text-fg-muted">暂无歌词</p>
     </div>
   );
 });
