@@ -1,6 +1,6 @@
 import { Disc3, Heart, Play, User } from "lucide-react";
 import { memo } from "react";
-import { resolveStoragePath } from "@/lib/storage-url";
+import { posterThumbUrl } from "@/lib/thumb";
 import type { MusicAlbumOutput, MusicArtistOutput } from "@/types";
 
 export function formatDuration(seconds: number | null | undefined): string {
@@ -37,7 +37,7 @@ export const AlbumCard = memo(function AlbumCard({
       <div className="relative aspect-square overflow-hidden bg-[var(--bg-skeleton)]">
         {album.coverPath ? (
           <img
-            src={resolveStoragePath(album.coverPath)}
+            src={posterThumbUrl(album.coverPath, 200)}
             alt={album.title}
             decoding="async"
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
@@ -106,7 +106,7 @@ export const ArtistCard = memo(function ArtistCard({
       <div className="relative aspect-square w-full overflow-hidden rounded-full bg-[var(--bg-skeleton)]">
         {artist.profilePath ? (
           <img
-            src={resolveStoragePath(artist.profilePath)}
+            src={posterThumbUrl(artist.profilePath, 200)}
             alt={artist.name}
             decoding="async"
             className="h-full w-full object-cover transition-transform group-hover:scale-105"

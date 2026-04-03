@@ -3,7 +3,7 @@ import { User } from "lucide-react";
 import { useEffect } from "react";
 import { SectionTitle } from "@/apps/media/pages/media-detail-shared";
 import { api } from "@/generated/rust-api";
-import { resolveStoragePath } from "@/lib/storage-url";
+import { posterThumbUrl } from "@/lib/thumb";
 import { useBackgroundArt, useWindowNav } from "@/system";
 import { MusicLayout } from "../components/MusicLayout";
 import { AlbumCard } from "./music-shared";
@@ -23,7 +23,7 @@ export default function MusicArtistPage() {
 
   useEffect(() => {
     if (artist?.profilePath) {
-      setBackgroundArt(resolveStoragePath(artist.profilePath));
+      setBackgroundArt(posterThumbUrl(artist.profilePath, 1280) ?? null);
     }
     return () => {
       setBackgroundArt(null);
@@ -65,7 +65,7 @@ export default function MusicArtistPage() {
             <div className="relative h-[200px] w-[200px] flex-shrink-0 overflow-hidden rounded-full shadow-2xl">
               {artist.profilePath ? (
                 <img
-                  src={resolveStoragePath(artist.profilePath)}
+                  src={posterThumbUrl(artist.profilePath, 300)}
                   alt={artist.name}
                   className="h-full w-full object-cover"
                 />

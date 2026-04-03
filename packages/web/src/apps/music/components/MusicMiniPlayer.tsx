@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { resolveStoragePath } from "@/lib/storage-url";
+import { posterThumbUrl } from "@/lib/thumb";
 import { useLyrics } from "@/shared/hooks/useLyrics";
 import { type RepeatMode, useMusicPlayer } from "@/system";
 import { FullScreenPlayer } from "./FullScreenPlayer";
@@ -32,7 +32,7 @@ function formatTime(seconds: number): string {
 function getCoverUrl(coverPath: string | null | undefined): string | null {
   if (!coverPath) return null;
   if (coverPath.startsWith("http")) return coverPath;
-  return resolveStoragePath(coverPath);
+  return posterThumbUrl(coverPath, 300) ?? null;
 }
 
 // ── Karaoke text for mini player — reads progressRef via RAF ─────────────────

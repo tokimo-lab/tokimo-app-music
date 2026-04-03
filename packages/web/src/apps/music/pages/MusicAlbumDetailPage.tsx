@@ -21,7 +21,7 @@ import {
   SectionTitle,
 } from "@/apps/media/pages/media-detail-shared";
 import { api } from "@/generated/rust-api";
-import { resolveStoragePath } from "@/lib/storage-url";
+import { posterThumbUrl } from "@/lib/thumb";
 import { useBackgroundArt, useMusicPlayer, useWindowNav } from "@/system";
 import type { CreditOutput, MusicTrackOutput } from "@/types";
 import { MusicLayout } from "../components/MusicLayout";
@@ -189,7 +189,7 @@ export default function MusicAlbumDetailPage() {
   const { setBackgroundArt } = useBackgroundArt();
   useEffect(() => {
     if (album?.coverPath) {
-      setBackgroundArt(resolveStoragePath(album.coverPath));
+      setBackgroundArt(posterThumbUrl(album.coverPath, 1280) ?? null);
     }
     return () => {
       setBackgroundArt(null);
@@ -263,7 +263,7 @@ export default function MusicAlbumDetailPage() {
             <div className="relative w-[200px] flex-shrink-0 overflow-hidden rounded-xl shadow-2xl md:w-[250px]">
               {album.coverPath ? (
                 <img
-                  src={resolveStoragePath(album.coverPath)}
+                  src={posterThumbUrl(album.coverPath, 300)}
                   alt={album.title}
                   className="aspect-square w-full object-cover"
                 />

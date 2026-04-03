@@ -29,7 +29,7 @@ import {
   savePlayerCoverBg,
   savePlayerVisualMode,
 } from "@/lib/storage";
-import { resolveStoragePath } from "@/lib/storage-url";
+import { posterThumbUrl } from "@/lib/thumb";
 import type { PlayerVisualMode } from "@/lib/types";
 import { useUiPreference } from "@/lib/use-preference";
 import { useLyrics } from "@/shared/hooks/useLyrics";
@@ -60,7 +60,7 @@ import {
 function getCoverUrl(coverPath: string | null | undefined): string | null {
   if (!coverPath) return null;
   if (coverPath.startsWith("http")) return coverPath;
-  return resolveStoragePath(coverPath);
+  return posterThumbUrl(coverPath, 300) ?? null;
 }
 
 function formatTime(seconds: number): string {
