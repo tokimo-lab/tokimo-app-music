@@ -33,9 +33,9 @@ import { resolveStoragePath } from "@/lib/storage-url";
 import type { PlayerVisualMode } from "@/lib/types";
 import { useUiPreference } from "@/lib/use-preference";
 import { useLyrics } from "@/shared/hooks/useLyrics";
-import { AudioVisualizer } from "@/shell/player/AudioVisualizer";
-import { CoverArtDisplay } from "@/shell/player/CoverArtDisplay";
-import { VisualizationPicker } from "@/shell/player/VisualizationPicker";
+import { AudioVisualizer } from "@/shell/player/audio/AudioVisualizer";
+import { CoverArtDisplay } from "@/shell/player/audio/CoverArtDisplay";
+import { VisualizationPicker } from "@/shell/player/audio/VisualizationPicker";
 import {
   type AlchemySceneInfo,
   AlchemyVisualizer,
@@ -53,7 +53,7 @@ import {
   TunnelVisualizer,
   WaveformVisualizer,
   WaveVisualizer,
-} from "@/shell/player/visualizations";
+} from "@/shell/player/audio/visualizations";
 import { type RepeatMode, useMusicPlayer } from "@/system";
 import type { PlayerPrefs } from "@/types";
 
