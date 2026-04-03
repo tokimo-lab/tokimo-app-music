@@ -33,9 +33,11 @@ import { resolveStoragePath } from "@/lib/storage-url";
 import type { PlayerVisualMode } from "@/lib/types";
 import { useUiPreference } from "@/lib/use-preference";
 import { useLyrics } from "@/shared/hooks/useLyrics";
-import { AudioVisualizer } from "@/shell/player/audio/AudioVisualizer";
-import { CoverArtDisplay } from "@/shell/player/audio/CoverArtDisplay";
-import { VisualizationPicker } from "@/shell/player/audio/VisualizationPicker";
+import { type RepeatMode, useMusicPlayer } from "@/system";
+import type { PlayerPrefs } from "@/types";
+import { AudioVisualizer } from "./visualizer/AudioVisualizer";
+import { CoverArtDisplay } from "./visualizer/CoverArtDisplay";
+import { VisualizationPicker } from "./visualizer/VisualizationPicker";
 import {
   type AlchemySceneInfo,
   AlchemyVisualizer,
@@ -53,9 +55,7 @@ import {
   TunnelVisualizer,
   WaveformVisualizer,
   WaveVisualizer,
-} from "@/shell/player/audio/visualizations";
-import { type RepeatMode, useMusicPlayer } from "@/system";
-import type { PlayerPrefs } from "@/types";
+} from "./visualizer/visualizations";
 
 function getCoverUrl(coverPath: string | null | undefined): string | null {
   if (!coverPath) return null;
