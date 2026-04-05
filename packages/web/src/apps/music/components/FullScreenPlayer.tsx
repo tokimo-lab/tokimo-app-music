@@ -31,7 +31,7 @@ import {
 } from "@/lib/storage";
 import { posterThumbUrl } from "@/lib/thumb";
 import type { PlayerVisualMode } from "@/lib/types";
-import { useUiPreference } from "@/lib/use-preference";
+import { useUiPreference } from "@/shared/hooks/use-preference";
 import { useLyrics } from "@/shared/hooks/useLyrics";
 import { type RepeatMode, useMusicPlayer } from "@/system";
 import type { PlayerPrefs } from "@/types";
