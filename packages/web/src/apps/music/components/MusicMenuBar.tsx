@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Checkbox, Modal } from "@tokiomo/components";
-import { FolderSync, RefreshCw, Sparkles } from "lucide-react";
+import { FolderSync, RefreshCw } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { api } from "@/generated/rust-api";
 import type { MenuBarConfig } from "@/system";
@@ -14,7 +14,6 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
 
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncClearData, setSyncClearData] = useState(false);
-  const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
 
   const syncMutation = api.app.sync.useMutation({
     onSuccess: () => {
@@ -24,17 +23,6 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
       api.app.listTracks.invalidate(qc);
     },
     onError: (e) => message.error(e.message || "同步失败"),
-  });
-
-  const scrapeMutation = api.app.batchScrapeMusic.useMutation({
-    onSuccess: (res) => {
-      message.success(
-        `刮削完成：成功 ${res.success}，跳过 ${res.skipped}，失败 ${res.failed}`,
-      );
-      setScrapeModalOpen(false);
-      api.app.listAlbums.invalidate(qc);
-    },
-    onError: (e) => message.error(e.message || "刮削失败"),
   });
 
   const menuBarConfig: MenuBarConfig | null = useMemo(() => {
@@ -66,14 +54,6 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
                 setSyncModalOpen(true);
               },
             },
-            { type: "divider" as const },
-            {
-              key: "scrape",
-              label: "刮削音乐元数据",
-              icon: <Sparkles size={14} />,
-              disabled: scrapeMutation.isPending,
-              onClick: () => setScrapeModalOpen(true),
-            },
           ],
         },
       ],
@@ -84,35 +64,13 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
           navigate(`/albums/${item.id}`, item.title ?? "Album"),
       },
     };
-  }, [id, qc, navigate, syncMutation.isPending, scrapeMutation.isPending]);
+  }, [id, qc, navigate, syncMutation.isPending]);
 
   useMenuBar(menuBarConfig);
 
   return (
     <>
       {children}
-
-      <Modal
-        open={scrapeModalOpen}
-        title="刮削音乐元数据"
-        okText="开始刮削"
-        cancelText="取消"
-        confirmLoading={scrapeMutation.isPending}
-        onCancel={() => setScrapeModalOpen(false)}
-        onOk={async () => {
-          if (!id) return;
-          await scrapeMutation.mutateAsync({ appId: id });
-        }}
-      >
-        <p className="text-sm text-[var(--text-secondary)]">
-          将通过 MusicBrainz
-          自动匹配专辑封面、发行年份、流派等元数据。已刮削的专辑将被跳过。
-        </p>
-        <p className="mt-2 text-xs text-[var(--text-muted)]">
-          提示：刮削请求受 MusicBrainz
-          速率限制，专辑较多时耗时较长，请耐心等待。
-        </p>
-      </Modal>
 
       <Modal
         open={syncModalOpen}
