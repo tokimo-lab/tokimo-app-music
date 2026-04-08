@@ -107,7 +107,7 @@ function AlbumsGrid({
   onAlbumClick,
 }: {
   albums: MusicAlbumOutput[];
-  onAlbumClick: (albumId: string) => void;
+  onAlbumClick: (albumId: string, albumTitle: string) => void;
 }) {
   if (!albums.length) return <Empty description="暂无专辑" />;
   return (
@@ -116,7 +116,7 @@ function AlbumsGrid({
         <AlbumCard
           key={album.id}
           album={album}
-          onClick={() => onAlbumClick(album.id)}
+          onClick={() => onAlbumClick(album.id, album.title ?? "Album")}
         />
       ))}
     </div>
@@ -128,7 +128,7 @@ function ArtistsGrid({
   onArtistClick,
 }: {
   artists: MusicArtistOutput[];
-  onArtistClick: (artistId: string) => void;
+  onArtistClick: (artistId: string, artistName: string) => void;
 }) {
   if (!artists.length) return <Empty description="暂无艺术家" />;
   return (
@@ -137,7 +137,7 @@ function ArtistsGrid({
         <ArtistCard
           key={artist.id}
           artist={artist}
-          onClick={() => onArtistClick(artist.id)}
+          onClick={() => onArtistClick(artist.id, artist.name ?? "Artist")}
         />
       ))}
     </div>
@@ -274,13 +274,15 @@ export default function MusicContent({ musicId }: { musicId: string }) {
         ) : tab === "albums" ? (
           <AlbumsGrid
             albums={albumsQuery.data?.items ?? []}
-            onAlbumClick={(albumId) => navigate(`/albums/${albumId}`, "Album")}
+            onAlbumClick={(albumId, albumTitle) =>
+              navigate(`/albums/${albumId}`, `TokimoMusic · ${albumTitle}`)
+            }
           />
         ) : tab === "artists" ? (
           <ArtistsGrid
             artists={artistsQuery.data?.items ?? []}
-            onArtistClick={(artistId) =>
-              navigate(`/artists/${artistId}`, "Artist")
+            onArtistClick={(artistId, artistName) =>
+              navigate(`/artists/${artistId}`, `TokimoMusic · ${artistName}`)
             }
           />
         ) : (

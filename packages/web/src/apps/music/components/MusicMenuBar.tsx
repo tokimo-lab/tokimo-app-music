@@ -61,7 +61,10 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
         appId: musicId,
         searchType: "music" as const,
         onSelect: (item) =>
-          navigate(`/albums/${item.id}`, item.title ?? "Album"),
+          navigate(
+            `/albums/${item.id}`,
+            `TokimoMusic · ${item.title ?? "Album"}`,
+          ),
       },
     };
   }, [musicId, qc, navigate, syncMutation.isPending]);

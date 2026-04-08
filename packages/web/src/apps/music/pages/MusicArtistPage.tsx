@@ -134,7 +134,10 @@ export default function MusicArtistPage() {
                   key={album.id}
                   album={album}
                   onClick={() =>
-                    navigate(`/albums/${album.id}`, album.title ?? "Album")
+                    navigate(
+                      `/albums/${album.id}`,
+                      `TokimoMusic · ${album.title ?? "Album"}`,
+                    )
                   }
                 />
               ))}

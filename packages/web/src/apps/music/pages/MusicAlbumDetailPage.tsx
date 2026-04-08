@@ -314,7 +314,7 @@ export default function MusicAlbumDetailPage() {
                     if (artist) {
                       navigate(
                         `/artists/${artist.person.id}`,
-                        artist.person.name,
+                        `TokimoMusic · ${artist.person.name}`,
                       );
                     }
                   }}

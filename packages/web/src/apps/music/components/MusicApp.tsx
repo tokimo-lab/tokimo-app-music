@@ -15,7 +15,7 @@ const LoadingFallback = (
 );
 
 export default function MusicApp() {
-  const { LazyViewComponent, route, navigate } = useWindowNav();
+  const { LazyViewComponent, route, navigate, updateTitle } = useWindowNav();
   const { data: libraries, isLoading } = api.music.list.useQuery();
   const [containerRef, containerWidth] = useContainerWidth();
   const sidebarCollapsed = containerWidth > 0 && containerWidth < 720;
@@ -31,6 +31,14 @@ export default function MusicApp() {
     setActiveLibraryId(id);
     localStorage.setItem(STORAGE_KEY, id);
   }, [libraries]);
+
+  const activeLibrary = libraries?.find((l) => l.id === activeLibraryId);
+
+  useEffect(() => {
+    if (route === "/" && activeLibrary) {
+      updateTitle(`TokimoMusic · ${activeLibrary.name}`);
+    }
+  }, [route, activeLibrary, updateTitle]);
 
   const handleSelectLibrary = (id: string) => {
     setActiveLibraryId(id);
@@ -56,7 +64,6 @@ export default function MusicApp() {
     );
   }
 
-  const activeLibrary = libraries.find((l) => l.id === activeLibraryId);
   const isDetailPage = route !== "/" && LazyViewComponent;
 
   return (
