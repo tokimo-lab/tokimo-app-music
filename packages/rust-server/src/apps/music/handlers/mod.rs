@@ -96,16 +96,7 @@ pub struct MusicRecentlyAddedQuery {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistDetailQuery {
-    /// New music-scoped route sends `musicId`.
-    pub music_id: Option<String>,
-    /// Legacy generic route (`/api/apps/artist/...`) sends `appId`.
-    pub app_id: Option<String>,
-}
-
-impl ArtistDetailQuery {
-    pub fn resolve_music_id(&self) -> Option<&str> {
-        self.music_id.as_deref().or(self.app_id.as_deref())
-    }
+    pub music_id: String,
 }
 
 // ── Shared helpers ──

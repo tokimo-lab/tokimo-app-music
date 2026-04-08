@@ -121,10 +121,7 @@ pub async fn get_artist_detail(
     Query(q): Query<ArtistDetailQuery>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
     let pid = parse_uuid(&person_id)?;
-    let music_id_str = q
-        .resolve_music_id()
-        .ok_or_else(|| AppError::BadRequest("musicId or appId is required".into()))?;
-    let lid = parse_uuid(music_id_str)?;
+    let lid = parse_uuid(&q.music_id)?;
     let detail = MediaContentRepo::get_artist_detail(&state.db, pid, lid)
         .await?
         .not_found(format!("artist {person_id} not found"))?;

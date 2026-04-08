@@ -129,9 +129,9 @@ export default function MusicAppPage() {
 
   const albumSortParams = parseAlbumSort(albumSort);
 
-  const albumsQuery = api.app.listAlbums.useQuery(
+  const albumsQuery = api.music.listAlbums.useQuery(
     {
-      appId: id!,
+      id: id!,
       page,
       pageSize: PAGE_SIZE,
       ...albumSortParams,
@@ -139,18 +139,18 @@ export default function MusicAppPage() {
     { enabled: !!id && tab === "albums" },
   );
 
-  const artistsQuery = api.app.listArtists.useQuery(
+  const artistsQuery = api.music.listArtists.useQuery(
     {
-      appId: id!,
+      id: id!,
       page,
       pageSize: PAGE_SIZE,
     },
     { enabled: !!id && tab === "artists" },
   );
 
-  const tracksQuery = api.app.listTracks.useQuery(
+  const tracksQuery = api.music.listTracks.useQuery(
     {
-      appId: id!,
+      id: id!,
       page,
       pageSize: PAGE_SIZE,
     },
