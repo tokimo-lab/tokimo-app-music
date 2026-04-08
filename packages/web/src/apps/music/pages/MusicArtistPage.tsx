@@ -10,15 +10,15 @@ import { AlbumCard } from "./music-shared";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicArtistPage() {
-  const { params, metadata, goBack, navigate } = useWindowNav();
-  const id = metadata.appId as string | undefined;
+  const { params, goBack, navigate } = useWindowNav();
+  const musicId = localStorage.getItem("music-active-library") ?? undefined;
   const personId = params.personId;
 
   const { setBackgroundArt } = useBackgroundArt();
 
-  const { data: artist, isLoading } = api.app.getArtistDetail.useQuery(
-    { personId: personId!, appId: id! },
-    { enabled: !!personId && !!id },
+  const { data: artist, isLoading } = api.music.getArtistDetail.useQuery(
+    { id: personId!, musicId: musicId! },
+    { enabled: !!personId && !!musicId },
   );
 
   useEffect(() => {

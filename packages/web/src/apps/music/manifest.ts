@@ -1,70 +1,22 @@
-import type { SettingsSectionDef } from "@/lib/settings-defs";
+import { Music } from "lucide-react";
 import type { AppManifest } from "../_framework/types";
-
-function audioLibrarySettings(): SettingsSectionDef[] {
-  return [
-    {
-      key: "display",
-      label: "settings.library.display",
-      fields: [
-        {
-          key: "defaultSort",
-          type: "select",
-          label: "settings.library.defaultSort",
-          defaultValue: "addedAt",
-          options: [
-            { label: "settings.library.sortAddedAt", value: "addedAt" },
-            { label: "settings.library.sortTitleAsc", value: "title_asc" },
-            { label: "settings.library.sortTitleDesc", value: "title_desc" },
-            { label: "settings.library.sortYearDesc", value: "year_desc" },
-            { label: "settings.library.sortYearAsc", value: "year_asc" },
-          ],
-        },
-      ],
-    },
-  ];
-}
 
 export const manifest: AppManifest = {
   id: "music",
-  name: "Music Library",
-  category: "page",
-  supportedTypes: ["music", "audiobook", "podcast"],
+  name: "TokimoMusic",
+  category: "system",
+  fullBleed: true,
   defaultSize: { width: 1200, height: 800 },
-  component: () => import("./pages/MusicAppPage"),
+  icon: Music,
+  image: "/page-icons/music.png",
+  color: "#ec4899",
+  labelKey: "music",
+  order: 2,
+  component: () => import("./components/MusicApp"),
+  menuBar: () => import("./components/MusicMenuBar"),
   views: {
-    "/": () => import("./pages/MusicAppPage"),
+    "/": () => import("./components/MusicApp"),
     "/albums/:albumId": () => import("./pages/MusicAlbumDetailPage"),
     "/artists/:personId": () => import("./pages/MusicArtistPage"),
-  },
-  menuBar: () => import("./components/MusicMenuBar"),
-
-  settings: audioLibrarySettings(),
-  settingsByType: {
-    music: [
-      ...audioLibrarySettings(),
-      {
-        key: "playback",
-        label: "settings.music.playback",
-        fields: [
-          {
-            key: "crossfade",
-            type: "slider",
-            label: "settings.music.crossfade",
-            description: "settings.music.crossfadeDesc",
-            defaultValue: 0,
-            min: 0,
-            max: 12,
-            step: 1,
-          },
-          {
-            key: "gapless",
-            type: "boolean",
-            label: "settings.music.gapless",
-            defaultValue: true,
-          },
-        ],
-      },
-    ],
   },
 };

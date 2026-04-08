@@ -36,8 +36,9 @@ function FavoriteButton({
   albumId: string;
 }) {
   const qc = useQueryClient();
-  const toggle = api.app.toggleAlbumFavorite.useMutation({
-    onSuccess: () => void api.app.getAlbumDetail.invalidate(qc, { albumId }),
+  const toggle = api.music.toggleAlbumFavorite.useMutation({
+    onSuccess: () =>
+      void api.music.getAlbumDetail.invalidate(qc, { id: albumId }),
   });
   return (
     <button
@@ -48,7 +49,7 @@ function FavoriteButton({
           ? "text-red-500"
           : "text-[var(--text-muted)] hover:text-red-400"
       }`}
-      onClick={() => toggle.mutate({ albumId })}
+      onClick={() => toggle.mutate(albumId!)}
     >
       <Heart className={`h-5 w-5 ${isFavorite ? "fill-current" : ""}`} />
     </button>
@@ -181,8 +182,8 @@ export default function MusicAlbumDetailPage() {
   const albumId = params.albumId;
   const { playTracks, addToQueue } = useMusicPlayer();
 
-  const { data: album, isLoading } = api.app.getAlbumDetail.useQuery(
-    { albumId: albumId! },
+  const { data: album, isLoading } = api.music.getAlbumDetail.useQuery(
+    { id: albumId! },
     { enabled: !!albumId },
   );
 

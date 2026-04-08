@@ -7,26 +7,26 @@ import type { MenuBarConfig } from "@/system";
 import { useMenuBar, useMessage, useWindowNav } from "@/system";
 
 export default function MusicMenuBar({ children }: { children: ReactNode }) {
-  const { metadata, navigate } = useWindowNav();
-  const id = metadata.appId as string | undefined;
+  const { navigate } = useWindowNav();
+  const musicId = localStorage.getItem("music-active-library") ?? undefined;
   const message = useMessage();
   const qc = useQueryClient();
 
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncClearData, setSyncClearData] = useState(false);
 
-  const syncMutation = api.app.sync.useMutation({
+  const syncMutation = api.music.sync.useMutation({
     onSuccess: () => {
       message.success("同步已开始");
-      api.app.listAlbums.invalidate(qc);
-      api.app.listArtists.invalidate(qc);
-      api.app.listTracks.invalidate(qc);
+      api.music.listAlbums.invalidate(qc);
+      api.music.listArtists.invalidate(qc);
+      api.music.listTracks.invalidate(qc);
     },
     onError: (e) => message.error(e.message || "同步失败"),
   });
 
   const menuBarConfig: MenuBarConfig | null = useMemo(() => {
-    if (!id) return null;
+    if (!musicId) return null;
     return {
       menus: [
         {
@@ -38,9 +38,9 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
               label: "刷新",
               icon: <RefreshCw size={14} />,
               onClick: () => {
-                api.app.listAlbums.invalidate(qc);
-                api.app.listArtists.invalidate(qc);
-                api.app.listTracks.invalidate(qc);
+                api.music.listAlbums.invalidate(qc);
+                api.music.listArtists.invalidate(qc);
+                api.music.listTracks.invalidate(qc);
               },
             },
             { type: "divider" as const },
@@ -58,13 +58,13 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
         },
       ],
       search: {
-        appId: id,
+        appId: musicId,
         searchType: "music" as const,
         onSelect: (item) =>
           navigate(`/albums/${item.id}`, item.title ?? "Album"),
       },
     };
-  }, [id, qc, navigate, syncMutation.isPending]);
+  }, [musicId, qc, navigate, syncMutation.isPending]);
 
   useMenuBar(menuBarConfig);
 
@@ -80,10 +80,10 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
         confirmLoading={syncMutation.isPending}
         onCancel={() => setSyncModalOpen(false)}
         onOk={async () => {
-          if (!id) return;
+          if (!musicId) return;
           try {
             await syncMutation.mutateAsync({
-              id,
+              id: musicId,
               clearData: syncClearData,
             });
           } finally {
