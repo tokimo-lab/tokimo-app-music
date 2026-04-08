@@ -19,4 +19,9 @@ export const manifest: AppManifest = {
     "/albums/:albumId": () => import("./pages/MusicAlbumDetailPage"),
     "/artists/:personId": () => import("./pages/MusicArtistPage"),
   },
+
+  userSettings: {
+    order: 11,
+    libraryDomain: "music",
+  },
 };
