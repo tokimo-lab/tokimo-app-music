@@ -31,7 +31,7 @@ export const AlbumCard = memo(function AlbumCard({
   return (
     <button
       type="button"
-      className="group w-full cursor-pointer overflow-hidden rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] text-left transition-shadow hover:shadow-md"
+      className="group w-full cursor-pointer overflow-hidden rounded-lg border border-border-base bg-[var(--bg-glass)] text-left transition-shadow hover:shadow-md"
       onClick={onClick}
     >
       <div className="relative aspect-square overflow-hidden bg-[var(--bg-skeleton)]">
@@ -100,7 +100,7 @@ export const ArtistCard = memo(function ArtistCard({
   return (
     <button
       type="button"
-      className="group flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)] p-4 text-center transition-shadow hover:shadow-md"
+      className="group flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-border-base bg-[var(--bg-glass)] p-4 text-center transition-shadow hover:shadow-md"
       onClick={onClick}
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-full bg-[var(--bg-skeleton)]">

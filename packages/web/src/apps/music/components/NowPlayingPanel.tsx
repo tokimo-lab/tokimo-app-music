@@ -88,7 +88,7 @@ export function NowPlayingPanel({ open, onClose }: NowPlayingPanelProps) {
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--glass-border)] px-4 py-3 select-none">
+        <div className="flex items-center justify-between border-b border-border-base px-4 py-3 select-none">
           <div className="flex items-center gap-2">
             <ListMusic className="h-5 w-5 text-[var(--text-muted)]" />
             <span className="text-sm font-semibold text-[var(--text-primary)]">

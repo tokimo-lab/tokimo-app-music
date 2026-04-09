@@ -314,9 +314,9 @@ function TracksTable({
 }) {
   if (!tracks.length) return <Empty description="暂无曲目" />;
   return (
-    <div className="rounded-lg border border-[var(--glass-border)] bg-[var(--bg-glass)]">
+    <div className="rounded-lg border border-border-base bg-[var(--bg-glass)]">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-[var(--glass-border)] px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
+      <div className="flex items-center gap-3 border-b border-border-base px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
         <span className="w-8 flex-shrink-0 text-center">#</span>
         <span className="min-w-0 flex-1">标题</span>
         <span className="hidden w-[140px] flex-shrink-0 sm:block">艺术家</span>
@@ -326,7 +326,7 @@ function TracksTable({
         </span>
       </div>
       {/* Rows */}
-      <div className="divide-y divide-[var(--glass-border)]">
+      <div className="divide-y divide-[var(--border-base)]">
         {tracks.map((track, i) => (
           <TrackRow
             key={track.id}
