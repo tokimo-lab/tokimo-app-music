@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftOutlined,
   Button,
-  HorizontalScroll,
+  ScrollArea,
   Spin,
   Tag,
 } from "@tokiomo/components";
@@ -162,7 +162,11 @@ function CreditsSection({ credits }: { credits: CreditOutput[] }) {
   return (
     <section className="mt-8">
       <SectionTitle>艺术家</SectionTitle>
-      <HorizontalScroll innerClassName="gap-3 px-0.5 pb-2 pt-0.5">
+      <ScrollArea
+        direction="horizontal"
+        hideScrollbar
+        innerClassName="gap-3 px-0.5 pb-2 pt-0.5"
+      >
         {credits.map((c) => (
           <PersonCard
             key={c.id}
@@ -171,7 +175,7 @@ function CreditsSection({ credits }: { credits: CreditOutput[] }) {
             profilePath={c.person.profilePath}
           />
         ))}
-      </HorizontalScroll>
+      </ScrollArea>
     </section>
   );
 }
