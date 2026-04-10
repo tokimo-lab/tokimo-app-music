@@ -4,7 +4,7 @@
 //! Lyrics: LrcLib (free, no API key).
 //! Cover art: Cover Art Archive (primary) → iTunes (fallback).
 
-use crate::url_util::url_encode;
+use crate::common::url_util::url_encode;
 use std::sync::Arc;
 
 use chrono::Utc;
