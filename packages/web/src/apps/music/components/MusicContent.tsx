@@ -1,4 +1,4 @@
-import { Button, Empty, PillTabBar, Spin, Tag } from "@tokiomo/components";
+import { Empty, PillTabBar, Spin, Tag } from "@tokiomo/components";
 import {
   ArrowDownUp,
   Clock,
@@ -8,8 +8,9 @@ import {
   Pause,
   Play,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/generated/rust-api";
+import { useInfiniteScroll } from "@/shared/hooks/use-infinite-scroll";
 import { useMusicPlayer, useWindowNav } from "@/system";
 import type {
   MusicAlbumOutput,
@@ -222,8 +223,32 @@ export default function MusicContent({ musicId }: { musicId: string }) {
       : tab === "artists"
         ? artistsQuery
         : tracksQuery;
-  const total = activeQuery.data?.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  type AnyMusicItem = MusicAlbumOutput | MusicArtistOutput | MusicTrackOutput;
+
+  const { items, total, hasMore, sentinelRef, reset } =
+    useInfiniteScroll<AnyMusicItem>({
+      queryData: activeQuery.data as
+        | { items: AnyMusicItem[]; total: number; page: number }
+        | undefined,
+      isFetching: activeQuery.isFetching,
+      onLoadMore: () => setPage((p) => p + 1),
+    });
+
+  const resetAll = useCallback(() => {
+    reset();
+    setPage(1);
+  }, [reset]);
+
+  // Reset when data is externally cleared (e.g. sync with "clear" option)
+  const lastKnownTotalRef = useRef(total);
+  useEffect(() => {
+    if (lastKnownTotalRef.current > 0 && total === 0 && page > 1) {
+      resetAll();
+    }
+    lastKnownTotalRef.current = total;
+  }, [total, page, resetAll]);
+
   const isLoading = activeQuery.isLoading;
 
   const handlePlayTrack = useCallback(
@@ -249,7 +274,10 @@ export default function MusicContent({ musicId }: { musicId: string }) {
       <PillTabBar
         tabs={tabs}
         activeTab={tab}
-        onTabChange={setTab}
+        onTabChange={(t) => {
+          setTab(t);
+          resetAll();
+        }}
         sort={
           tab === "albums"
             ? {
@@ -257,7 +285,7 @@ export default function MusicContent({ musicId }: { musicId: string }) {
                 value: albumSort,
                 onChange: (v) => {
                   setAlbumSort(v as AlbumSortValue);
-                  setPage(1);
+                  resetAll();
                 },
                 activeIcon: <ArrowDownUp className="h-3.5 w-3.5" />,
               }
@@ -267,50 +295,38 @@ export default function MusicContent({ musicId }: { musicId: string }) {
       />
 
       <div className="mt-3 space-y-3">
-        {isLoading ? (
+        {isLoading && items.length === 0 ? (
           <div className="flex h-64 items-center justify-center">
             <Spin />
           </div>
         ) : tab === "albums" ? (
           <AlbumsGrid
-            albums={albumsQuery.data?.items ?? []}
+            albums={items as MusicAlbumOutput[]}
             onAlbumClick={(albumId, albumTitle) =>
               navigate(`/albums/${albumId}`, `TokimoMusic · ${albumTitle}`)
             }
           />
         ) : tab === "artists" ? (
           <ArtistsGrid
-            artists={artistsQuery.data?.items ?? []}
+            artists={items as MusicArtistOutput[]}
             onArtistClick={(artistId, artistName) =>
               navigate(`/artists/${artistId}`, `TokimoMusic · ${artistName}`)
             }
           />
         ) : (
           <TracksTable
-            tracks={tracksQuery.data?.items ?? []}
+            tracks={items as MusicTrackOutput[]}
             onPlayTrack={handlePlayTrack}
           />
         )}
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 pb-4">
-            <Button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              上一页
-            </Button>
-            <span className="text-sm text-[var(--text-muted)]">
-              {page} / {totalPages}
-            </span>
-            <Button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              下一页
-            </Button>
-          </div>
-        )}
+        <div ref={sentinelRef} className="h-px" />
+        <div className="flex justify-center py-3">
+          {activeQuery.isFetching && <Spin />}
+          {!hasMore && total > 0 && !activeQuery.isFetching && (
+            <p className="text-xs text-fg-muted">已加载全部 {total} 个</p>
+          )}
+        </div>
       </div>
     </div>
   );

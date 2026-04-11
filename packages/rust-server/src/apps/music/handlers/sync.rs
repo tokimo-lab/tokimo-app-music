@@ -37,6 +37,12 @@ pub async fn sync_music(
     if music.sync_status == "syncing" && !clear_data {
         return Err(AppError::Conflict("Music library is already syncing".into()));
     }
+
+    // Clear data synchronously so frontend sees empty state immediately
+    if clear_data {
+        AppSyncService::clear_library_data(&state.db, uid, &music.r#type).await?;
+    }
+
     MusicRepo::update_sync_status(&state.db, uid, "syncing", None).await?;
 
     let db = state.db.clone();
@@ -44,7 +50,7 @@ pub async fn sync_music(
     let storage = state.storage.clone();
 
     tokio::spawn(async move {
-        match AppSyncService::execute_music_sync(&db, &sources, &storage, uid, clear_data).await {
+        match AppSyncService::execute_music_sync(&db, &sources, &storage, uid, false).await {
             Ok(result) => {
                 info!(
                     "music sync completed, {} jobs dispatched",
