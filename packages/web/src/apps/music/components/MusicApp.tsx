@@ -1,9 +1,11 @@
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { Spin } from "@tokiomo/components";
 import { Music, Plus } from "lucide-react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/generated/rust-api";
 import { useContainerWidth } from "@/shared/hooks/use-container-width";
 import { useWindowNav } from "@/system";
+import { useJobEvents } from "@/system/events/useJobEvents";
 import MusicContent from "./MusicContent";
 import MusicSettingsModal from "./MusicSettingsModal";
 import MusicSidebar from "./MusicSidebar";
@@ -50,6 +52,59 @@ export default function MusicApp() {
       navigate("/");
     }
   };
+
+  // ── Sync progress tracking ──
+  const queryClient = useQueryClient();
+
+  const syncProgressQueries = useQueries({
+    queries: (libraries ?? []).map((lib) => ({
+      queryKey: api.music.getSyncProgress.queryKey({ id: lib.id }),
+      queryFn: () => api.music.getSyncProgress.fetch({ id: lib.id }),
+      enabled: lib.syncStatus === "syncing",
+      refetchInterval: 3000,
+      staleTime: 2000,
+    })),
+  });
+
+  const syncProgress: Record<string, { isActive: boolean; pct: number }> = {};
+  for (let i = 0; i < (libraries ?? []).length; i++) {
+    const lib = libraries![i];
+    const q = syncProgressQueries[i];
+    if (q?.data) {
+      const d = q.data;
+      const total = d.completed + d.running + d.pending + d.failed;
+      const pct = total > 0 ? Math.round((d.completed / total) * 100) : 0;
+      const isActive = d.status === "syncing" || d.running > 0 || d.pending > 0;
+      if (isActive) {
+        syncProgress[lib.id] = { isActive, pct };
+      }
+    } else if (lib.syncStatus === "syncing") {
+      syncProgress[lib.id] = { isActive: true, pct: 0 };
+    }
+  }
+
+  useJobEvents({
+    onEvent: (event) => {
+      if (event.type === "job_update") {
+        const payload = event.job.payload as Record<string, unknown>;
+        const appId = payload?.appId as string | undefined;
+        if (appId && (libraries ?? []).some((l) => l.id === appId)) {
+          queryClient.invalidateQueries({
+            queryKey: api.music.getSyncProgress.queryKey({ id: appId }),
+          });
+          if (
+            event.job.status === "completed" ||
+            event.job.status === "failed"
+          ) {
+            api.music.list.invalidate(queryClient);
+            api.music.listAlbums.invalidate(queryClient);
+            api.music.listArtists.invalidate(queryClient);
+            api.music.listTracks.invalidate(queryClient);
+          }
+        }
+      }
+    },
+  });
 
   if (isLoading) {
     return (
@@ -107,6 +162,7 @@ export default function MusicApp() {
           collapsed={sidebarCollapsed}
           onCreateClick={() => setSettingsOpen(true)}
           onSettingsClick={() => setSettingsOpen(true)}
+          syncProgress={syncProgress}
         />
         <div
           className={`min-w-0 flex-1 overflow-auto${isDetailPage ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}

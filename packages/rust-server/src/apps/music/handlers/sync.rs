@@ -28,11 +28,17 @@ pub async fn sync_music(
         .parse()
         .map_err(|_| AppError::BadRequest("invalid music id".into()))?;
 
-    let _music = MusicRepo::get_by_id(&state.db, uid)
+    let music = MusicRepo::get_by_id(&state.db, uid)
         .await?
         .not_found(format!("music library {id} not found"))?;
 
     let clear_data = body.and_then(|b| b.clear_data).unwrap_or(false);
+
+    if music.sync_status == "syncing" && !clear_data {
+        return Err(AppError::Conflict("Music library is already syncing".into()));
+    }
+    MusicRepo::update_sync_status(&state.db, uid, "syncing", None).await?;
+
     let db = state.db.clone();
     let sources = state.sources.clone();
     let storage = state.storage.clone();
@@ -96,7 +102,7 @@ pub async fn get_music_sync_progress(
         .await?
         .not_found(format!("music library {id} not found"))?;
 
-    let job_types = &["file_scrape"];
+    let job_types = &["music_scrape"];
     let (total, completed, running, pending, failed) =
         JobRepo::count_jobs_by_app(&state.db, uid, job_types).await?;
 

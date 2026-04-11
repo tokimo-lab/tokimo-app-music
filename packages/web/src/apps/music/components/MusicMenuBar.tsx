@@ -18,6 +18,7 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
   const syncMutation = api.music.sync.useMutation({
     onSuccess: () => {
       message.success("同步已开始");
+      api.music.list.invalidate(qc);
       api.music.listAlbums.invalidate(qc);
       api.music.listArtists.invalidate(qc);
       api.music.listTracks.invalidate(qc);
