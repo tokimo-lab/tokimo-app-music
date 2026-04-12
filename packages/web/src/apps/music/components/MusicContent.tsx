@@ -1,4 +1,5 @@
 import { Empty, PillTabBar, Spin, Tag } from "@tokiomo/components";
+import { motion } from "framer-motion";
 import {
   ArrowDownUp,
   Clock,
@@ -8,7 +9,7 @@ import {
   Pause,
   Play,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/generated/rust-api";
 import { useInfiniteScroll } from "@/shared/hooks/use-infinite-scroll";
 import { useMusicPlayer, useWindowNav } from "@/system";
@@ -38,6 +39,13 @@ function parseAlbumSort(v: AlbumSortValue) {
 }
 
 const PAGE_SIZE = 60;
+
+const LAYOUT_SPRING = {
+  type: "spring" as const,
+  stiffness: 400,
+  damping: 30,
+  mass: 0.8,
+};
 
 // ── Track Row ─────────────────────────────────────────────────────────────────
 
@@ -114,11 +122,12 @@ function AlbumsGrid({
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
       {albums.map((album) => (
-        <AlbumCard
-          key={album.id}
-          album={album}
-          onClick={() => onAlbumClick(album.id, album.title ?? "Album")}
-        />
+        <motion.div key={album.id} layout transition={LAYOUT_SPRING}>
+          <AlbumCard
+            album={album}
+            onClick={() => onAlbumClick(album.id, album.title ?? "Album")}
+          />
+        </motion.div>
       ))}
     </div>
   );
@@ -135,11 +144,12 @@ function ArtistsGrid({
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
       {artists.map((artist) => (
-        <ArtistCard
-          key={artist.id}
-          artist={artist}
-          onClick={() => onArtistClick(artist.id, artist.name ?? "Artist")}
-        />
+        <motion.div key={artist.id} layout transition={LAYOUT_SPRING}>
+          <ArtistCard
+            artist={artist}
+            onClick={() => onArtistClick(artist.id, artist.name ?? "Artist")}
+          />
+        </motion.div>
       ))}
     </div>
   );
@@ -180,7 +190,13 @@ function TracksTable({
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function MusicContent({ musicId }: { musicId: string }) {
+export default function MusicContent({
+  musicId,
+  syncing,
+}: {
+  musicId: string;
+  syncing?: boolean;
+}) {
   const { navigate } = useWindowNav();
   const { playTrack, playTracks } = useMusicPlayer();
 
@@ -233,21 +249,13 @@ export default function MusicContent({ musicId }: { musicId: string }) {
         | undefined,
       isFetching: activeQuery.isFetching,
       onLoadMore: () => setPage((p) => p + 1),
+      enabled: !syncing,
     });
 
   const resetAll = useCallback(() => {
     reset();
     setPage(1);
   }, [reset]);
-
-  // Reset when data is externally cleared (e.g. sync with "clear" option)
-  const lastKnownTotalRef = useRef(total);
-  useEffect(() => {
-    if (lastKnownTotalRef.current > 0 && total === 0 && page > 1) {
-      resetAll();
-    }
-    lastKnownTotalRef.current = total;
-  }, [total, page, resetAll]);
 
   const isLoading = activeQuery.isLoading;
 
@@ -270,7 +278,7 @@ export default function MusicContent({ musicId }: { musicId: string }) {
   ];
 
   return (
-    <div className="p-4">
+    <div className="flex h-full flex-col p-4">
       <PillTabBar
         tabs={tabs}
         activeTab={tab}
@@ -294,9 +302,9 @@ export default function MusicContent({ musicId }: { musicId: string }) {
         trailing={total > 0 ? <Tag>{total}</Tag> : undefined}
       />
 
-      <div className="mt-3 space-y-3">
-        {isLoading && items.length === 0 ? (
-          <div className="flex h-64 items-center justify-center">
+      <div className="mt-3 min-h-0 flex-1 space-y-3">
+        {(isLoading || syncing) && items.length === 0 ? (
+          <div className="flex h-full items-center justify-center">
             <Spin />
           </div>
         ) : tab === "albums" ? (

@@ -137,7 +137,13 @@ export default function MusicApp() {
             </Suspense>
           ) : (
             activeLibraryId &&
-            activeLibrary && <MusicContent musicId={activeLibraryId} />
+            activeLibrary && (
+              <MusicContent
+                key={activeLibraryId}
+                musicId={activeLibraryId}
+                syncing={!!syncProgress[activeLibraryId]?.isActive}
+              />
+            )
           )}
         </div>
       </div>
