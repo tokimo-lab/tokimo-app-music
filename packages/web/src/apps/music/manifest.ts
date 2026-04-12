@@ -24,6 +24,19 @@ export const manifest: AppManifest = {
     libraryDomain: "music",
     sections: [
       {
+        key: "sidebar",
+        label: "settings.sidebar.title",
+        preferenceScope: { scope: "component", scopeId: "music" },
+        fields: [
+          {
+            key: "sidebarCollapsed",
+            type: "boolean",
+            label: "settings.sidebar.defaultCollapsed",
+            defaultValue: false,
+          },
+        ],
+      },
+      {
         key: "display",
         label: "settings.library.display",
         fields: [

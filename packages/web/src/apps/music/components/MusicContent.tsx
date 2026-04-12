@@ -1,15 +1,18 @@
 import { Empty, PillTabBar, Spin, Tag } from "@tokiomo/components";
 import { motion } from "framer-motion";
 import {
-  ArrowDownUp,
+  ArrowLeft,
   Clock,
   Disc3,
   ListMusic,
   Mic2,
   Pause,
   Play,
+  Search,
+  X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/generated/rust-api";
 import { useInfiniteScroll } from "@/shared/hooks/use-infinite-scroll";
 import { useMusicPlayer, useWindowNav } from "@/system";
@@ -19,23 +22,19 @@ import type {
   MusicTrackOutput,
 } from "@/types";
 import { AlbumCard, ArtistCard, formatDuration } from "../pages/music-shared";
+import type { MusicFilters } from "./MusicFilterPanel";
+import MusicFilterPanel, { EMPTY_MUSIC_FILTERS } from "./MusicFilterPanel";
 
 type TabKey = "albums" | "artists" | "tracks";
 
-const SORT_OPTIONS_ALBUM = [
-  { label: "最近添加", value: "addedAt" },
-  { label: "标题 A-Z", value: "title_asc" },
-  { label: "年份 最新", value: "year_desc" },
-] as const;
-
-type AlbumSortValue = (typeof SORT_OPTIONS_ALBUM)[number]["value"];
-
-function parseAlbumSort(v: AlbumSortValue) {
-  if (v === "title_asc")
-    return { sortBy: "title" as const, sortDir: "asc" as const };
-  if (v === "year_desc")
-    return { sortBy: "year" as const, sortDir: "desc" as const };
-  return { sortBy: "addedAt" as const, sortDir: "desc" as const };
+function parseSortValue(v: string) {
+  if (v === "title_asc") return { sortBy: "title", sortDir: "asc" };
+  if (v === "title_desc") return { sortBy: "title", sortDir: "desc" };
+  if (v === "year_desc") return { sortBy: "year", sortDir: "desc" };
+  if (v === "year_asc") return { sortBy: "year", sortDir: "asc" };
+  if (v === "name_asc") return { sortBy: "name", sortDir: "asc" };
+  if (v === "name_desc") return { sortBy: "name", sortDir: "desc" };
+  return { sortBy: "addedAt", sortDir: "desc" };
 }
 
 const PAGE_SIZE = 60;
@@ -199,16 +198,30 @@ export default function MusicContent({
 }) {
   const { navigate } = useWindowNav();
   const { playTrack, playTracks } = useMusicPlayer();
+  const { t } = useTranslation();
 
   const [tab, setTabRaw] = useState<TabKey>("albums");
   const [page, setPage] = useState(1);
-  const [albumSort, setAlbumSort] = useState<AlbumSortValue>("addedAt");
+  const [filters, setFilters] = useState<MusicFilters>(EMPTY_MUSIC_FILTERS);
+  const [searching, setSearching] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchValue.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
 
   // Reset on library change
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on musicId change
   useEffect(() => {
     setPage(1);
     setTabRaw("albums");
+    setFilters(EMPTY_MUSIC_FILTERS);
+    setSearching(false);
+    setSearchValue("");
   }, [musicId]);
 
   const setTab = useCallback((t: TabKey) => {
@@ -216,20 +229,48 @@ export default function MusicContent({
     setPage(1);
   }, []);
 
-  const albumSortParams = parseAlbumSort(albumSort);
+  const sortParams = parseSortValue(filters.sortBy || "addedAt");
+
+  // Genres query
+  const genresQuery = api.music.listGenres.useQuery(
+    { id: musicId },
+    { enabled: !!musicId },
+  );
+  const genres = genresQuery.data ?? [];
 
   const albumsQuery = api.music.listAlbums.useQuery(
-    { id: musicId, page, pageSize: PAGE_SIZE, ...albumSortParams },
+    {
+      id: musicId,
+      page,
+      pageSize: PAGE_SIZE,
+      ...sortParams,
+      genre: filters.genre || undefined,
+      search: debouncedSearch || undefined,
+      favorite: filters.favorite === "true" ? true : undefined,
+    },
     { enabled: tab === "albums" },
   );
 
   const artistsQuery = api.music.listArtists.useQuery(
-    { id: musicId, page, pageSize: PAGE_SIZE },
+    {
+      id: musicId,
+      page,
+      pageSize: PAGE_SIZE,
+      ...sortParams,
+      search: debouncedSearch || undefined,
+    },
     { enabled: tab === "artists" },
   );
 
   const tracksQuery = api.music.listTracks.useQuery(
-    { id: musicId, page, pageSize: PAGE_SIZE },
+    {
+      id: musicId,
+      page,
+      pageSize: PAGE_SIZE,
+      ...sortParams,
+      genre: filters.genre || undefined,
+      search: debouncedSearch || undefined,
+    },
     { enabled: tab === "tracks" },
   );
 
@@ -271,42 +312,134 @@ export default function MusicContent({
     [playTrack, playTracks],
   );
 
+  const handleFiltersChange = useCallback(
+    (next: MusicFilters) => {
+      setFilters(next);
+      resetAll();
+    },
+    [resetAll],
+  );
+
+  const openSearch = useCallback(() => {
+    setSearching(true);
+    // Focus the input after React renders it
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setSearching(false);
+    setSearchValue("");
+    setDebouncedSearch("");
+    resetAll();
+  }, [resetAll]);
+
   const tabs: { key: TabKey; label: string; icon: typeof Disc3 }[] = [
-    { key: "albums", label: "专辑", icon: Disc3 },
-    { key: "artists", label: "艺术家", icon: Mic2 },
-    { key: "tracks", label: "曲目", icon: ListMusic },
+    { key: "albums", label: t("media.music.albums"), icon: Disc3 },
+    { key: "artists", label: t("media.music.artists"), icon: Mic2 },
+    { key: "tracks", label: t("media.music.tracks"), icon: ListMusic },
   ];
 
+  const searchPlaceholder =
+    tab === "albums"
+      ? t("media.music.searchAlbums")
+      : tab === "artists"
+        ? t("media.music.searchArtists")
+        : t("media.music.searchTracks");
+
   return (
-    <div className="flex h-full flex-col p-4">
-      <PillTabBar
-        tabs={tabs}
-        activeTab={tab}
-        onTabChange={(t) => {
-          setTab(t);
-          resetAll();
-        }}
-        sort={
-          tab === "albums"
-            ? {
-                options: SORT_OPTIONS_ALBUM,
-                value: albumSort,
-                onChange: (v) => {
-                  setAlbumSort(v as AlbumSortValue);
+    <div className="flex h-full flex-col overflow-y-auto p-4">
+      {/* Tab bar / Search bar — sticky */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-0 bg-[var(--bg-primary)] px-4 pt-4 pb-3">
+        {searching ? (
+          /* ── Search mode: replace tab bar with search input ── */
+          <div className="flex justify-center">
+            <div className="relative flex w-full max-w-[560px] items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]">
+              <button
+                type="button"
+                className="cursor-pointer text-fg-muted transition-colors hover:text-fg-primary"
+                onClick={closeSearch}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-[var(--text-secondary)]"
+                placeholder={searchPlaceholder}
+                value={searchValue}
+                onChange={(e) => {
+                  setSearchValue(e.target.value);
                   resetAll();
-                },
-                activeIcon: <ArrowDownUp className="h-3.5 w-3.5" />,
-              }
-            : undefined
-        }
-        trailing={total > 0 ? <Tag>{total}</Tag> : undefined}
-      />
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") closeSearch();
+                }}
+              />
+              {searchValue && (
+                <button
+                  type="button"
+                  className="cursor-pointer text-fg-muted transition-colors hover:text-fg-primary"
+                  onClick={() => {
+                    setSearchValue("");
+                    setDebouncedSearch("");
+                    resetAll();
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* ── Normal mode: tab bar with search button ── */
+          <PillTabBar
+            tabs={tabs}
+            activeTab={tab}
+            onTabChange={(t) => {
+              setTab(t);
+              setFilters(EMPTY_MUSIC_FILTERS);
+              resetAll();
+            }}
+            trailing={
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-full p-1.5 text-fg-muted transition-colors hover:bg-white/10 hover:text-fg-primary"
+                  onClick={openSearch}
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+                {total > 0 && <Tag>{total}</Tag>}
+              </div>
+            }
+          />
+        )}
+      </div>
+
+      {/* Filter Panel */}
+      <div className="rounded-lg border border-white/8 bg-black/20 px-4 py-3 backdrop-blur-md">
+        <MusicFilterPanel
+          filters={filters}
+          onChange={handleFiltersChange}
+          genreOptions={genres}
+          activeTab={tab}
+        />
+      </div>
 
       <div className="mt-3 min-h-0 flex-1 space-y-3">
         {(isLoading || syncing) && items.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <Spin />
           </div>
+        ) : items.length === 0 ? (
+          <Empty
+            description={
+              debouncedSearch || filters.genre || filters.favorite
+                ? t("media.music.noFilterResults")
+                : undefined
+            }
+          />
         ) : tab === "albums" ? (
           <AlbumsGrid
             albums={items as MusicAlbumOutput[]}
@@ -332,7 +465,9 @@ export default function MusicContent({
         <div className="flex justify-center py-3">
           {activeQuery.isFetching && <Spin />}
           {!hasMore && total > 0 && !activeQuery.isFetching && (
-            <p className="text-xs text-fg-muted">已加载全部 {total} 个</p>
+            <p className="text-xs text-fg-muted">
+              {t("media.music.loadedAll", { count: total })}
+            </p>
           )}
         </div>
       </div>

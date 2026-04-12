@@ -1,5 +1,5 @@
 import { AppSidebar, CircularProgress, Tooltip } from "@tokiomo/components";
-import { Plus, Settings } from "lucide-react";
+import { PanelLeft, PanelLeftClose, Plus, Settings } from "lucide-react";
 import type { MusicOutput } from "@/generated/rust-types/MusicOutput";
 import { AppIcon } from "@/shared/components/icons";
 
@@ -11,6 +11,7 @@ export default function MusicSidebar({
   onCreateClick,
   onSettingsClick,
   syncProgress,
+  onToggleCollapse,
 }: {
   libraries: MusicOutput[];
   activeId: string | null;
@@ -19,6 +20,7 @@ export default function MusicSidebar({
   onCreateClick: () => void;
   onSettingsClick: () => void;
   syncProgress?: Record<string, { isActive: boolean; pct: number }>;
+  onToggleCollapse?: () => void;
 }) {
   const sections = [
     {
@@ -61,6 +63,15 @@ export default function MusicSidebar({
           <Settings className="h-4 w-4" />
         </button>
       </Tooltip>
+      <Tooltip title="展开侧边栏" placement="right">
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-fg-muted transition-all hover:bg-black/[0.08] hover:text-fg-secondary dark:hover:bg-white/[0.08]"
+        >
+          <PanelLeft className="h-4 w-4" />
+        </button>
+      </Tooltip>
     </div>
   );
 
@@ -82,6 +93,15 @@ export default function MusicSidebar({
           className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-fg-muted transition-all hover:bg-black/[0.08] hover:text-fg-secondary dark:hover:bg-white/[0.08]"
         >
           <Settings className="h-4 w-4" />
+        </button>
+      </Tooltip>
+      <Tooltip title="收起侧边栏">
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-fg-muted transition-all hover:bg-black/[0.08] hover:text-fg-secondary dark:hover:bg-white/[0.08]"
+        >
+          <PanelLeftClose className="h-4 w-4" />
         </button>
       </Tooltip>
     </div>

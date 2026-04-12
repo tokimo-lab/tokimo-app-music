@@ -2,6 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     response::Json,
 };
+use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use std::sync::Arc;
 
 use crate::db::pagination::Page;
@@ -34,6 +35,7 @@ pub async fn list_albums(
             genre: q.genre,
             search: q.search,
             artist_id,
+            favorite: q.favorite,
         },
     )
     .await?;
@@ -166,4 +168,26 @@ pub async fn get_track_lyrics(
         "syncedLyrics": synced,
         "plainLyrics": plain,
     })))
+}
+
+/// GET /api/apps/music/{id}/genres
+pub async fn list_music_genres(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<Vec<String>>>, AppError> {
+    let uid = parse_uuid(&id)?;
+    let stmt = Statement::from_sql_and_values(
+        DatabaseBackend::Postgres,
+        "SELECT DISTINCT t.genre FROM music_tracks t \
+         JOIN music_albums a ON a.id = t.album_id \
+         WHERE a.music_id = $1 AND t.genre IS NOT NULL AND t.genre <> '' \
+         ORDER BY t.genre",
+        [uid.into()],
+    );
+    let rows = state.db.query_all_raw(stmt).await?;
+    let genres: Vec<String> = rows
+        .iter()
+        .filter_map(|r| r.try_get::<String>("", "genre").ok())
+        .collect();
+    Ok(ok(genres))
 }

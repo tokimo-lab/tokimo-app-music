@@ -69,4 +69,8 @@ pub fn build_music_app_routes() -> Router<Arc<AppState>> {
             "/api/apps/music/{id}/artists",
             get(handlers::list_artists),
         )
+        .route(
+            "/api/apps/music/{id}/genres",
+            get(handlers::list_music_genres),
+        )
 }

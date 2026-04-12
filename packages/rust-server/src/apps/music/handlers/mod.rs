@@ -85,6 +85,7 @@ pub struct MusicListQuery {
     pub genre: Option<String>,
     pub search: Option<String>,
     pub artist_id: Option<String>,
+    pub favorite: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
