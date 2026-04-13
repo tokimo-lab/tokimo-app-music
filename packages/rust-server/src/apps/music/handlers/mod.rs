@@ -163,7 +163,7 @@ pub(crate) async fn to_music_output(
         description: model.description,
         poster_path: model.poster_path,
         scrape_enabled: model.scrape_enabled,
-        scrape_agents: Some(model.scrape_agents),
+        scrape_agents: model.scrape_agents,
         sort_order: model.sort_order,
         settings: model.settings,
         sync_status: model.sync_status,
