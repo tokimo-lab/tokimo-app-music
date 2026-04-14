@@ -21,14 +21,6 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  loadPlayerAlchemyAmbient,
-  loadPlayerCoverBg,
-  loadPlayerVisualMode,
-  savePlayerAlchemyAmbient,
-  savePlayerCoverBg,
-  savePlayerVisualMode,
-} from "@/lib/storage";
 import { posterThumbUrl } from "@/lib/thumb";
 import type { PlayerVisualMode } from "@/lib/types";
 import { useUiPreference } from "@/shared/hooks/use-preference";
@@ -393,12 +385,14 @@ export function FullScreenPlayer({
 
   const playerPref = useUiPreference<PlayerPrefs>("player");
   const [visualMode, setVisualMode] = useState<PlayerVisualMode>(
-    () => playerPref.data?.playerVisualMode ?? loadPlayerVisualMode(),
+    () => playerPref.data?.playerVisualMode ?? "vinyl",
   );
 
-  const [coverBgEnabled, setCoverBgEnabled] = useState(loadPlayerCoverBg);
+  const [coverBgEnabled, setCoverBgEnabled] = useState(
+    () => playerPref.data?.playerCoverBg ?? true,
+  );
   const [alchemyAmbient, setAlchemyAmbient] = useState(
-    loadPlayerAlchemyAmbient,
+    () => playerPref.data?.playerAlchemyAmbient ?? false,
   );
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -435,27 +429,30 @@ export function FullScreenPlayer({
     });
   }, []);
 
-  const handleSelectVisualMode = useCallback((mode: PlayerVisualMode) => {
-    setVisualMode(mode);
-    savePlayerVisualMode(mode);
-    setPickerOpen(false);
-  }, []);
+  const handleSelectVisualMode = useCallback(
+    (mode: PlayerVisualMode) => {
+      setVisualMode(mode);
+      playerPref.patch({ playerVisualMode: mode }).catch(() => {});
+      setPickerOpen(false);
+    },
+    [playerPref],
+  );
 
   const handleToggleCoverBg = useCallback(() => {
     setCoverBgEnabled((prev) => {
       const next = !prev;
-      savePlayerCoverBg(next);
+      playerPref.patch({ playerCoverBg: next }).catch(() => {});
       return next;
     });
-  }, []);
+  }, [playerPref]);
 
   const handleToggleAlchemyAmbient = useCallback(() => {
     setAlchemyAmbient((prev) => {
       const next = !prev;
-      savePlayerAlchemyAmbient(next);
+      playerPref.patch({ playerAlchemyAmbient: next }).catch(() => {});
       return next;
     });
-  }, []);
+  }, [playerPref]);
 
   // Read CSS --accent hex for canvas drawing
   const accentHex = useMemo(() => {
