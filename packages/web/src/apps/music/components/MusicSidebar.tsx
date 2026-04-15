@@ -1,6 +1,7 @@
 import { AppSidebar, CircularProgress, Tooltip } from "@tokiomo/components";
 import { PanelLeft, PanelLeftClose, Plus, Settings } from "lucide-react";
 import type { MusicOutput } from "@/generated/rust-types/MusicOutput";
+import { getAvatarColor, getAvatarIcon } from "@/shared/avatar-utils";
 import { AppIcon } from "@/shared/components/icons";
 
 export default function MusicSidebar({
@@ -28,10 +29,20 @@ export default function MusicSidebar({
         const sp = syncProgress?.[lib.id];
         return {
           key: lib.id,
-          icon: <AppIcon icon={lib.icon} color={lib.color} size={20} />,
+          icon: (
+            <AppIcon
+              icon={getAvatarIcon(lib.avatar) || lib.name}
+              color={getAvatarColor(lib.avatar)}
+              size={20}
+            />
+          ),
           collapsedIcon: sp?.isActive ? (
             <span className="relative flex h-7 w-7 items-center justify-center">
-              <AppIcon icon={lib.icon} color={lib.color} size={16} />
+              <AppIcon
+                icon={getAvatarIcon(lib.avatar)}
+                color={getAvatarColor(lib.avatar)}
+                size={20}
+              />
               <CircularProgress
                 value={sp.pct}
                 size={28}
