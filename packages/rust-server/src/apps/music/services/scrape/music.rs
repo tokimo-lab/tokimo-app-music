@@ -68,11 +68,7 @@ async fn itunes_get_cover_url(http: &reqwest::Client, artist: &str, album: &str)
         "https://itunes.apple.com/search?term={}&entity=album&country=cn&limit=5",
         url_encode(&query)
     );
-    let resp = http
-        .get(&url)
-        .send()
-        .await
-        .ok()?;
+    let resp = http.get(&url).send().await.ok()?;
     let data: ItunesSearchResponse = resp.json().await.ok()?;
 
     // Find the best match by album name similarity
@@ -117,24 +113,16 @@ impl MusicScrapeService {
         // Try " - " separator pattern (date before, album after)
         if let Some(pos) = title.find(" - ") {
             let before = &title[..pos];
-            let is_date_prefix = before.chars().all(|c| {
-                c.is_ascii_digit()
-                    || c == '年'
-                    || c == '月'
-                    || c == '日'
-                    || c == '-'
-                    || c == ' '
-            });
+            let is_date_prefix = before
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == '年' || c == '月' || c == '日' || c == '-' || c == ' ');
             if is_date_prefix {
                 return title[pos + 3..].trim().to_string();
             }
         }
 
         // Try 《...》 bracket pattern — date then 《album name》 optional suffix
-        if let (Some(start_byte), Some(end_byte)) = (
-            title.find('《'),
-            title.rfind('》'),
-        ) {
+        if let (Some(start_byte), Some(end_byte)) = (title.find('《'), title.rfind('》')) {
             // Characters inside 《》
             let inside_start = start_byte + '《'.len_utf8();
             let inside = &title[inside_start..end_byte];
@@ -167,12 +155,7 @@ impl MusicScrapeService {
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    fn make_error(
-        album_id: Uuid,
-        title: &str,
-        clean_title: &str,
-        error: &str,
-    ) -> AlbumScrapeResult {
+    fn make_error(album_id: Uuid, title: &str, clean_title: &str, error: &str) -> AlbumScrapeResult {
         AlbumScrapeResult {
             album_id: album_id.to_string(),
             title: title.to_string(),
@@ -198,7 +181,10 @@ impl MusicScrapeService {
         album_title: &str,
     ) -> AlbumScrapeResult {
         let clean_title = Self::extract_clean_title(album_title);
-        info!("[music_scrape] Inline scraping \"{}\" by \"{}\"", clean_title, artist_name);
+        info!(
+            "[music_scrape] Inline scraping \"{}\" by \"{}\"",
+            clean_title, artist_name
+        );
         Self::do_search_and_scrape(db, storage, album_id, album_title, &clean_title, artist_name, mb).await
     }
 
@@ -223,7 +209,6 @@ impl MusicScrapeService {
         artist_name: &str,
         mb: &MusicBrainzClient,
     ) -> AlbumScrapeResult {
-
         let track_count = music_tracks::Entity::find()
             .filter(music_tracks::Column::AlbumId.eq(album_id))
             .count(db)
@@ -266,8 +251,7 @@ impl MusicScrapeService {
             }
         }
 
-        let Some(candidate) = Self::pick_best_candidate(&candidates, clean_title, track_count)
-        else {
+        let Some(candidate) = Self::pick_best_candidate(&candidates, clean_title, track_count) else {
             warn!("[music_scrape] No MusicBrainz match for \"{}\"", clean_title);
             return AlbumScrapeResult {
                 album_id: album_id.to_string(),
@@ -287,7 +271,17 @@ impl MusicScrapeService {
             candidate.title, candidate.artist, candidate.mb_release_id
         );
         let mb_release_id = candidate.mb_release_id.clone();
-        Self::do_scrape(db, storage, album_id, &mb_release_id, raw_title, clean_title, artist_name, mb).await
+        Self::do_scrape(
+            db,
+            storage,
+            album_id,
+            &mb_release_id,
+            raw_title,
+            clean_title,
+            artist_name,
+            mb,
+        )
+        .await
     }
 
     /// Fetch full MusicBrainz release detail and persist to DB.
@@ -343,14 +337,8 @@ impl MusicScrapeService {
         let now = Utc::now().fixed_offset();
 
         // Download cover: Cover Art Archive → iTunes fallback
-        let cover_path = Self::download_cover(
-            storage,
-            album_id,
-            artist_name,
-            clean_title,
-            detail.cover_url.as_deref(),
-        )
-        .await;
+        let cover_path =
+            Self::download_cover(storage, album_id, artist_name, clean_title, detail.cover_url.as_deref()).await;
         let cover_downloaded = cover_path.is_some();
 
         // Persist album metadata
@@ -360,9 +348,10 @@ impl MusicScrapeService {
         if let Some(ref rd) = detail.release_date {
             if let Ok(date) = chrono::NaiveDate::parse_from_str(rd, "%Y-%m-%d") {
                 active.release_date = Set(Some(date));
-            } else if let Some(date) = rd.get(..4).and_then(|y| {
-                chrono::NaiveDate::parse_from_str(&format!("{y}-01-01"), "%Y-%m-%d").ok()
-            }) {
+            } else if let Some(date) = rd
+                .get(..4)
+                .and_then(|y| chrono::NaiveDate::parse_from_str(&format!("{y}-01-01"), "%Y-%m-%d").ok())
+            {
                 active.release_date = Set(Some(date));
             }
         }
@@ -431,11 +420,7 @@ impl MusicScrapeService {
     ///
     /// Deduplicates by `mb_id` (MusicBrainz Artist ID), so Simplified/Traditional
     /// variants and case differences in the name never produce duplicate records.
-    async fn save_album_artists(
-        db: &DatabaseConnection,
-        album_id: Uuid,
-        artist_credits: &[ArtistCredit],
-    ) {
+    async fn save_album_artists(db: &DatabaseConnection, album_id: Uuid, artist_credits: &[ArtistCredit]) {
         if artist_credits.is_empty() {
             return;
         }
@@ -549,7 +534,11 @@ impl MusicScrapeService {
                             }
                         }
                     }
-                    Ok(resp) => info!("[music_scrape] {} cover not available ({})", $source, resp.status()),
+                    Ok(resp) => info!(
+                        "[music_scrape] {} cover not available ({})",
+                        $source,
+                        resp.status()
+                    ),
                     Err(e) => warn!("[music_scrape] {} request failed: {}", $source, e),
                 }
             }};
@@ -607,14 +596,16 @@ impl MusicScrapeService {
         .await
         {
             Ok(Some(l)) => Ok(Some(l)),
-            _ => rust_client_api::metadata_providers::lrclib::fetch_lyrics(
-                http,
-                &effective_artist,
-                &track_clean_title,
-                None,
-                duration,
-            )
-            .await,
+            _ => {
+                rust_client_api::metadata_providers::lrclib::fetch_lyrics(
+                    http,
+                    &effective_artist,
+                    &track_clean_title,
+                    None,
+                    duration,
+                )
+                .await
+            }
         };
 
         match lyrics_result {
@@ -688,9 +679,9 @@ impl MusicScrapeService {
         let mut updated = 0i32;
         for db_track in &db_tracks {
             // Match by normalized title (MB doesn't reliably give disc+number for flat lists)
-            let mb_track = mb_tracks.iter().find(|t| {
-                normalize_for_match(&t.title) == normalize_for_match(&db_track.title)
-            });
+            let mb_track = mb_tracks
+                .iter()
+                .find(|t| normalize_for_match(&t.title) == normalize_for_match(&db_track.title));
 
             let mut active: music_tracks::ActiveModel = db_track.clone().into();
             let mut changed = false;

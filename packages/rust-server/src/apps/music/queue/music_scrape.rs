@@ -1,12 +1,12 @@
 use sea_orm::*;
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::AppState;
 use crate::db::entities::music_albums;
 use crate::services::media::scrape::music::MusicScrapeService;
-use crate::AppState;
 
 pub async fn handle(
     db: &DatabaseConnection,

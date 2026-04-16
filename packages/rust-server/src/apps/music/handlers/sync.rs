@@ -6,17 +6,17 @@ use std::sync::Arc;
 use tracing::{error, info};
 use uuid::Uuid;
 
+use crate::AppState;
 use crate::db::ApiDateTimeExt;
 use crate::db::models::music::{MusicSyncProgressOutput, MusicSyncStatusOutput, MusicTaskProgress};
 use crate::db::repos::job_repo::JobRepo;
 use crate::db::repos::media::MusicRepo;
 use crate::error::AppError;
 use crate::error::OptionExt;
-use crate::handlers::{ok, ApiResponse};
+use crate::handlers::{ApiResponse, ok};
 use crate::services::media::app_sync::AppSyncService;
-use crate::AppState;
 
-use super::{parse_uuid, MusicSyncInput};
+use super::{MusicSyncInput, parse_uuid};
 
 /// POST /api/apps/music/{id}/sync
 pub async fn sync_music(
@@ -52,10 +52,7 @@ pub async fn sync_music(
     tokio::spawn(async move {
         match AppSyncService::execute_music_sync(&db, &sources, &storage, uid, false).await {
             Ok(result) => {
-                info!(
-                    "music sync completed, {} jobs dispatched",
-                    result.total_jobs
-                );
+                info!("music sync completed, {} jobs dispatched", result.total_jobs);
             }
             Err(e) => {
                 error!("music sync failed: {e}");
@@ -109,8 +106,7 @@ pub async fn get_music_sync_progress(
         .not_found(format!("music library {id} not found"))?;
 
     let job_types = &["music_scrape"];
-    let (total, completed, running, pending, failed) =
-        JobRepo::count_jobs_by_app(&state.db, uid, job_types).await?;
+    let (total, completed, running, pending, failed) = JobRepo::count_jobs_by_app(&state.db, uid, job_types).await?;
 
     let rows = JobRepo::get_task_progress_by_app(&state.db, uid, job_types).await?;
     let tasks: Vec<MusicTaskProgress> = rows

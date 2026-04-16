@@ -1,7 +1,7 @@
-pub mod crud;
 pub mod browse;
-pub mod sync;
+pub mod crud;
 pub mod stream;
+pub mod sync;
 
 use serde::Deserialize;
 use uuid::Uuid;
@@ -12,10 +12,10 @@ use crate::db::repos::media::MusicRepo;
 use crate::db::{ApiDateTimeExt, OptionalApiDateTimeExt};
 use crate::error::AppError;
 
-pub use crud::*;
 pub use browse::*;
-pub use sync::*;
+pub use crud::*;
 pub use stream::stream_music_file;
+pub use sync::*;
 
 // ── Input DTOs ──
 
@@ -128,8 +128,8 @@ pub(crate) async fn to_music_output(
     db: &sea_orm::DatabaseConnection,
     model: crate::db::entities::musics::Model,
 ) -> Result<MusicOutput, AppError> {
-    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, PaginatorTrait};
     use crate::db::entities::music_albums;
+    use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
 
     let music_id = model.id;
 

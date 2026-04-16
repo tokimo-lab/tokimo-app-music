@@ -5,14 +5,14 @@ use axum::{
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use std::sync::Arc;
 
+use crate::AppState;
 use crate::db::pagination::Page;
 use crate::db::repos::media::MediaContentRepo;
 use crate::db::repos::media::media_content_repo::{ListAlbumsInput, ListTracksInput};
 use crate::error::{AppError, OptionExt};
-use crate::handlers::{ok, ApiResponse};
-use crate::AppState;
+use crate::handlers::{ApiResponse, ok};
 
-use super::{parse_uuid, ArtistDetailQuery, MusicListQuery};
+use super::{ArtistDetailQuery, MusicListQuery, parse_uuid};
 
 /// GET /api/apps/music/{id}/albums
 pub async fn list_albums(
@@ -39,12 +39,7 @@ pub async fn list_albums(
         },
     )
     .await?;
-    Ok(ok(Page::from_parts(
-        items,
-        total,
-        page as u64,
-        page_size as u64,
-    )))
+    Ok(ok(Page::from_parts(items, total, page as u64, page_size as u64)))
 }
 
 /// GET /api/apps/music/{id}/tracks
@@ -69,12 +64,7 @@ pub async fn list_tracks(
         },
     )
     .await?;
-    Ok(ok(Page::from_parts(
-        items,
-        total,
-        page as u64,
-        page_size as u64,
-    )))
+    Ok(ok(Page::from_parts(items, total, page as u64, page_size as u64)))
 }
 
 /// GET /api/apps/music/{id}/artists
@@ -96,12 +86,7 @@ pub async fn list_artists(
         q.search.as_deref(),
     )
     .await?;
-    Ok(ok(Page::from_parts(
-        items,
-        total,
-        page as u64,
-        page_size as u64,
-    )))
+    Ok(ok(Page::from_parts(items, total, page as u64, page_size as u64)))
 }
 
 /// GET /api/apps/music/album/{id}

@@ -5,9 +5,9 @@ use axum::{
 use std::sync::Arc;
 
 use crate::{
+    AppState,
     db::repos::media::MusicRepo,
     handlers::{err404, err500, user::AuthUser},
-    AppState,
 };
 
 /// Stream a music file over HTTP with range request support.

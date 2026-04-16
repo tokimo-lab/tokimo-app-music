@@ -5,25 +5,23 @@ use axum::{
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::AppState;
 use crate::db::models::music::MusicOutput;
 use crate::db::repos::job_repo::JobRepo;
 use crate::db::repos::media::MusicRepo;
 use crate::db::repos::media::music_repo::UpdateMusicFields;
 use crate::error::AppError;
 use crate::error::OptionExt;
-use crate::handlers::{ok, ok_empty, ApiResponse};
+use crate::handlers::{ApiResponse, ok, ok_empty};
 use crate::services::media::source::normalize_source_path;
-use crate::AppState;
 
 use super::{
-    parse_uuid, sources_to_json, to_music_output, to_music_outputs,
-    CreateMusicInput, UpdateMusicInput, MusicReorderInput,
+    CreateMusicInput, MusicReorderInput, UpdateMusicInput, parse_uuid, sources_to_json, to_music_output,
+    to_music_outputs,
 };
 
 /// GET /api/apps/music
-pub async fn list_musics(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<ApiResponse<Vec<MusicOutput>>>, AppError> {
+pub async fn list_musics(State(state): State<Arc<AppState>>) -> Result<Json<ApiResponse<Vec<MusicOutput>>>, AppError> {
     let rows = MusicRepo::list_all(&state.db).await?;
     let outputs = to_music_outputs(&state.db, rows).await?;
     Ok(ok(outputs))
@@ -158,12 +156,7 @@ pub async fn reorder_musics(
     let orders: Vec<(Uuid, i32)> = body
         .orders
         .into_iter()
-        .filter_map(|item| {
-            item.id
-                .parse::<Uuid>()
-                .ok()
-                .map(|uid| (uid, item.sort_order))
-        })
+        .filter_map(|item| item.id.parse::<Uuid>().ok().map(|uid| (uid, item.sort_order)))
         .collect();
     MusicRepo::reorder(&state.db, orders).await?;
     Ok(ok_empty())
