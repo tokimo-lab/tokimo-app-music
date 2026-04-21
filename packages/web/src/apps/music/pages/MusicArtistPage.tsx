@@ -1,4 +1,4 @@
-import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokiomo/components";
+import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokimo/ui";
 import { User } from "lucide-react";
 import { useEffect } from "react";
 import { SectionTitle } from "@/apps/media/pages/media-detail-shared";

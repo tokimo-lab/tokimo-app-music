@@ -1,4 +1,4 @@
-import { Empty, PillTabBar, Spin, Tag } from "@tokiomo/components";
+import { Empty, PillTabBar, Spin, Tag } from "@tokimo/ui";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,

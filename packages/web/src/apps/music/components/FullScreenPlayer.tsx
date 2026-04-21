@@ -1,4 +1,4 @@
-import { cn } from "@tokiomo/components";
+import { cn } from "@tokimo/ui";
 import {
   ChartNoAxesColumn,
   ChevronDown,

@@ -1,4 +1,4 @@
-import { cn } from "@tokiomo/components";
+import { cn } from "@tokimo/ui";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 

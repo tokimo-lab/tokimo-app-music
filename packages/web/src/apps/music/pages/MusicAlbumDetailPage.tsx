@@ -1,11 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowLeftOutlined,
-  Button,
-  ScrollArea,
-  Spin,
-  Tag,
-} from "@tokiomo/components";
+import { ArrowLeftOutlined, Button, ScrollArea, Spin, Tag } from "@tokimo/ui";
 import {
   Clock,
   Disc3,

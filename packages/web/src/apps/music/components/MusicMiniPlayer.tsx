@@ -1,4 +1,4 @@
-import { cn, Tooltip } from "@tokiomo/components";
+import { cn, Tooltip } from "@tokimo/ui";
 import {
   Disc3,
   ListMusic,

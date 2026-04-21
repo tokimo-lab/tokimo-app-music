@@ -1,4 +1,4 @@
-import { cn } from "@tokiomo/components";
+import { cn } from "@tokimo/ui";
 import { ListMusic, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { useMusicPlayer } from "@/system";
