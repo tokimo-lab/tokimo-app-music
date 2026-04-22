@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::db::entities::music_albums;
+use crate::queue::cancellation::{JobCancel, check_cancel};
 use crate::services::media::scrape::music::MusicScrapeService;
 
 pub async fn handle(
@@ -13,7 +14,9 @@ pub async fn handle(
     state: &Arc<AppState>,
     _job_id: Uuid,
     payload: &JsonValue,
+    cancel: &JobCancel,
 ) -> Result<Option<JsonValue>, Box<dyn std::error::Error + Send + Sync>> {
+    check_cancel(cancel)?;
     let album_id = payload
         .get("albumId")
         .and_then(|v| v.as_str())
@@ -32,6 +35,7 @@ pub async fn handle(
         return Ok(Some(json!({ "skipped": true, "reason": "already_scraped" })));
     }
 
+    check_cancel(cancel)?;
     let result = MusicScrapeService::auto_scrape_album(db, &state.storage, album_id).await;
 
     Ok(Some(json!({
