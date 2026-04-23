@@ -13,6 +13,9 @@ import MusicSidebar from "./MusicSidebar";
 
 const STORAGE_KEY = "music-active-library";
 
+/** See PHOTO_SCAN_JOB_TYPES. Backend: apps/music/handlers/sync.rs */
+const MUSIC_SCAN_JOB_TYPES = ["music_scrape"] as const;
+
 const LoadingFallback = (
   <div className="flex h-full items-center justify-center">
     <Spin />
@@ -64,6 +67,7 @@ export default function MusicApp() {
     libraries,
     progressQueryKey: (id) => api.music.getSyncProgress.queryKey({ id }),
     fetchProgress: (id) => api.music.getSyncProgress.fetch({ id }),
+    scanJobTypes: MUSIC_SCAN_JOB_TYPES,
     onContentRefresh: () => {
       api.music.listAlbums.invalidate(queryClient);
       api.music.listArtists.invalidate(queryClient);
