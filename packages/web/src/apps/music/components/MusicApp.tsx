@@ -122,11 +122,7 @@ export default function MusicApp() {
 
   return (
     <>
-      <div
-        ref={containerRef}
-        className="grid h-full"
-        style={{ gridTemplateColumns: `${sidebarCollapsed ? 48 : 200}px 1fr` }}
-      >
+      <div ref={containerRef} className="relative flex h-full">
         <MusicSidebar
           libraries={libraries}
           activeId={activeLibraryId}
