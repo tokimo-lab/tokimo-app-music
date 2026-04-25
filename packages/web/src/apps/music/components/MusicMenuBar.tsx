@@ -7,8 +7,8 @@ import type { MenuBarConfig } from "@/system";
 import { useMenuBar, useMessage, useWindowNav } from "@/system";
 
 export default function MusicMenuBar({ children }: { children: ReactNode }) {
-  const { navigate } = useWindowNav();
-  const musicId = localStorage.getItem("music-active-library") ?? undefined;
+  const { navigate, params } = useWindowNav();
+  const musicId = params.libraryId ?? undefined;
   const message = useMessage();
   const qc = useQueryClient();
 
