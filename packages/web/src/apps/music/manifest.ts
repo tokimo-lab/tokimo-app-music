@@ -15,6 +15,7 @@ export const manifest: AppManifest = {
   menuBar: () => import("./components/MusicMenuBar"),
   views: {
     "/": () => import("./components/MusicApp"),
+    "/library/:libraryId": () => import("./components/MusicApp"),
     "/albums/:albumId": () => import("./pages/MusicAlbumDetailPage"),
     "/artists/:personId": () => import("./pages/MusicArtistPage"),
   },
