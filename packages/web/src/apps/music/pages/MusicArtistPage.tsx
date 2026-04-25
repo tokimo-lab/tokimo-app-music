@@ -11,7 +11,7 @@ import { AlbumCard } from "./music-shared";
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicArtistPage() {
   const { params, goBack, navigate } = useWindowNav();
-  const musicId = localStorage.getItem("music-active-library") ?? undefined;
+  const musicId = params.libraryId ?? undefined;
   const personId = params.personId;
 
   const { setBackgroundArt } = useBackgroundArt();
