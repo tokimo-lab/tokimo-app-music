@@ -1,18 +1,20 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Spin } from "@tokimo/ui";
 import { Music, Plus } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import MusicLibraryEditor from "@/apps/settings/admin/MusicLibraryEditor";
 import { api } from "@/generated/rust-api";
 import { useContainerWidth } from "@/shared/hooks/use-container-width";
 import { useSidebarCollapsed } from "@/shared/hooks/use-sidebar-collapsed";
 import { useSyncProgress } from "@/shared/hooks/use-sync-progress";
 import { useWindowNav } from "@/system";
 import MusicContent from "./MusicContent";
-import MusicSettingsModal from "./MusicSettingsModal";
 import MusicSidebar from "./MusicSidebar";
 
 /** See PHOTO_SCAN_JOB_TYPES. Backend: apps/music/handlers/sync.rs */
 const MUSIC_SCAN_JOB_TYPES = ["music_scrape"] as const;
+
+type ViewMode = "content" | "settings" | "settings-new";
 
 const LoadingFallback = (
   <div className="flex h-full items-center justify-center">
@@ -28,7 +30,7 @@ export default function MusicApp() {
     "music",
     containerWidth > 0 && containerWidth < 720,
   );
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mode, setMode] = useState<ViewMode>("content");
 
   const activeLibraryId = params.libraryId ?? null;
 
@@ -43,15 +45,50 @@ export default function MusicApp() {
   }, [libraries, params.libraryId, replace]);
 
   const activeLibrary = libraries?.find((l) => l.id === activeLibraryId);
+  const isDetailPage = !!(params.albumId ?? params.personId);
+  const isSettingsView = mode !== "content";
 
   useEffect(() => {
-    if (activeLibrary) {
+    if (mode === "settings-new") {
+      updateTitle("TokimoMusic · 新建音乐库");
+    } else if (mode === "settings" && activeLibrary) {
+      updateTitle(`TokimoMusic · ${activeLibrary.name} · 设置`);
+    } else if (!isDetailPage && activeLibrary) {
       updateTitle(`TokimoMusic · ${activeLibrary.name}`);
     }
-  }, [activeLibrary, updateTitle]);
+  }, [activeLibrary, mode, isDetailPage, updateTitle]);
+
+  const openSettings = useCallback(() => {
+    setMode("settings");
+  }, []);
+
+  const openCreate = useCallback(() => {
+    setMode("settings-new");
+  }, []);
 
   const handleSelectLibrary = (id: string) => {
     replace(`/library/${id}`);
+    setMode("content");
+  };
+
+  const handleSaved = (savedId: string) => {
+    replace(`/library/${savedId}`);
+    setMode("content");
+  };
+
+  const handleDeleted = () => {
+    const remaining = (libraries ?? []).filter((l) => l.id !== activeLibraryId);
+    const next = remaining[0]?.id;
+    if (next) {
+      replace(`/library/${next}`);
+    } else {
+      replace("/");
+    }
+    setMode("content");
+  };
+
+  const handleCancel = () => {
+    setMode("content");
   };
 
   // ── Sync progress tracking (WS-driven + fallback polling) ──
@@ -81,6 +118,29 @@ export default function MusicApp() {
   }
 
   if (!libraries?.length) {
+    if (mode === "settings-new") {
+      return (
+        <div ref={containerRef} className="relative flex h-full">
+          <MusicSidebar
+            libraries={[]}
+            activeId={null}
+            onSelect={handleSelectLibrary}
+            collapsed={sidebarCollapsed}
+            onCreateClick={openCreate}
+            onSettingsClick={openSettings}
+            onToggleCollapse={onToggleCollapse}
+            settingsActive
+          />
+          <div className="flex-1 min-w-0 overflow-hidden h-full">
+            <MusicLibraryEditor
+              key="__new__"
+              onSaved={handleSaved}
+              onCancel={handleCancel}
+            />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
@@ -96,21 +156,15 @@ export default function MusicApp() {
         </div>
         <button
           type="button"
-          onClick={() => setSettingsOpen(true)}
+          onClick={openCreate}
           className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700"
         >
           <Plus className="h-4 w-4" />
           新建音乐库
         </button>
-        <MusicSettingsModal
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-        />
       </div>
     );
   }
-
-  const isDetailPage = !!(params.albumId ?? params.personId);
 
   return (
     <div ref={containerRef} className="relative flex h-full">
@@ -119,15 +173,30 @@ export default function MusicApp() {
         activeId={activeLibraryId}
         onSelect={handleSelectLibrary}
         collapsed={sidebarCollapsed}
-        onCreateClick={() => setSettingsOpen(true)}
-        onSettingsClick={() => setSettingsOpen(true)}
+        onCreateClick={openCreate}
+        onSettingsClick={openSettings}
         syncProgress={syncProgress}
         onToggleCollapse={onToggleCollapse}
+        settingsActive={isSettingsView}
       />
       <div
-        className={`min-w-0 flex-1 overflow-auto${isDetailPage ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}
+        className={`min-w-0 flex-1 overflow-auto${isDetailPage && !isSettingsView ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}
       >
-        {isDetailPage && LazyViewComponent ? (
+        {mode === "settings-new" ? (
+          <MusicLibraryEditor
+            key="__new__"
+            onSaved={handleSaved}
+            onCancel={handleCancel}
+          />
+        ) : mode === "settings" && activeLibraryId ? (
+          <MusicLibraryEditor
+            key={activeLibraryId}
+            musicId={activeLibraryId}
+            onSaved={handleSaved}
+            onDeleted={handleDeleted}
+            onCancel={handleCancel}
+          />
+        ) : isDetailPage && LazyViewComponent ? (
           <Suspense fallback={LoadingFallback}>
             <LazyViewComponent />
           </Suspense>
@@ -142,10 +211,6 @@ export default function MusicApp() {
           )
         )}
       </div>
-      <MusicSettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
     </div>
   );
 }
