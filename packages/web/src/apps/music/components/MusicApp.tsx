@@ -183,19 +183,23 @@ export default function MusicApp() {
         className={`min-w-0 flex-1 overflow-auto${isDetailPage && !isSettingsView ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}
       >
         {mode === "settings-new" ? (
-          <MusicLibraryEditor
-            key="__new__"
-            onSaved={handleSaved}
-            onCancel={handleCancel}
-          />
+          <div className="animate-settings-pane-in h-full">
+            <MusicLibraryEditor
+              key="__new__"
+              onSaved={handleSaved}
+              onCancel={handleCancel}
+            />
+          </div>
         ) : mode === "settings" && activeLibraryId ? (
-          <MusicLibraryEditor
-            key={activeLibraryId}
-            musicId={activeLibraryId}
-            onSaved={handleSaved}
-            onDeleted={handleDeleted}
-            onCancel={handleCancel}
-          />
+          <div className="animate-settings-pane-in h-full">
+            <MusicLibraryEditor
+              key={activeLibraryId}
+              musicId={activeLibraryId}
+              onSaved={handleSaved}
+              onDeleted={handleDeleted}
+              onCancel={handleCancel}
+            />
+          </div>
         ) : isDetailPage && LazyViewComponent ? (
           <Suspense fallback={LoadingFallback}>
             <LazyViewComponent />
