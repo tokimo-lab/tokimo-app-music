@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Spin } from "@tokimo/ui";
 import { Music, Plus } from "lucide-react";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import { AnimatedSettingsPane } from "@/apps/_framework/AnimatedSettingsPane";
 import MusicLibraryEditor from "@/apps/settings/admin/MusicLibraryEditor";
 import { api } from "@/generated/rust-api";
 import { useContainerWidth } from "@/shared/hooks/use-container-width";
@@ -180,39 +181,40 @@ export default function MusicApp() {
         settingsActive={isSettingsView}
       />
       <div
-        className={`min-w-0 flex-1 overflow-auto${isDetailPage && !isSettingsView ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}
+        className={`relative min-w-0 flex-1 overflow-auto${isDetailPage && !isSettingsView ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}
       >
-        {mode === "settings-new" ? (
-          <div className="animate-settings-pane-in h-full">
-            <MusicLibraryEditor
-              key="__new__"
-              onSaved={handleSaved}
-              onCancel={handleCancel}
-            />
-          </div>
-        ) : mode === "settings" && activeLibraryId ? (
-          <div className="animate-settings-pane-in h-full">
-            <MusicLibraryEditor
-              key={activeLibraryId}
-              musicId={activeLibraryId}
-              onSaved={handleSaved}
-              onDeleted={handleDeleted}
-              onCancel={handleCancel}
-            />
-          </div>
-        ) : isDetailPage && LazyViewComponent ? (
+        {isDetailPage && LazyViewComponent && !isSettingsView ? (
           <Suspense fallback={LoadingFallback}>
             <LazyViewComponent />
           </Suspense>
         ) : (
-          activeLibraryId &&
-          activeLibrary && (
-            <MusicContent
-              key={activeLibraryId}
-              musicId={activeLibraryId}
-              syncing={!!syncProgress[activeLibraryId]?.isActive}
-            />
-          )
+          <>
+            {activeLibraryId && activeLibrary && mode === "content" && (
+              <MusicContent
+                key={activeLibraryId}
+                musicId={activeLibraryId}
+                syncing={!!syncProgress[activeLibraryId]?.isActive}
+              />
+            )}
+            <AnimatedSettingsPane open={mode === "settings-new"}>
+              <MusicLibraryEditor
+                key="__new__"
+                onSaved={handleSaved}
+                onCancel={handleCancel}
+              />
+            </AnimatedSettingsPane>
+            <AnimatedSettingsPane
+              open={mode === "settings" && !!activeLibraryId}
+            >
+              <MusicLibraryEditor
+                key={activeLibraryId ?? "edit"}
+                musicId={activeLibraryId ?? undefined}
+                onSaved={handleSaved}
+                onDeleted={handleDeleted}
+                onCancel={handleCancel}
+              />
+            </AnimatedSettingsPane>
+          </>
         )}
       </div>
     </div>
