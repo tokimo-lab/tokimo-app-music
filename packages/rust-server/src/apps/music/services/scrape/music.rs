@@ -441,7 +441,9 @@ impl MusicScrapeService {
                     let mut active: music_artists::ActiveModel = artist.clone().into();
                     active.name = Set(credit.name.clone());
                     active.updated_at = Set(Some(now));
-                    let _ = active.update(db).await;
+                    if let Err(e) = active.update(db).await {
+                        warn!("[music_scrape] failed to update artist name for {}: {e}", artist.id);
+                    }
                 }
                 artist.id
             } else {
@@ -495,7 +497,9 @@ impl MusicScrapeService {
                 role: Set("artist".to_string()),
                 sort_order: Set(i as i32),
             };
-            let _ = music_album_artists::Entity::insert(link).exec(db).await;
+            if let Err(e) = music_album_artists::Entity::insert(link).exec(db).await {
+                warn!("[music_scrape] failed to link album {album_id} artist {aid}: {e}");
+            }
         }
         info!(
             "[music_scrape] Updated {} MB artist credits for album {}",
