@@ -1,21 +1,18 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Spin } from "@tokimo/ui";
-import { Music, Plus } from "lucide-react";
-import { Suspense, useCallback, useEffect, useState } from "react";
-import { AnimatedSettingsPane } from "@/apps/_framework/AnimatedSettingsPane";
-import MusicLibraryEditor from "@/apps/settings/admin/MusicLibraryEditor";
+import { AppSetupGuide, Spin } from "@tokimo/ui";
+import { Disc3, FileMusic, ListMusic, Plus } from "lucide-react";
+import { Suspense, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/generated/rust-api";
 import { useContainerWidth } from "@/shared/hooks/use-container-width";
 import { useSidebarCollapsed } from "@/shared/hooks/use-sidebar-collapsed";
 import { useSyncProgress } from "@/shared/hooks/use-sync-progress";
-import { useWindowNav } from "@/system";
+import { useWindowActions, useWindowId, useWindowNav } from "@/system";
 import MusicContent from "./MusicContent";
 import MusicSidebar from "./MusicSidebar";
 
 /** See PHOTO_SCAN_JOB_TYPES. Backend: apps/music/handlers/sync.rs */
 const MUSIC_SCAN_JOB_TYPES = ["music_scrape"] as const;
-
-type ViewMode = "content" | "settings" | "settings-new";
 
 const LoadingFallback = (
   <div className="flex h-full items-center justify-center">
@@ -24,6 +21,7 @@ const LoadingFallback = (
 );
 
 export default function MusicApp() {
+  const { t } = useTranslation();
   const { LazyViewComponent, params, replace, updateTitle } = useWindowNav();
   const { data: libraries, isLoading } = api.music.list.useQuery();
   const [containerRef, containerWidth] = useContainerWidth();
@@ -31,7 +29,9 @@ export default function MusicApp() {
     "music",
     containerWidth > 0 && containerWidth < 720,
   );
-  const [mode, setMode] = useState<ViewMode>("content");
+
+  const windowId = useWindowId();
+  const { openModalWindow } = useWindowActions();
 
   const activeLibraryId = params.libraryId ?? null;
 
@@ -47,49 +47,36 @@ export default function MusicApp() {
 
   const activeLibrary = libraries?.find((l) => l.id === activeLibraryId);
   const isDetailPage = !!(params.albumId ?? params.personId);
-  const isSettingsView = mode !== "content";
+
+  const openEditorModal = useCallback(
+    (opts: { musicId?: string } = {}) => {
+      openModalWindow({
+        component: () =>
+          import("@/apps/settings/admin/MusicLibraryEditorWindow"),
+        parentWindowId: windowId,
+        title: opts.musicId
+          ? `TokimoMusic · 设置`
+          : "TokimoMusic · 新建音乐库",
+        width: 720,
+        height: 640,
+        noResize: true,
+        noMinimize: true,
+        metadata: opts.musicId
+          ? ({ musicId: opts.musicId } as Record<string, unknown>)
+          : undefined,
+      });
+    },
+    [openModalWindow, windowId],
+  );
 
   useEffect(() => {
-    if (mode === "settings-new") {
-      updateTitle("TokimoMusic · 新建音乐库");
-    } else if (mode === "settings" && activeLibrary) {
-      updateTitle(`TokimoMusic · ${activeLibrary.name} · 设置`);
-    } else if (!isDetailPage && activeLibrary) {
+    if (!isDetailPage && activeLibrary) {
       updateTitle(`TokimoMusic · ${activeLibrary.name}`);
     }
-  }, [activeLibrary, mode, isDetailPage, updateTitle]);
-
-  const openSettings = useCallback(() => {
-    setMode("settings");
-  }, []);
-
-  const openCreate = useCallback(() => {
-    setMode("settings-new");
-  }, []);
+  }, [activeLibrary, isDetailPage, updateTitle]);
 
   const handleSelectLibrary = (id: string) => {
     replace(`/library/${id}`);
-    setMode("content");
-  };
-
-  const handleSaved = (savedId: string) => {
-    replace(`/library/${savedId}`);
-    setMode("content");
-  };
-
-  const handleDeleted = () => {
-    const remaining = (libraries ?? []).filter((l) => l.id !== activeLibraryId);
-    const next = remaining[0]?.id;
-    if (next) {
-      replace(`/library/${next}`);
-    } else {
-      replace("/");
-    }
-    setMode("content");
-  };
-
-  const handleCancel = () => {
-    setMode("content");
   };
 
   // ── Sync progress tracking (WS-driven + fallback polling) ──
@@ -119,51 +106,24 @@ export default function MusicApp() {
   }
 
   if (!libraries?.length) {
-    if (mode === "settings-new") {
-      return (
-        <div ref={containerRef} className="relative flex h-full">
-          <MusicSidebar
-            libraries={[]}
-            activeId={null}
-            onSelect={handleSelectLibrary}
-            collapsed={sidebarCollapsed}
-            onCreateClick={openCreate}
-            onSettingsClick={openSettings}
-            onToggleCollapse={onToggleCollapse}
-            settingsActive
-          />
-          <div className="flex-1 min-w-0 overflow-hidden h-full">
-            <MusicLibraryEditor
-              key="__new__"
-              onSaved={handleSaved}
-              onCancel={handleCancel}
-            />
-          </div>
-        </div>
-      );
-    }
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-          <Music className="h-8 w-8" />
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold text-fg-primary">
-            开始使用 TokimoMusic
-          </h2>
-          <p className="mt-1 text-sm text-fg-muted">
-            创建一个音乐库来管理你的音乐收藏
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700"
-        >
-          <Plus className="h-4 w-4" />
-          新建音乐库
-        </button>
-      </div>
+      <AppSetupGuide
+        imageSrc="/page-icons/music.png"
+        accentColor="rose"
+        title={t("common.setupGuide.getStarted", { name: "TokimoMusic" })}
+        description={t("common.setupGuide.musicTagline")}
+        features={(
+          t("common.setupGuide.musicFeatures", {
+            returnObjects: true,
+          }) as string[]
+        ).map((label, i) => ({
+          icon: [FileMusic, Disc3, ListMusic][i],
+          label,
+        }))}
+        actionLabel={t("common.setupGuide.musicAction")}
+        actionIcon={Plus}
+        onAction={() => openEditorModal()}
+      />
     );
   }
 
@@ -174,47 +134,29 @@ export default function MusicApp() {
         activeId={activeLibraryId}
         onSelect={handleSelectLibrary}
         collapsed={sidebarCollapsed}
-        onCreateClick={openCreate}
-        onSettingsClick={openSettings}
+        onCreateClick={() => openEditorModal()}
+        onSettingsClick={() =>
+          activeLibraryId && openEditorModal({ musicId: activeLibraryId })
+        }
         syncProgress={syncProgress}
         onToggleCollapse={onToggleCollapse}
-        settingsActive={isSettingsView}
       />
       <div
-        className={`relative min-w-0 flex-1 overflow-auto${isDetailPage && !isSettingsView ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}
+        className={`relative min-w-0 flex-1 overflow-auto${isDetailPage ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}
       >
-        {isDetailPage && LazyViewComponent && !isSettingsView ? (
+        {isDetailPage && LazyViewComponent ? (
           <Suspense fallback={LoadingFallback}>
             <LazyViewComponent />
           </Suspense>
         ) : (
-          <>
-            {activeLibraryId && activeLibrary && mode === "content" && (
-              <MusicContent
-                key={activeLibraryId}
-                musicId={activeLibraryId}
-                syncing={!!syncProgress[activeLibraryId]?.isActive}
-              />
-            )}
-            <AnimatedSettingsPane open={mode === "settings-new"}>
-              <MusicLibraryEditor
-                key="__new__"
-                onSaved={handleSaved}
-                onCancel={handleCancel}
-              />
-            </AnimatedSettingsPane>
-            <AnimatedSettingsPane
-              open={mode === "settings" && !!activeLibraryId}
-            >
-              <MusicLibraryEditor
-                key={activeLibraryId ?? "edit"}
-                musicId={activeLibraryId ?? undefined}
-                onSaved={handleSaved}
-                onDeleted={handleDeleted}
-                onCancel={handleCancel}
-              />
-            </AnimatedSettingsPane>
-          </>
+          activeLibraryId &&
+          activeLibrary && (
+            <MusicContent
+              key={activeLibraryId}
+              musicId={activeLibraryId}
+              syncing={!!syncProgress[activeLibraryId]?.isActive}
+            />
+          )
         )}
       </div>
     </div>
