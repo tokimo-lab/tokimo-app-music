@@ -54,9 +54,7 @@ export default function MusicApp() {
         component: () =>
           import("@/apps/settings/admin/MusicLibraryEditorWindow"),
         parentWindowId: windowId,
-        title: opts.musicId
-          ? `TokimoMusic · 设置`
-          : "TokimoMusic · 新建音乐库",
+        title: opts.musicId ? `TokimoMusic · 设置` : "TokimoMusic · 新建音乐库",
         width: 720,
         height: 640,
         noResize: true,
