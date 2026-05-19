@@ -27,7 +27,6 @@ pub struct CreateMusicInput {
     pub avatar: Option<serde_json::Value>,
     pub description: Option<String>,
     pub scrape_enabled: Option<bool>,
-    pub scrape_agents: Option<Vec<String>>,
     pub settings: Option<serde_json::Value>,
     pub sources: Option<Vec<MusicSourceInput>>,
 }
@@ -40,7 +39,6 @@ pub struct UpdateMusicInput {
     pub avatar: Option<serde_json::Value>,
     pub description: Option<String>,
     pub scrape_enabled: Option<bool>,
-    pub scrape_agents: Option<Vec<String>>,
     pub settings: Option<serde_json::Value>,
     pub sources: Option<Vec<MusicSourceInput>>,
 }
@@ -160,7 +158,6 @@ pub(crate) async fn to_music_output(
         description: model.description,
         poster_path: model.poster_path,
         scrape_enabled: model.scrape_enabled,
-        scrape_agents: model.scrape_agents,
         sort_order: model.sort_order,
         settings: model.settings,
         sync_status: model.sync_status,
