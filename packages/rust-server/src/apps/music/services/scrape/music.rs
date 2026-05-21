@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::db::entities::{music_album_artists, music_albums, music_artists, music_tracks};
 use crate::error::AppError;
-use crate::services::media::scrape::shared::artwork::upload_image_buffer;
+use crate::services::scrape::shared::artwork::upload_image_buffer;
 use crate::services::storage::StorageProvider;
 use rust_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
 use rust_client_api::types::{ArtistCredit, MusicMatchCandidate, MusicTrack as MbTrack};

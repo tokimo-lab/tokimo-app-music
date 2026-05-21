@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::db::entities::music_albums;
 use crate::queue::cancellation::{JobCancel, check_cancel};
-use crate::services::media::scrape::music::MusicScrapeService;
+use crate::services::scrape::music::MusicScrapeService;
 
 pub async fn handle(
     db: &DatabaseConnection,

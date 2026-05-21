@@ -13,7 +13,7 @@ use crate::db::repos::media::music_repo::UpdateMusicFields;
 use crate::error::AppError;
 use crate::error::OptionExt;
 use crate::handlers::{ApiResponse, ok, ok_empty};
-use crate::services::media::source::normalize_source_path;
+use crate::services::source::normalize_source_path;
 
 use super::{
     CreateMusicInput, MusicReorderInput, UpdateMusicInput, parse_uuid, sources_to_json, to_music_output,

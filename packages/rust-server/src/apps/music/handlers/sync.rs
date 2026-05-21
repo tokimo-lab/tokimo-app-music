@@ -14,7 +14,7 @@ use crate::db::repos::media::MusicRepo;
 use crate::error::AppError;
 use crate::error::OptionExt;
 use crate::handlers::{ApiResponse, ok};
-use crate::services::media::app_sync::AppSyncService;
+use crate::services::app_sync::AppSyncService;
 
 use super::{MusicSyncInput, parse_uuid};
 
