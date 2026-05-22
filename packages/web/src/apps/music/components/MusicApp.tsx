@@ -8,6 +8,7 @@ import { useContainerWidth } from "@/shared/hooks/use-container-width";
 import { useSidebarCollapsed } from "@/shared/hooks/use-sidebar-collapsed";
 import { useSyncProgress } from "@/shared/hooks/use-sync-progress";
 import { useWindowActions, useWindowId, useWindowNav } from "@/system";
+import { PickCancelled, pickWithBridge } from "@/system/window-bridge";
 import MusicContent from "./MusicContent";
 import MusicSidebar from "./MusicSidebar";
 
@@ -49,22 +50,31 @@ export default function MusicApp() {
   const isDetailPage = !!(params.albumId ?? params.personId);
 
   const openEditorModal = useCallback(
-    (opts: { musicId?: string } = {}) => {
-      openModalWindow({
-        component: () =>
-          import("@/apps/settings/admin/MusicLibraryEditorWindow"),
-        parentWindowId: windowId,
-        title: opts.musicId ? `TokimoMusic · 设置` : "TokimoMusic · 新建音乐库",
-        width: 720,
-        height: 640,
-        noResize: true,
-        noMinimize: true,
-        metadata: opts.musicId
-          ? ({ musicId: opts.musicId } as Record<string, unknown>)
-          : undefined,
-      });
+    async (opts: { musicId?: string } = {}) => {
+      const isEdit = !!opts.musicId;
+      try {
+        const created = await pickWithBridge<{ id: string }>(openModalWindow, {
+          component: () =>
+            import("@/apps/settings/admin/MusicLibraryEditorWindow"),
+          parentWindowId: windowId,
+          title: isEdit ? "TokimoMusic · 设置" : "TokimoMusic · 新建音乐库",
+          width: 720,
+          height: 640,
+          noResize: true,
+          noMinimize: true,
+          metadata: isEdit
+            ? ({ musicId: opts.musicId } as Record<string, unknown>)
+            : undefined,
+        });
+        if (!isEdit) {
+          replace(`/library/${created.id}`);
+        }
+      } catch (err) {
+        if (err instanceof PickCancelled) return;
+        throw err;
+      }
     },
-    [openModalWindow, windowId],
+    [openModalWindow, windowId, replace],
   );
 
   useEffect(() => {
@@ -120,7 +130,9 @@ export default function MusicApp() {
         }))}
         actionLabel={t("common.setupGuide.musicAction")}
         actionIcon={Plus}
-        onAction={() => openEditorModal()}
+        onAction={() => {
+          void openEditorModal();
+        }}
       />
     );
   }
@@ -132,10 +144,14 @@ export default function MusicApp() {
         activeId={activeLibraryId}
         onSelect={handleSelectLibrary}
         collapsed={sidebarCollapsed}
-        onCreateClick={() => openEditorModal()}
-        onSettingsClick={() =>
-          activeLibraryId && openEditorModal({ musicId: activeLibraryId })
-        }
+        onCreateClick={() => {
+          void openEditorModal();
+        }}
+        onSettingsClick={() => {
+          if (activeLibraryId) {
+            void openEditorModal({ musicId: activeLibraryId });
+          }
+        }}
         syncProgress={syncProgress}
         onToggleCollapse={onToggleCollapse}
       />
