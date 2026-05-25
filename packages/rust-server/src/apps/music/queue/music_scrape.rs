@@ -13,14 +13,15 @@ pub async fn handle(
     db: &DatabaseConnection,
     state: &Arc<AppState>,
     _job_id: Uuid,
-    payload: &JsonValue,
+    params: &JsonValue,
+    _user_id: Option<Uuid>,
     cancel: &JobCancel,
 ) -> Result<Option<JsonValue>, Box<dyn std::error::Error + Send + Sync>> {
     check_cancel(cancel)?;
-    let album_id = payload
+    let album_id = params
         .get("albumId")
         .and_then(|v| v.as_str())
-        .ok_or("Missing albumId in payload")?;
+        .ok_or("Missing albumId in params")?;
     let album_id = Uuid::parse_str(album_id)?;
 
     // Idempotency: skip if already scraped (handles duplicate jobs from re-sync).
