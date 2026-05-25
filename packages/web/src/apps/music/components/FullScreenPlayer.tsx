@@ -21,10 +21,10 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useLyrics } from "@/apps/music/hooks/useLyrics";
 import { posterThumbUrl } from "@/lib/thumb";
 import type { PlayerVisualMode } from "@/lib/types";
 import { useUiPreference } from "@/shared/hooks/use-preference";
-import { useLyrics } from "@/shared/hooks/useLyrics";
 import { type RepeatMode, useMusicPlayer } from "@/system";
 import type { PlayerPrefs } from "@/types";
 import { AudioVisualizer } from "./visualizer/AudioVisualizer";

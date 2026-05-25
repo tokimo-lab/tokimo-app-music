@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { AppSetupGuide, Spin } from "@tokimo/ui";
 import { Disc3, FileMusic, ListMusic, Plus } from "lucide-react";
 import { Suspense, useCallback, useEffect } from "react";
@@ -6,14 +5,11 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/generated/rust-api";
 import { useContainerWidth } from "@/shared/hooks/use-container-width";
 import { useSidebarCollapsed } from "@/shared/hooks/use-sidebar-collapsed";
-import { useJobProgress } from "@/shared/hooks/use-sync-progress";
 import { useWindowActions, useWindowId, useWindowNav } from "@/system";
 import { PickCancelled, pickWithBridge } from "@/system/window-bridge";
+import { useLibraryItemProgress } from "../hooks/useLibraryItemProgress";
 import MusicContent from "./MusicContent";
 import MusicSidebar from "./MusicSidebar";
-
-/** See PHOTO_SCAN_JOB_TYPES. Backend: apps/music/handlers/sync.rs */
-const MUSIC_SCAN_JOB_TYPES = ["music_scrape"] as const;
 
 const LoadingFallback = (
   <div className="flex h-full items-center justify-center">
@@ -87,23 +83,7 @@ export default function MusicApp() {
     replace(`/library/${id}`);
   };
 
-  // ── Job progress tracking (WS-driven + fallback polling) ──
-  const queryClient = useQueryClient();
-
-  const syncProgress = useJobProgress({
-    libraries,
-    progressQueryKey: (id) => api.music.getSyncProgress.queryKey({ id }),
-    fetchProgress: (id) => api.music.getSyncProgress.fetch({ id }),
-    scanJobTypes: MUSIC_SCAN_JOB_TYPES,
-    onContentRefresh: () => {
-      api.music.listAlbums.invalidate(queryClient);
-      api.music.listArtists.invalidate(queryClient);
-      api.music.listTracks.invalidate(queryClient);
-    },
-    onLibraryRefresh: () => {
-      api.music.list.invalidate(queryClient);
-    },
-  });
+  const syncProgress = useLibraryItemProgress(libraries);
 
   if (isLoading) {
     return (

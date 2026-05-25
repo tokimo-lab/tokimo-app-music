@@ -14,8 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLyrics } from "@/apps/music/hooks/useLyrics";
 import { posterThumbUrl } from "@/lib/thumb";
-import { useLyrics } from "@/shared/hooks/useLyrics";
 import { type RepeatMode, useMusicPlayer } from "@/system";
 import { FullScreenPlayer } from "./FullScreenPlayer";
 import { NowPlayingPanel } from "./NowPlayingPanel";
