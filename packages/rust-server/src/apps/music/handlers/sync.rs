@@ -8,11 +8,11 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::db::ApiDateTimeExt;
-use crate::db::models::music::{MusicSyncProgressOutput, MusicSyncStatusOutput, MusicTaskProgress};
-use crate::db::repos::job_repo::JobRepo;
+use crate::db::models::music::MusicSyncStatusOutput;
 use crate::db::repos::media::MusicRepo;
 use crate::error::AppError;
 use crate::error::OptionExt;
+use crate::handlers::user::AuthUser;
 use crate::handlers::{ApiResponse, ok};
 use crate::services::app_sync::AppSyncService;
 
@@ -22,6 +22,7 @@ use super::{MusicSyncInput, parse_uuid};
 pub async fn sync_music(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
+    AuthUser(auth): AuthUser,
     body: Option<Json<MusicSyncInput>>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
     let uid: Uuid = id
@@ -48,9 +49,11 @@ pub async fn sync_music(
     let db = state.db.clone();
     let sources = state.sources.clone();
     let storage = state.storage.clone();
+    let user_id: Option<Uuid> = auth.user_id.parse().ok();
+    let event_tx = state.event_tx.clone();
 
     tokio::spawn(async move {
-        match AppSyncService::execute_music_sync(&db, &sources, &storage, uid, false).await {
+        match AppSyncService::execute_music_sync(&db, &sources, &storage, uid, false, user_id, &event_tx).await {
             Ok(result) => {
                 info!("music sync completed, {} jobs dispatched", result.total_jobs);
             }
@@ -93,57 +96,4 @@ pub async fn get_all_music_sync_statuses(
         })
         .collect();
     Ok(ok(statuses))
-}
-
-/// GET /api/apps/music/{id}/sync-progress
-pub async fn get_music_sync_progress(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Result<Json<ApiResponse<MusicSyncProgressOutput>>, AppError> {
-    let uid = parse_uuid(&id)?;
-    let music = MusicRepo::get_by_id(&state.db, uid)
-        .await?
-        .not_found(format!("music library {id} not found"))?;
-
-    let job_types = &["music_scrape"];
-    let (total, completed, running, pending, failed) = JobRepo::count_jobs_by_app(&state.db, uid, job_types).await?;
-
-    let rows = JobRepo::get_task_progress_by_app(&state.db, uid, job_types).await?;
-    let tasks: Vec<MusicTaskProgress> = rows
-        .into_iter()
-        .map(|row| {
-            let status = if row.running > 0 {
-                "running"
-            } else if row.pending > 0 {
-                "pending"
-            } else if row.failed > 0 && row.completed == 0 {
-                "failed"
-            } else {
-                "completed"
-            };
-
-            let (total_items, processed_items) = {
-                let t = row.completed + row.running + row.pending + row.failed;
-                (t, row.completed)
-            };
-
-            MusicTaskProgress {
-                task_type: row.job_type,
-                status: status.to_string(),
-                total_items,
-                processed_items,
-            }
-        })
-        .collect();
-
-    Ok(ok(MusicSyncProgressOutput {
-        music_id: uid.to_string(),
-        status: music.sync_status,
-        total,
-        completed,
-        running,
-        pending,
-        failed,
-        tasks,
-    }))
 }

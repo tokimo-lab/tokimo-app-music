@@ -54,10 +54,6 @@ pub fn build_music_app_routes() -> Router<Arc<AppState>> {
             get(handlers::get_music_sync_status),
         )
         .route(
-            "/api/apps/music/{id}/sync-progress",
-            get(handlers::get_music_sync_progress),
-        )
-        .route(
             "/api/apps/music/{id}/albums",
             get(handlers::list_albums),
         )
