@@ -2,10 +2,8 @@
 //!
 //! 路由布局（server 端 `/api/apps/music/<rest>` 反代到本 sock 的 `/<rest>`）。
 //!
-//! TODO: All handlers currently return 501 Not Implemented. Business logic
-//! (file scanning, streaming, metadata scrape, sync) needs to be ported from
-//! packages/rust-server/src/apps/music/ once shared DB repos are extracted
-//! into a standalone crate.
+//! Stage 3a: GET /, GET /{id}/tracks, GET /files/{file_id}/stream are real.
+//! All other stubs remain 501 until Stage 3b.
 
 use std::sync::Arc;
 
@@ -18,7 +16,7 @@ use axum::{
 use tokimo_bus_protocol::{BusListener, DataPlaneSocket};
 use tracing::{error, info};
 
-use crate::{assets, ctx::AppCtx};
+use crate::{assets, ctx::AppCtx, handlers};
 
 pub async fn spawn(service: &str, ctx: Arc<AppCtx>) -> anyhow::Result<DataPlaneSocket> {
     let (listener, socket) = BusListener::bind_for_app(service)?;
@@ -37,10 +35,10 @@ pub async fn spawn(service: &str, ctx: Arc<AppCtx>) -> anyhow::Result<DataPlaneS
 
 fn build_router(ctx: Arc<AppCtx>) -> Router {
     Router::new()
-        // File streaming
-        .route("/files/{file_id}/stream", get(stub_stream))
-        // Library CRUD
-        .route("/", get(stub).post(stub))
+        // File streaming — Stage 3a real
+        .route("/files/{file_id}/stream", get(handlers::stream_file))
+        // Library CRUD — GET / is Stage 3a real; POST / remains 501
+        .route("/", get(handlers::list_libraries).post(stub))
         .route("/reorder", post(stub))
         .route("/sync-statuses", get(stub))
         // Album / track / artist detail (must come before /{id})
@@ -48,12 +46,12 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
         .route("/artist/{person_id}", get(stub))
         .route("/album/{id}/toggle-favorite", post(stub))
         .route("/track/{id}/lyrics", get(stub))
-        // Library-scoped routes
+        // Library-scoped routes — GET /{id}/tracks is Stage 3a real
         .route("/{id}", get(stub).patch(stub).delete(stub))
         .route("/{id}/sync", post(stub))
         .route("/{id}/sync-status", get(stub))
         .route("/{id}/albums", get(stub))
-        .route("/{id}/tracks", get(stub))
+        .route("/{id}/tracks", get(handlers::list_tracks))
         .route("/{id}/artists", get(stub))
         .route("/{id}/genres", get(stub))
         // Assets
@@ -62,7 +60,6 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
 }
 
 /// Stub handler — returns 501 Not Implemented.
-/// TODO: replace with real implementation once DB repos are extracted.
 async fn stub() -> Response {
     (
         StatusCode::NOT_IMPLEMENTED,
@@ -72,9 +69,4 @@ async fn stub() -> Response {
         })),
     )
         .into_response()
-}
-
-/// Alias — streaming stub is the same response shape.
-async fn stub_stream() -> Response {
-    stub().await
 }

@@ -8,6 +8,7 @@ mod assets;
 mod ctx;
 mod db;
 mod error;
+mod handlers;
 
 use std::sync::{Arc, OnceLock};
 

@@ -1,6 +1,9 @@
-//! DB 层 — 仅连接池初始化。schema migrations 由 host (`bus/app_migrator`) 统一执行。
+//! DB layer — connection pool init + entities + repos.
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+
+pub mod entities;
+pub mod repos;
 
 pub async fn init_pool() -> anyhow::Result<DatabaseConnection> {
     let base_url = std::env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL is required"))?;
