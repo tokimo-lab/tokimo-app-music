@@ -28,12 +28,41 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
+async function vfsFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(path, { ...init, credentials: "include" });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  const json = (await r.json()) as ApiResponse<T>;
+  if (!json.success) {
+    throw new Error(json.error ?? "API request failed");
+  }
+  return json.data as T;
+}
+
 const API_BASE = "/api/apps/music";
+
+export interface VfsDto {
+  id: string;
+  name: string;
+  type: string;
+}
+
+interface MusicSource {
+  sourceId: string;
+  rootPath: string;
+  sortOrder?: number;
+  isDefaultDownload?: boolean;
+  sourceName?: string;
+  sourceType?: string;
+}
 
 interface LibraryDto {
   id: string;
   userId?: string | null;
   name: string;
+  type?: string;
+  avatar?: unknown;
+  description?: string | null;
+  sources?: MusicSource[];
   rootPath: string;
   sourceId?: string | null;
   sourceType?: string | null;
@@ -108,11 +137,14 @@ interface RawPage<T> {
 export interface MusicOutput {
   id: string;
   name: string;
+  type?: string;
+  avatar?: unknown;
+  description?: string | null;
+  sources?: MusicSource[];
   storageBindingId?: string | null;
   rootPath: string;
   sourceId?: string | null;
   sourceType?: string | null;
-  avatar: string;
   itemCount: number;
   syncStatus?: string;
   createdAt: string;
@@ -205,14 +237,31 @@ export interface TrackLyricsOutput {
 }
 
 function toLibrary(dto: LibraryDto, sync?: SyncStatusDto): MusicOutput {
+  const sources =
+    dto.sources && dto.sources.length > 0
+      ? dto.sources
+      : dto.sourceId || dto.rootPath
+        ? [
+            {
+              sourceId: dto.sourceId ?? "",
+              rootPath: dto.rootPath,
+              sourceName: undefined,
+              sourceType: dto.sourceType ?? undefined,
+            },
+          ]
+        : undefined;
+
   return {
     id: dto.id,
     name: dto.name,
+    type: dto.type,
+    avatar: dto.avatar,
+    description: dto.description,
+    sources,
     storageBindingId: dto.sourceId,
     rootPath: dto.rootPath,
     sourceId: dto.sourceId,
     sourceType: dto.sourceType,
-    avatar: dto.id,
     itemCount: 0,
     syncStatus: sync?.status,
     createdAt: dto.createdAt,
@@ -308,6 +357,16 @@ function invalidate(qc: QueryClient, key: QueryKey) {
 }
 
 export const api = {
+  vfs: {
+    list: {
+      useQuery: (options?: QueryOptions<VfsDto[]>) =>
+        useQuery<VfsDto[]>({
+          queryKey: ["vfs", "list"],
+          queryFn: () => vfsFetch<VfsDto[]>("/api/vfs"),
+          ...options,
+        }),
+    },
+  },
   music: {
     list: {
       useQuery: (options?: QueryOptions<MusicOutput[]>) =>
@@ -593,13 +652,31 @@ export const api = {
 
 export interface CreateLibraryInput {
   name: string;
-  rootPath: string;
+  type?: string;
+  avatar?: Record<string, unknown> | null;
+  description?: string | null;
+  sources?: Array<{
+    sourceId: string;
+    rootPath: string;
+    sortOrder?: number;
+    isDefaultDownload?: boolean;
+  }>;
+  rootPath?: string;
   sourceId?: string;
   sourceType?: string;
 }
 
 export interface UpdateLibraryInput {
   name?: string;
+  type?: string;
+  avatar?: Record<string, unknown> | null;
+  description?: string | null;
+  sources?: Array<{
+    sourceId: string;
+    rootPath: string;
+    sortOrder?: number;
+    isDefaultDownload?: boolean;
+  }>;
   rootPath?: string;
   sourceId?: string;
   sourceType?: string;
