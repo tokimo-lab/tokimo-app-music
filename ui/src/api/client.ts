@@ -647,6 +647,29 @@ export const api = {
           ...options,
         }),
     },
+    reorder: {
+      useMutation: (
+        options?: UseMutationOptions<
+          { success: boolean },
+          Error,
+          Array<{ id: string; sortOrder: number }>
+        >,
+      ) =>
+        useMutation<
+          { success: boolean },
+          Error,
+          Array<{ id: string; sortOrder: number }>
+        >({
+          mutationFn: (input) =>
+            apiFetch<{ success: boolean }>(`${API_BASE}/reorder`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orders: input }),
+            }),
+          ...options,
+        }),
+      invalidate: (qc: QueryClient) => invalidate(qc, ["music", "list"]),
+    },
   },
 };
 
