@@ -1,0 +1,10 @@
+{
+  "name": "@tokimo-app/music-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'music UI is served from the main web package'",
+    "dev": "echo 'music UI is served from the main web package'"
+  }
+}

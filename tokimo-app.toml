@@ -1,0 +1,29 @@
+[app]
+id          = "music"
+display     = "Music"
+version     = "0.1.0"
+description = "Tokimo 音乐库管理器 — 本地音乐文件管理与播放"
+
+[runtime]
+lifecycle    = "resident"
+binary       = "tokimo-app-music"
+ui_dist      = "ui/dist"
+
+[ui]
+entry        = "assets/index.js"
+window_type  = "music"
+category     = "system"
+icon         = "Music"
+image        = "icon.png"
+color        = "#ec4899"
+width        = 1200
+height       = 800
+
+[cli]
+name = "tokimo-app-music"
+description = "Manage music libraries."
+
+[database]
+schema = "music"
+migrations_dir = "migrations"
+driver = "postgres"
