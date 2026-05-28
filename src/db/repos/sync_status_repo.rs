@@ -22,19 +22,22 @@ impl SyncStatusRepo {
         Ok(SyncStatus::find().all(db).await?)
     }
 
-    /// Upsert sync status to "completed" with last_sync_at = now.
-    /// TODO: real scan task in worker queue (Stage 3c or independent ticket).
-    pub async fn upsert_completed<C: ConnectionTrait>(
+    /// Upsert sync status and persist progress/error details.
+    pub async fn upsert_status<C: ConnectionTrait>(
         db: &C,
         library_id: Uuid,
+        status: &str,
+        last_error: Option<String>,
+        progress: Option<serde_json::Value>,
     ) -> Result<library_sync_status::Model, AppError> {
         let now = Utc::now().fixed_offset();
+        let last_sync_at = (status == "completed").then_some(now);
         let am = library_sync_status::ActiveModel {
             library_id: Set(library_id),
-            status: Set("completed".to_string()),
-            last_sync_at: Set(Some(now)),
-            last_error: Set(None),
-            progress: Set(None),
+            status: Set(status.to_string()),
+            last_sync_at: Set(last_sync_at),
+            last_error: Set(last_error),
+            progress: Set(progress),
             updated_at: Set(now),
         };
         Ok(SyncStatus::insert(am)
