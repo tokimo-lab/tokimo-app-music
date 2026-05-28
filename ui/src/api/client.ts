@@ -356,6 +356,25 @@ function invalidate(qc: QueryClient, key: QueryKey) {
   return qc.invalidateQueries({ queryKey: key });
 }
 
+export interface BrowseEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
+export interface BrowseDirectoryResponse {
+  currentPath: string;
+  parentPath: string | null;
+  entries: BrowseEntry[];
+}
+
+export interface SourceStatEntry {
+  path: string;
+  size: number | null;
+  modifiedAt: string | null;
+  mode: string | null;
+}
+
 export const api = {
   vfs: {
     list: {
@@ -366,6 +385,32 @@ export const api = {
           ...options,
         }),
     },
+    browse: (fileSystemId: string | undefined, path: string) =>
+      fileSystemId
+        ? vfsFetch<BrowseDirectoryResponse>(
+            `/api/vfs/${encodeURIComponent(fileSystemId)}/browse?path=${encodeURIComponent(path)}`,
+          )
+        : vfsFetch<BrowseDirectoryResponse>(
+            `/api/vfs/local/browse?path=${encodeURIComponent(path)}`,
+          ),
+    stat: (
+      paths: string[],
+      fileSystemId: string | undefined,
+    ): Promise<SourceStatEntry[]> =>
+      fileSystemId
+        ? vfsFetch<SourceStatEntry[]>(
+            `/api/vfs/${encodeURIComponent(fileSystemId)}/stat`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ paths }),
+            },
+          )
+        : vfsFetch<SourceStatEntry[]>("/api/vfs/local/stat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paths }),
+          }),
   },
   music: {
     list: {

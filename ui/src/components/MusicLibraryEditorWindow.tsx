@@ -30,6 +30,7 @@ export default function MusicLibraryEditorWindow({
         <ToastProvider>
           <MusicLibraryEditor
             musicId={bridge.musicId}
+            shell={bridge.shell}
             onSaved={() => {
               bridge.onMutated();
               win.close();

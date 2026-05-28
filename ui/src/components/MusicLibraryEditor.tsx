@@ -3,6 +3,7 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
+import type { ShellApi } from "@tokimo/sdk";
 import {
   type AvatarData,
   AvatarPicker,
@@ -14,13 +15,14 @@ import {
   parseAvatar,
   ScrollArea,
   Select,
-  type StorageBinding,
   StorageBindingsField,
   useToast,
+  type VideoBinding,
 } from "@tokimo/ui";
 import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type MusicOutput } from "../api/client";
+import { useVfsBrowse } from "../hooks/useVfsBrowse";
 
 const MUSIC_TYPES = [
   { value: "music", label: "音乐" },
@@ -30,6 +32,7 @@ const MUSIC_TYPES = [
 
 interface MusicLibraryEditorProps {
   musicId?: string;
+  shell: ShellApi;
   onSaved?: (savedId: string) => void;
   onDeleted?: () => void;
   onCancel?: () => void;
@@ -37,11 +40,13 @@ interface MusicLibraryEditorProps {
 
 export default function MusicLibraryEditor({
   musicId,
+  shell,
   onSaved,
   onDeleted,
   onCancel,
 }: MusicLibraryEditorProps) {
   const toast = useToast();
+  const onBrowse = useVfsBrowse(shell);
   const qc = useQueryClient();
   const [form] = Form.useForm();
 
@@ -50,7 +55,6 @@ export default function MusicLibraryEditor({
   const music = musicId ? libraries.find((c) => c.id === musicId) : undefined;
 
   const [avatar, setAvatar] = useState<AvatarData | null>(null);
-  const [bindings, setBindings] = useState<StorageBinding[]>([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
 
@@ -73,32 +77,10 @@ export default function MusicLibraryEditor({
         description: music.description ?? "",
       });
       setAvatar(parseAvatar(music.avatar));
-
-      // Initialize bindings from music.sources or fallback to legacy rootPath/sourceId
-      if (music.sources && music.sources.length > 0) {
-        setBindings(
-          music.sources.map((s) => ({
-            sourceId: s.sourceId,
-            rootPath: s.rootPath,
-            isDefaultDownload: s.isDefaultDownload,
-          })),
-        );
-      } else if (music.rootPath || music.sourceId) {
-        setBindings([
-          {
-            sourceId: music.sourceId ?? "",
-            rootPath: music.rootPath,
-            isDefaultDownload: true,
-          },
-        ]);
-      } else {
-        setBindings([]);
-      }
     } else {
       form.resetFields();
       form.setFieldsValue({ type: "music" });
       setAvatar({ type: "icon", icon: "lucide:music", color: "#ec4899" });
-      setBindings([]);
     }
   }, [music, form]);
 
@@ -133,8 +115,9 @@ export default function MusicLibraryEditor({
 
   const handleSave = useCallback(async () => {
     const values = await form.validateFields();
-    // Filter and map bindings to sources format
-    const sources = bindings
+    const rawBindings =
+      (form.getFieldValue("bindings") as VideoBinding[] | undefined) ?? [];
+    const sources = rawBindings
       .filter((b) => b.sourceId && b.rootPath)
       .map((b, i) => ({
         sourceId: b.sourceId,
@@ -143,15 +126,6 @@ export default function MusicLibraryEditor({
         isDefaultDownload: b.isDefaultDownload ?? i === 0,
       }));
 
-    // Legacy compatibility: use first binding for rootPath/sourceId
-    const firstBinding = bindings[0];
-    const legacyRootPath = firstBinding?.rootPath ?? "";
-    const legacySourceId = firstBinding?.sourceId;
-    // Find sourceType from vfsSources for the first binding
-    const legacySourceType = legacySourceId
-      ? vfsSources.find((s) => s.id === legacySourceId)?.type
-      : undefined;
-
     if (music) {
       await updateMutation.mutateAsync({
         id: music.id,
@@ -159,9 +133,6 @@ export default function MusicLibraryEditor({
         avatar: avatar as Record<string, unknown> | null,
         description: (values.description as string) || null,
         sources,
-        rootPath: legacyRootPath,
-        sourceId: legacySourceId,
-        sourceType: legacySourceType,
       });
     } else {
       await createMutation.mutateAsync({
@@ -170,20 +141,9 @@ export default function MusicLibraryEditor({
         avatar: avatar as Record<string, unknown> | null,
         description: (values.description as string) || null,
         sources,
-        rootPath: legacyRootPath,
-        sourceId: legacySourceId,
-        sourceType: legacySourceType,
       });
     }
-  }, [
-    form,
-    music,
-    avatar,
-    bindings,
-    vfsSources,
-    createMutation,
-    updateMutation,
-  ]);
+  }, [form, music, avatar, createMutation, updateMutation]);
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
@@ -244,9 +204,10 @@ export default function MusicLibraryEditor({
               路径配置
             </h4>
             <StorageBindingsField
-              value={bindings}
-              onChange={setBindings}
               sources={vfsSources}
+              form={form}
+              initialSources={music?.sources}
+              onBrowse={onBrowse}
             />
           </div>
         </ScrollArea>
@@ -255,11 +216,7 @@ export default function MusicLibraryEditor({
         <div className="flex shrink-0 items-center justify-between border-t border-border-base px-5 py-3">
           <div>
             {music && (
-              <Button
-                variant="danger"
-                onClick={() => setDeleteOpen(true)}
-                className="cursor-pointer"
-              >
+              <Button variant="danger" onClick={() => setDeleteOpen(true)}>
                 <Trash2 size={14} className="mr-1" />
                 删除
               </Button>
@@ -338,7 +295,6 @@ function DeleteConfirmModal({
             disabled={deleteInput !== music.name}
             loading={loading}
             onClick={onConfirm}
-            className="cursor-pointer"
           >
             确认删除
           </Button>
