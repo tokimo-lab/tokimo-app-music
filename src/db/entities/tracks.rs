@@ -13,6 +13,10 @@ pub struct Model {
     pub duration_secs: Option<f64>,
     pub size_bytes: Option<i64>,
     pub mime: Option<String>,
+    pub album_id: Option<Uuid>,
+    pub artist_id: Option<Uuid>,
+    pub genre_id: Option<Uuid>,
+    pub lyrics_text: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }
@@ -25,11 +29,44 @@ pub enum Relation {
         to = "super::libraries::Column::Id"
     )]
     Library,
+    #[sea_orm(
+        belongs_to = "super::albums::Entity",
+        from = "Column::AlbumId",
+        to = "super::albums::Column::Id"
+    )]
+    Album,
+    #[sea_orm(
+        belongs_to = "super::artists::Entity",
+        from = "Column::ArtistId",
+        to = "super::artists::Column::Id"
+    )]
+    Artist,
+    #[sea_orm(
+        belongs_to = "super::genres::Entity",
+        from = "Column::GenreId",
+        to = "super::genres::Column::Id"
+    )]
+    Genre,
 }
 
 impl Related<super::libraries::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Library.def()
+    }
+}
+impl Related<super::albums::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Album.def()
+    }
+}
+impl Related<super::artists::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Artist.def()
+    }
+}
+impl Related<super::genres::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Genre.def()
     }
 }
 

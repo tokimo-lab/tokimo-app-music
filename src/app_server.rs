@@ -2,15 +2,12 @@
 //!
 //! 路由布局（server 端 `/api/apps/music/<rest>` 反代到本 sock 的 `/<rest>`）。
 //!
-//! Stage 3a: GET /, GET /{id}/tracks, GET /files/{file_id}/stream are real.
-//! All other stubs remain 501 until Stage 3b.
+//! Stage 3b: All CRUD + sync stubs + albums/artists/genres/lyrics routes now real.
 
 use std::sync::Arc;
 
 use axum::{
     Router,
-    http::StatusCode,
-    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use tokimo_bus_protocol::{BusListener, DataPlaneSocket};
@@ -35,38 +32,37 @@ pub async fn spawn(service: &str, ctx: Arc<AppCtx>) -> anyhow::Result<DataPlaneS
 
 fn build_router(ctx: Arc<AppCtx>) -> Router {
     Router::new()
-        // File streaming — Stage 3a real
+        // File streaming
         .route("/files/{file_id}/stream", get(handlers::stream_file))
-        // Library CRUD — GET / is Stage 3a real; POST / remains 501
-        .route("/", get(handlers::list_libraries).post(stub))
-        .route("/reorder", post(stub))
-        .route("/sync-statuses", get(stub))
+        // Library CRUD
+        .route(
+            "/",
+            get(handlers::list_libraries).post(handlers::create_library),
+        )
+        .route("/reorder", post(handlers::reorder_libraries))
+        .route("/sync-statuses", get(handlers::list_sync_statuses))
         // Album / track / artist detail (must come before /{id})
-        .route("/album/{id}", get(stub))
-        .route("/artist/{person_id}", get(stub))
-        .route("/album/{id}/toggle-favorite", post(stub))
-        .route("/track/{id}/lyrics", get(stub))
-        // Library-scoped routes — GET /{id}/tracks is Stage 3a real
-        .route("/{id}", get(stub).patch(stub).delete(stub))
-        .route("/{id}/sync", post(stub))
-        .route("/{id}/sync-status", get(stub))
-        .route("/{id}/albums", get(stub))
+        .route("/album/{id}", get(handlers::get_album_detail))
+        .route("/artist/{person_id}", get(handlers::get_artist_detail))
+        .route(
+            "/album/{id}/toggle-favorite",
+            post(handlers::toggle_album_favorite),
+        )
+        .route("/track/{id}/lyrics", get(handlers::get_track_lyrics))
+        // Library-scoped routes
+        .route(
+            "/{id}",
+            get(handlers::get_library)
+                .patch(handlers::update_library)
+                .delete(handlers::delete_library),
+        )
+        .route("/{id}/sync", post(handlers::start_library_sync))
+        .route("/{id}/sync-status", get(handlers::get_library_sync_status))
+        .route("/{id}/albums", get(handlers::list_library_albums))
         .route("/{id}/tracks", get(handlers::list_tracks))
-        .route("/{id}/artists", get(stub))
-        .route("/{id}/genres", get(stub))
+        .route("/{id}/artists", get(handlers::list_library_artists))
+        .route("/{id}/genres", get(handlers::list_library_genres))
         // Assets
         .route("/assets/{*path}", get(assets::serve))
         .with_state(ctx)
-}
-
-/// Stub handler — returns 501 Not Implemented.
-async fn stub() -> Response {
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        axum::Json(serde_json::json!({
-            "success": false,
-            "error": "not implemented — music sidecar is being migrated"
-        })),
-    )
-        .into_response()
 }
