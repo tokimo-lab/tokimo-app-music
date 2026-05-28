@@ -8,3 +8,5 @@ pub mod ctx;
 pub mod db;
 pub mod error;
 pub mod services;
+
+pub mod queue;

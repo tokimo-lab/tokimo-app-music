@@ -6,12 +6,11 @@ use sea_orm::DatabaseConnection;
 use tokimo_bus_client::BusClient;
 
 use crate::services::source::SourceRegistry;
+use crate::services::storage::StorageProvider;
 
 pub struct AppCtx {
-    #[allow(dead_code)]
     pub db: DatabaseConnection,
-    #[allow(dead_code)]
-    pub client: Arc<OnceLock<Arc<BusClient>>>,
-    #[allow(dead_code)]
+        pub client: Arc<OnceLock<Arc<BusClient>>>,
     pub sources: Arc<SourceRegistry>,
+    pub storage: Arc<dyn StorageProvider>,
 }
