@@ -30,6 +30,9 @@ tokio-util        = { version = "0.7", features = ["io"] }
 urlencoding       = "2"
 rust-client-api   = { path = "../../packages/rust-client-api" }
 reqwest           = { workspace = true }
+bytes             = "1"
+async-trait       = "0.1"
+opendal           = { version = "0.55", features = ["services-fs"] }
 
 [profile.release]
 lto       = "thin"
