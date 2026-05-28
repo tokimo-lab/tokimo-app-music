@@ -35,6 +35,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::album_genres::Entity")]
+    AlbumGenres,
     #[sea_orm(has_many = "super::music_album_artists::Entity")]
     MusicAlbumArtists,
     #[sea_orm(has_many = "super::music_tracks::Entity")]
@@ -47,6 +49,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Musics,
+}
+
+impl Related<super::album_genres::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AlbumGenres.def()
+    }
 }
 
 impl Related<super::music_album_artists::Entity> for Entity {

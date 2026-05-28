@@ -2,13 +2,12 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub enum AppError {
     NotFound(String),
     BadRequest(String),
+    Conflict(String),
     Internal(String),
-    NotImplemented,
     Database(sea_orm::DbErr),
 }
 
@@ -17,8 +16,8 @@ impl std::fmt::Display for AppError {
         match self {
             Self::NotFound(msg) => write!(f, "not found: {msg}"),
             Self::BadRequest(msg) => write!(f, "bad request: {msg}"),
+            Self::Conflict(msg) => write!(f, "conflict: {msg}"),
             Self::Internal(msg) => write!(f, "internal: {msg}"),
-            Self::NotImplemented => write!(f, "unsupported operation"),
             Self::Database(err) => write!(f, "database: {err}"),
         }
     }
@@ -37,14 +36,28 @@ impl IntoResponse for AppError {
         let status = match &self {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
-            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Conflict(_) => StatusCode::CONFLICT,
+            Self::Internal(_) | Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let body = serde_json::json!({
             "success": false,
             "error": self.to_string(),
         });
         (status, Json(body)).into_response()
+    }
+}
+
+pub trait OptionExt<T> {
+    fn not_found(self, msg: String) -> Result<T, AppError>;
+    fn internal(self, msg: &str) -> Result<T, AppError>;
+}
+
+impl<T> OptionExt<T> for Option<T> {
+    fn not_found(self, msg: String) -> Result<T, AppError> {
+        self.ok_or_else(|| AppError::NotFound(msg))
+    }
+
+    fn internal(self, msg: &str) -> Result<T, AppError> {
+        self.ok_or_else(|| AppError::Internal(msg.to_string()))
     }
 }
