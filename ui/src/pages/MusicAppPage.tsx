@@ -10,13 +10,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
-import { useMusicPlayer, useWindowNav } from "../shell/hooks";
+import { MusicLayout } from "../components/MusicLayout";
 import type {
   MusicAlbumOutput,
   MusicArtistOutput,
   MusicTrackOutput,
 } from "../lib/types";
-import { MusicLayout } from "../components/MusicLayout";
+import { useMusicPlayer, useWindowNav } from "../shell/hooks";
 import { AlbumCard, ArtistCard, formatDuration } from "./music-shared";
 
 type TabKey = "albums" | "artists" | "tracks";

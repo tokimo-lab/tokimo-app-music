@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-export function useContainerWidth(): [React.RefObject<HTMLDivElement | null>, number] {
+export function useContainerWidth(): [
+  React.RefObject<HTMLDivElement | null>,
+  number,
+] {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
@@ -57,7 +60,9 @@ export function useInfiniteScroll<T>({
 
   useEffect(() => {
     if (!queryData) return;
-    setItems((prev) => (queryData.page <= 1 ? queryData.items : [...prev, ...queryData.items]));
+    setItems((prev) =>
+      queryData.page <= 1 ? queryData.items : [...prev, ...queryData.items],
+    );
   }, [queryData]);
 
   useEffect(() => {
@@ -90,7 +95,9 @@ export function useUiPreference<T>(
   const [value, setValue] = useState<T>(() => {
     try {
       const raw = window.localStorage.getItem(storageKey);
-      return raw ? ({ ...defaultValue, ...JSON.parse(raw) } as T) : defaultValue;
+      return raw
+        ? ({ ...defaultValue, ...JSON.parse(raw) } as T)
+        : defaultValue;
     } catch (error) {
       console.warn("Failed to read UI preference", error);
       return defaultValue;

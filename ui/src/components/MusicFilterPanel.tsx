@@ -48,9 +48,7 @@ export const TRACK_SORT_OPTIONS: FilterOption[] = [
   { label: "标题 Z-A", value: "title_desc" },
 ];
 
-const FAVORITE_OPTIONS: FilterOption[] = [
-  { label: "仅收藏", value: "true" },
-];
+const FAVORITE_OPTIONS: FilterOption[] = [{ label: "仅收藏", value: "true" }];
 
 // ── Pill ─────────────────────────────────────────────────────────────────────
 
@@ -96,8 +94,6 @@ export default function MusicFilterPanel({
   genreOptions,
   activeTab,
 }: MusicFilterPanelProps) {
-  
-
   const handleChange = useCallback(
     (key: keyof MusicFilters, value: string) => {
       const next = { ...filters, [key]: filters[key] === value ? "" : value };

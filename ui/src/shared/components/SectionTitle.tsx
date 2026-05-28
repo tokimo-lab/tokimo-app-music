@@ -21,13 +21,21 @@ export function PersonCard({
     <div className="w-28 shrink-0 text-center">
       <div className="mx-auto mb-2 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-skeleton)]">
         {profilePath ? (
-          <img src={profilePath} alt={name} className="h-full w-full object-cover" />
+          <img
+            src={profilePath}
+            alt={name}
+            className="h-full w-full object-cover"
+          />
         ) : (
           <User className="h-8 w-8 text-[var(--text-muted)]" />
         )}
       </div>
-      <p className="truncate text-sm font-medium text-[var(--text-primary)]">{name}</p>
-      {sub && <p className="truncate text-xs text-[var(--text-muted)]">{sub}</p>}
+      <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+        {name}
+      </p>
+      {sub && (
+        <p className="truncate text-xs text-[var(--text-muted)]">{sub}</p>
+      )}
     </div>
   );
 }

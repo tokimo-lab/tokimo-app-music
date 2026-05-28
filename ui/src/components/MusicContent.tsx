@@ -13,14 +13,14 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import { useInfiniteScroll } from "../shared/hooks/hooks";
-import { useMusicPlayer, useWindowNav } from "../shell/hooks";
 import type {
   MusicAlbumOutput,
   MusicArtistOutput,
   MusicTrackOutput,
 } from "../lib/types";
 import { AlbumCard, ArtistCard, formatDuration } from "../pages/music-shared";
+import { useInfiniteScroll } from "../shared/hooks/hooks";
+import { useMusicPlayer, useWindowNav } from "../shell/hooks";
 import type { MusicFilters } from "./MusicFilterPanel";
 import MusicFilterPanel, { EMPTY_MUSIC_FILTERS } from "./MusicFilterPanel";
 
@@ -197,7 +197,6 @@ export default function MusicContent({
 }) {
   const { navigate } = useWindowNav();
   const { playTrack, playTracks } = useMusicPlayer();
-  
 
   const [tab, setTabRaw] = useState<TabKey>("albums");
   const [page, setPage] = useState(1);

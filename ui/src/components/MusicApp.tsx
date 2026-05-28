@@ -2,11 +2,15 @@ import { AppSetupGuide, Spin } from "@tokimo/ui";
 import { Disc3, FileMusic, ListMusic, Plus } from "lucide-react";
 import { Suspense, useCallback, useEffect } from "react";
 import { api } from "../api/client";
-import { useContainerWidth } from "../shared/hooks/hooks";
-import { useSidebarCollapsed } from "../shared/hooks/hooks";
-import { useWindowActions, useWindowId, useWindowNav } from "../shell/hooks";
-import { PickCancelled, pickWithBridge } from "../shell/hooks";
 import { useLibraryItemProgress } from "../hooks/useLibraryItemProgress";
+import { useContainerWidth, useSidebarCollapsed } from "../shared/hooks/hooks";
+import {
+  PickCancelled,
+  pickWithBridge,
+  useWindowActions,
+  useWindowId,
+  useWindowNav,
+} from "../shell/hooks";
 import MusicContent from "./MusicContent";
 import MusicSidebar from "./MusicSidebar";
 
@@ -17,7 +21,6 @@ const LoadingFallback = (
 );
 
 export default function MusicApp() {
-  
   const { LazyViewComponent, params, replace, updateTitle } = useWindowNav();
   const { data: libraries, isLoading } = api.music.list.useQuery();
   const [containerRef, containerWidth] = useContainerWidth();

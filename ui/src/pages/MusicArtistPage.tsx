@@ -1,11 +1,11 @@
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokimo/ui";
 import { User } from "lucide-react";
 import { useEffect } from "react";
-import { SectionTitle } from "../shared/components/SectionTitle";
 import { api } from "../api/client";
-import { posterThumbUrl } from "../lib/utils";
-import { useBackgroundArt, useWindowNav } from "../shell/hooks";
 import { MusicLayout } from "../components/MusicLayout";
+import { posterThumbUrl } from "../lib/utils";
+import { SectionTitle } from "../shared/components/SectionTitle";
+import { useBackgroundArt, useWindowNav } from "../shell/hooks";
 import { AlbumCard } from "./music-shared";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────

@@ -22,11 +22,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useLyrics } from "../hooks/useLyrics";
+import type { PlayerPrefs, PlayerVisualMode } from "../lib/types";
 import { posterThumbUrl } from "../lib/utils";
-import type { PlayerVisualMode } from "../lib/types";
 import { useUiPreference } from "../shared/hooks/hooks";
 import { type RepeatMode, useMusicPlayer } from "../shell/hooks";
-import type { PlayerPrefs } from "../lib/types";
 import { AudioVisualizer } from "./visualizer/AudioVisualizer";
 import { CoverArtDisplay } from "./visualizer/CoverArtDisplay";
 import { VisualizationPicker } from "./visualizer/VisualizationPicker";

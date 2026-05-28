@@ -1,13 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api/client";
 import type { MusicOutput } from "../api/client";
+import { api } from "../api/client";
+import type { WsJobEvent } from "../lib/types";
 import {
   type AppEntityEventData,
   useAppEntityEvents,
+  useJobEvents,
 } from "../shell/hooks";
-import { useJobEvents } from "../shell/hooks";
-import type { WsJobEvent } from "../lib/types";
 
 const MUSIC_SCAN_JOB_TYPES = ["music_scrape"] as const;
 

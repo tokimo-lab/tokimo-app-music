@@ -10,15 +10,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect } from "react";
-import {
-  PersonCard,
-  SectionTitle,
-} from "../shared/components/SectionTitle";
 import { api } from "../api/client";
-import { posterThumbUrl } from "../lib/utils";
-import { useBackgroundArt, useMusicPlayer, useWindowNav } from "../shell/hooks";
-import type { CreditOutput, MusicTrackOutput } from "../lib/types";
 import { MusicLayout } from "../components/MusicLayout";
+import type { CreditOutput, MusicTrackOutput } from "../lib/types";
+import { posterThumbUrl } from "../lib/utils";
+import { PersonCard, SectionTitle } from "../shared/components/SectionTitle";
+import { useBackgroundArt, useMusicPlayer, useWindowNav } from "../shell/hooks";
 import { formatDuration, formatTotalDuration } from "./music-shared";
 
 // ── Favorite Button ───────────────────────────────────────────────────────────

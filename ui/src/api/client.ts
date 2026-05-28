@@ -1,10 +1,10 @@
 import {
-  useMutation,
-  useQuery,
   type QueryClient,
   type QueryKey,
   type UseMutationOptions,
   type UseQueryOptions,
+  useMutation,
+  useQuery,
 } from "@tanstack/react-query";
 
 interface ApiResponse<T> {
@@ -260,7 +260,10 @@ function toAlbum(dto: AlbumDto): MusicAlbumOutput {
   };
 }
 
-function toArtist(dto: ArtistDto, albums?: MusicAlbumOutput[]): MusicArtistOutput {
+function toArtist(
+  dto: ArtistDto,
+  albums?: MusicAlbumOutput[],
+): MusicArtistOutput {
   return {
     id: dto.id,
     musicId: dto.libraryId ?? "",
@@ -277,7 +280,10 @@ function toArtist(dto: ArtistDto, albums?: MusicAlbumOutput[]): MusicArtistOutpu
   };
 }
 
-function toPage<TIn, TOut>(page: RawPage<TIn>, map: (item: TIn) => TOut): PagedResult<TOut> {
+function toPage<TIn, TOut>(
+  page: RawPage<TIn>,
+  map: (item: TIn) => TOut,
+): PagedResult<TOut> {
   return {
     items: page.items.map(map),
     total: page.total,
@@ -286,7 +292,9 @@ function toPage<TIn, TOut>(page: RawPage<TIn>, map: (item: TIn) => TOut): PagedR
   };
 }
 
-function paramsToSearch(params: Record<string, string | number | boolean | undefined>) {
+function paramsToSearch(
+  params: Record<string, string | number | boolean | undefined>,
+) {
   const sp = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) sp.set(key, String(value));
@@ -313,7 +321,9 @@ export const api = {
               ),
             ]);
             const statusById = new Map(statuses.map((s) => [s.libraryId, s]));
-            return libraries.map((lib) => toLibrary(lib, statusById.get(lib.id)));
+            return libraries.map((lib) =>
+              toLibrary(lib, statusById.get(lib.id)),
+            );
           },
           ...options,
         }),
@@ -345,11 +355,21 @@ export const api = {
           ...options,
         }),
       invalidate: (qc: QueryClient, params?: { id?: string }) =>
-        invalidate(qc, params?.id ? ["music", "albums", params.id] : ["music", "albums"]),
+        invalidate(
+          qc,
+          params?.id ? ["music", "albums", params.id] : ["music", "albums"],
+        ),
     },
     listArtists: {
       useQuery: (
-        params: { id: string; page: number; pageSize: number; search?: string; sortBy?: string; sortDir?: string },
+        params: {
+          id: string;
+          page: number;
+          pageSize: number;
+          search?: string;
+          sortBy?: string;
+          sortDir?: string;
+        },
         options?: QueryOptions<PagedResult<MusicArtistOutput>>,
       ) =>
         useQuery<PagedResult<MusicArtistOutput>>({
@@ -364,11 +384,22 @@ export const api = {
           ...options,
         }),
       invalidate: (qc: QueryClient, params?: { id?: string }) =>
-        invalidate(qc, params?.id ? ["music", "artists", params.id] : ["music", "artists"]),
+        invalidate(
+          qc,
+          params?.id ? ["music", "artists", params.id] : ["music", "artists"],
+        ),
     },
     listTracks: {
       useQuery: (
-        params: { id: string; page: number; pageSize: number; genre?: string; search?: string; sortBy?: string; sortDir?: string },
+        params: {
+          id: string;
+          page: number;
+          pageSize: number;
+          genre?: string;
+          search?: string;
+          sortBy?: string;
+          sortDir?: string;
+        },
         options?: QueryOptions<PagedResult<MusicTrackOutput>>,
       ) =>
         useQuery<PagedResult<MusicTrackOutput>>({
@@ -383,45 +414,73 @@ export const api = {
           ...options,
         }),
       invalidate: (qc: QueryClient, params?: { id?: string }) =>
-        invalidate(qc, params?.id ? ["music", "tracks", params.id] : ["music", "tracks"]),
+        invalidate(
+          qc,
+          params?.id ? ["music", "tracks", params.id] : ["music", "tracks"],
+        ),
     },
     listGenres: {
       useQuery: (params: { id: string }, options?: QueryOptions<string[]>) =>
         useQuery<string[]>({
           queryKey: ["music", "genres", params.id],
           queryFn: () =>
-            apiFetch<RawPage<GenreDto>>(`${API_BASE}/${params.id}/genres?page=1&page_size=200`).then(
-              (page) => page.items.map((genre) => genre.name),
-            ),
+            apiFetch<RawPage<GenreDto>>(
+              `${API_BASE}/${params.id}/genres?page=1&page_size=200`,
+            ).then((page) => page.items.map((genre) => genre.name)),
           ...options,
         }),
     },
     getAlbumDetail: {
-      useQuery: (params: { id: string }, options?: QueryOptions<MusicAlbumOutput>) =>
+      useQuery: (
+        params: { id: string },
+        options?: QueryOptions<MusicAlbumOutput>,
+      ) =>
         useQuery<MusicAlbumOutput>({
           queryKey: ["music", "album", params.id],
           queryFn: async () => {
-            const detail = await apiFetch<{ album: AlbumDto; tracks: TrackDto[] }>(`${API_BASE}/album/${params.id}`);
+            const detail = await apiFetch<{
+              album: AlbumDto;
+              tracks: TrackDto[];
+            }>(`${API_BASE}/album/${params.id}`);
             return {
               ...toAlbum(detail.album),
               tracks: detail.tracks.map(toTrack),
-              totalDuration: detail.tracks.reduce((sum, track) => sum + (track.durationSecs ?? 0), 0),
+              totalDuration: detail.tracks.reduce(
+                (sum, track) => sum + (track.durationSecs ?? 0),
+                0,
+              ),
               credits: detail.album.artist
-                ? [{ id: `${detail.album.id}-artist`, role: "artist", person: { id: detail.album.id, name: detail.album.artist } }]
+                ? [
+                    {
+                      id: `${detail.album.id}-artist`,
+                      role: "artist",
+                      person: {
+                        id: detail.album.id,
+                        name: detail.album.artist,
+                      },
+                    },
+                  ]
                 : [],
               genres: [],
             };
           },
           ...options,
         }),
-      invalidate: (qc: QueryClient, params: { id: string }) => invalidate(qc, ["music", "album", params.id]),
+      invalidate: (qc: QueryClient, params: { id: string }) =>
+        invalidate(qc, ["music", "album", params.id]),
     },
     getArtistDetail: {
-      useQuery: (params: { id: string; musicId?: string }, options?: QueryOptions<MusicArtistOutput>) =>
+      useQuery: (
+        params: { id: string; musicId?: string },
+        options?: QueryOptions<MusicArtistOutput>,
+      ) =>
         useQuery<MusicArtistOutput>({
           queryKey: ["music", "artist", params.id],
           queryFn: async () => {
-            const detail = await apiFetch<{ artist: ArtistDto; albums: AlbumDto[] }>(`${API_BASE}/artist/${params.id}`);
+            const detail = await apiFetch<{
+              artist: ArtistDto;
+              albums: AlbumDto[];
+            }>(`${API_BASE}/artist/${params.id}`);
             const albums = detail.albums.map(toAlbum);
             return toArtist(detail.artist, albums);
           },
@@ -429,34 +488,58 @@ export const api = {
         }),
     },
     getTrackLyrics: {
-      useQuery: (params: { id: string }, options?: QueryOptions<TrackLyricsOutput>) =>
+      useQuery: (
+        params: { id: string },
+        options?: QueryOptions<TrackLyricsOutput>,
+      ) =>
         useQuery<TrackLyricsOutput>({
           queryKey: ["music", "track-lyrics", params.id],
-          queryFn: () => apiFetch<TrackLyricsOutput>(`${API_BASE}/track/${params.id}/lyrics`),
+          queryFn: () =>
+            apiFetch<TrackLyricsOutput>(
+              `${API_BASE}/track/${params.id}/lyrics`,
+            ),
           ...options,
         }),
     },
     toggleAlbumFavorite: {
-      useMutation: (options?: UseMutationOptions<{ isFavorite: boolean }, Error, string>) =>
+      useMutation: (
+        options?: UseMutationOptions<{ isFavorite: boolean }, Error, string>,
+      ) =>
         useMutation<{ isFavorite: boolean }, Error, string>({
-          mutationFn: (id) => apiFetch<{ isFavorite: boolean }>(`${API_BASE}/album/${id}/toggle-favorite`, { method: "POST" }),
+          mutationFn: (id) =>
+            apiFetch<{ isFavorite: boolean }>(
+              `${API_BASE}/album/${id}/toggle-favorite`,
+              { method: "POST" },
+            ),
           ...options,
         }),
     },
     sync: {
-      useMutation: (options?: UseMutationOptions<void, Error, { id: string; clearData?: boolean }>) =>
+      useMutation: (
+        options?: UseMutationOptions<
+          void,
+          Error,
+          { id: string; clearData?: boolean }
+        >,
+      ) =>
         useMutation<void, Error, { id: string; clearData?: boolean }>({
           mutationFn: async (params) => {
-            await apiFetch<unknown>(`${API_BASE}/${params.id}/sync`, { method: "POST" });
+            await apiFetch<unknown>(`${API_BASE}/${params.id}/sync`, {
+              method: "POST",
+            });
           },
           ...options,
         }),
     },
     syncLibrary: {
-      useMutation: (options?: UseMutationOptions<void, Error, { id: string }>) =>
+      useMutation: (
+        options?: UseMutationOptions<void, Error, { id: string }>,
+      ) =>
         useMutation<void, Error, { id: string }>({
           mutationFn: async (params) => {
-            await apiFetch<unknown>(`${API_BASE}/${params.id}/sync`, { method: "POST" });
+            await apiFetch<unknown>(`${API_BASE}/${params.id}/sync`, {
+              method: "POST",
+            });
           },
           ...options,
         }),

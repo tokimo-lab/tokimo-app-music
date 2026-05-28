@@ -1,7 +1,7 @@
 import { Disc3, Heart, Play, User } from "lucide-react";
 import { memo } from "react";
-import { posterThumbUrl } from "../lib/utils";
 import type { MusicAlbumOutput, MusicArtistOutput } from "../lib/types";
+import { posterThumbUrl } from "../lib/utils";
 
 export function formatDuration(seconds: number | null | undefined): string {
   if (!seconds) return "--:--";

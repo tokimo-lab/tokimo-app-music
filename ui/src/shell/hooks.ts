@@ -60,7 +60,10 @@ function parseRouteParams(route: string): WindowRouteParams {
 export function useWindowNav(): WindowNavResult {
   const ctx = useAppCtx();
   const shellNav = useShellWindowNav(ctx);
-  const params = useMemo(() => parseRouteParams(shellNav.route), [shellNav.route]);
+  const params = useMemo(
+    () => parseRouteParams(shellNav.route),
+    [shellNav.route],
+  );
   const metadata = useMemo<Record<string, unknown>>(
     () => ({ appId: params.libraryId, ...params }),
     [params],
@@ -110,7 +113,8 @@ function toMediaTrack(track: MusicTrackOutput): MediaTrack {
     artist: track.artistName,
     album: track.albumTitle,
     artworkUrl: track.coverPath ?? undefined,
-    durationMs: track.duration > 0 ? Math.round(track.duration * 1000) : undefined,
+    durationMs:
+      track.duration > 0 ? Math.round(track.duration * 1000) : undefined,
     meta: { original: track },
   };
 }
@@ -152,7 +156,9 @@ export function useMusicPlayer() {
       .map(originalOf)
       .filter((track): track is MusicTrackOutput => track !== null);
   }, [isActive, snapshot]);
-  const currentTrack = isActive ? originalOf(snapshot?.queue[snapshot.currentIndex]) : null;
+  const currentTrack = isActive
+    ? originalOf(snapshot?.queue[snapshot.currentIndex])
+    : null;
   const currentIndex = isActive && snapshot ? snapshot.currentIndex : -1;
 
   const playTracks = useCallback(
@@ -176,9 +182,16 @@ export function useMusicPlayer() {
     (tracks: MusicTrackOutput[]) => {
       if (!media || tracks.length === 0) return;
       const snap = media.getSnapshot();
-      const next = [...(snap?.providerId === PROVIDER_ID ? snap.queue : []), ...tracks.map(toMediaTrack)];
+      const next = [
+        ...(snap?.providerId === PROVIDER_ID ? snap.queue : []),
+        ...tracks.map(toMediaTrack),
+      ];
       if (!snap || snap.providerId !== PROVIDER_ID) {
-        void media.play({ providerId: PROVIDER_ID, queue: next, startIndex: 0 });
+        void media.play({
+          providerId: PROVIDER_ID,
+          queue: next,
+          startIndex: 0,
+        });
       } else {
         media.setQueue(next, snap.currentIndex);
       }
@@ -208,7 +221,9 @@ export function useMusicPlayer() {
     isPlaying: isActive && snapshot ? snapshot.isPlaying : false,
     isLoading: false,
     volume: snapshot?.volume ?? 1,
-    repeatMode: (isActive && snapshot ? snapshot.repeatMode : "off") as RepeatMode,
+    repeatMode: (isActive && snapshot
+      ? snapshot.repeatMode
+      : "off") as RepeatMode,
     shuffleEnabled: isActive && snapshot ? snapshot.shuffle : false,
     togglePlay: () => {
       const snap = media?.getSnapshot();
@@ -230,7 +245,8 @@ export function useMusicPlayer() {
     seek: (time: number) => media?.seek(Math.max(0, time) * 1000),
     setVolume: (volume: number) => media?.setVolume(volume),
     setRepeatMode: (mode: RepeatMode) => media?.setRepeat(mode),
-    toggleShuffle: () => media?.setShuffle(!(media.getSnapshot()?.shuffle ?? false)),
+    toggleShuffle: () =>
+      media?.setShuffle(!(media.getSnapshot()?.shuffle ?? false)),
     getAnalyser: () => media?.getAnalyser() ?? null,
     getCurrentTime: () => {
       const snap = media?.getSnapshot();
