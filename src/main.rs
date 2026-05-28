@@ -5,14 +5,20 @@ const MANIFEST: &str = include_str!("../tokimo-app.toml");
 
 mod app_server;
 mod assets;
+mod bus_clients;
+mod bus_services;
 mod ctx;
 mod db;
 mod error;
 mod handlers;
+mod queue;
+mod services;
 
 use std::sync::{Arc, OnceLock};
 
 use tokimo_bus_client::{BusClient, ClientConfig};
+
+use crate::services::source::SourceRegistry;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -45,21 +51,26 @@ async fn run_server() -> anyhow::Result<()> {
     info!("music: db connected");
 
     let client_slot: Arc<OnceLock<Arc<BusClient>>> = Arc::new(OnceLock::new());
+    let sources = Arc::new(SourceRegistry::new(Arc::clone(&client_slot)));
     let context = Arc::new(ctx::AppCtx {
         db: db.clone(),
         client: Arc::clone(&client_slot),
+        sources,
     });
 
     let app_socket = app_server::spawn("music", Arc::clone(&context))
         .await
         .map_err(|e| anyhow::anyhow!("app_server spawn: {e}"))?;
 
-    let client = BusClient::builder(cfg)
-        .service("music", env!("CARGO_PKG_VERSION"))
-        .data_plane(app_socket)
-        .build()
-        .await
-        .map_err(|e| anyhow::anyhow!("bus build: {e}"))?;
+    let client = bus_services::music_jobs::register(
+        BusClient::builder(cfg)
+            .service("music", env!("CARGO_PKG_VERSION"))
+            .data_plane(app_socket),
+        Arc::clone(&context),
+    )
+    .build()
+    .await
+    .map_err(|e| anyhow::anyhow!("bus build: {e}"))?;
     client_slot
         .set(Arc::clone(&client))
         .map_err(|_| anyhow::anyhow!("client_slot already set"))?;
