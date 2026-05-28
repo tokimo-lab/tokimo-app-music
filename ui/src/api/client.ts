@@ -315,7 +315,7 @@ export const api = {
           queryKey: ["music", "list"],
           queryFn: async () => {
             const [libraries, statuses] = await Promise.all([
-              apiFetch<LibraryDto[]>(`${API_BASE}/`),
+              apiFetch<LibraryDto[]>(API_BASE),
               apiFetch<SyncStatusDto[]>(`${API_BASE}/sync-statuses`).catch(
                 () => [] as SyncStatusDto[],
               ),
