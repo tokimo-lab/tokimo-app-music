@@ -2,7 +2,7 @@
 //!
 //! 路由布局（server 端 `/api/apps/music/<rest>` 反代到本 sock 的 `/<rest>`）。
 //!
-//! Stage 3b: All CRUD + sync stubs + albums/artists/genres/lyrics routes now real.
+//! Stage 3b: All CRUD + sync routes + albums/artists/genres/lyrics routes now real.
 
 use std::sync::Arc;
 

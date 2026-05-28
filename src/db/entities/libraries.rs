@@ -10,6 +10,7 @@ pub struct Model {
     pub root_path: String,
     pub source_id: Option<Uuid>,
     pub source_type: Option<String>,
+    pub sort_order: i32,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

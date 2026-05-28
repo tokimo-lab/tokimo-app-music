@@ -1,15 +1,11 @@
-//! Real handlers for Stage 3b: full CRUD + sync stubs + albums/artists/genres/lyrics.
-
 use std::sync::Arc;
 
 use axum::{
     Json,
     extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode, header},
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use serde::{Deserialize, Serialize};
-use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 use crate::{
@@ -20,6 +16,9 @@ use crate::{
         tracks_repo::TracksRepo,
     },
     error::AppError,
+    services::{
+        app_sync::AppSyncService, scrape::music::MusicScrapeService, stream::stream_vfs_file,
+    },
 };
 
 // ── Response helpers ──
@@ -39,6 +38,7 @@ struct LibraryDto {
     root_path: String,
     source_id: Option<String>,
     source_type: Option<String>,
+    sort_order: i32,
     created_at: String,
     updated_at: String,
 }
@@ -52,6 +52,7 @@ impl From<crate::db::entities::libraries::Model> for LibraryDto {
             root_path: m.root_path,
             source_id: m.source_id.map(|u| u.to_string()),
             source_type: m.source_type,
+            sort_order: m.sort_order,
             created_at: m.created_at.to_rfc3339(),
             updated_at: m.updated_at.to_rfc3339(),
         }
@@ -253,6 +254,18 @@ pub struct UpdateLibraryBody {
     pub source_type: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryOrder {
+    pub id: String,
+    pub sort_order: i32,
+}
+
+#[derive(Deserialize)]
+pub struct ReorderBody {
+    pub orders: Vec<LibraryOrder>,
+}
+
 // ── Handlers ──
 
 /// GET /
@@ -335,9 +348,24 @@ pub async fn delete_library(
 }
 
 /// POST /reorder
-/// Stub for reordering libraries.
-pub async fn reorder_libraries() -> Result<Json<serde_json::Value>, AppError> {
-    Ok(ok(serde_json::json!({"message": "reorder stub"})))
+/// Update custom library ordering.
+pub async fn reorder_libraries(
+    State(ctx): State<Arc<AppCtx>>,
+    Json(body): Json<ReorderBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let orders: Vec<(Uuid, i32)> = body
+        .orders
+        .into_iter()
+        .filter_map(|order| {
+            order
+                .id
+                .parse::<Uuid>()
+                .ok()
+                .map(|id| (id, order.sort_order))
+        })
+        .collect();
+    LibrariesRepo::update_sort_orders(&ctx.db, &orders).await?;
+    Ok(ok(serde_json::json!({ "success": true })))
 }
 
 /// GET /sync-statuses
@@ -362,7 +390,7 @@ pub async fn list_sync_statuses(
 }
 
 /// POST /{id}/sync
-/// Trigger library sync (MVP: upsert completed immediately).
+/// Trigger library sync in the sidecar.
 pub async fn start_library_sync(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<Uuid>,
@@ -370,7 +398,26 @@ pub async fn start_library_sync(
     LibrariesRepo::find_by_id(&ctx.db, id)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("library {id} not found")))?;
-    let status = SyncStatusRepo::upsert_completed(&ctx.db, id).await?;
+    let status = SyncStatusRepo::upsert_status(
+        &ctx.db,
+        id,
+        "syncing",
+        None,
+        Some(serde_json::json!({ "phase": "queued" })),
+    )
+    .await?;
+    let db = ctx.db.clone();
+    let sources = Arc::clone(&ctx.sources);
+    let bus_client_ref = Arc::clone(&ctx.client);
+    tokio::spawn(async move {
+        if let Err(error) =
+            AppSyncService::execute_music_sync(db.clone(), sources, bus_client_ref, id).await
+        {
+            tracing::error!(%error, library_id = %id, "music sync failed");
+            let _ = SyncStatusRepo::upsert_status(&db, id, "failed", Some(error.to_string()), None)
+                .await;
+        }
+    });
     Ok(ok(SyncStatusDto::from(status)))
 }
 
@@ -533,6 +580,16 @@ pub async fn get_track_lyrics(
     let lyrics_row = LyricsRepo::find_by_track_id(&ctx.db, id).await?;
     let (text, synced_lyrics) = match lyrics_row {
         Some(row) => (Some(row.text), row.synced_lyrics),
+        None if track.lyrics_text.is_none() => {
+            let fetched = MusicScrapeService::fetch_lyrics_for_track(&ctx.db, &track)
+                .await
+                .ok()
+                .flatten();
+            match fetched {
+                Some(row) => (Some(row.text), row.synced_lyrics),
+                None => (None, None),
+            }
+        }
         None => (track.lyrics_text, None),
     };
     let plain_lyrics = text.clone();
@@ -549,27 +606,29 @@ pub async fn get_track_lyrics(
 pub async fn stream_file(
     State(ctx): State<Arc<AppCtx>>,
     Path(file_id): Path<Uuid>,
+    request: axum::extract::Request,
 ) -> Result<Response, AppError> {
     let track = TracksRepo::find_by_id(&ctx.db, file_id)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("track {file_id} not found")))?;
-
-    let file = tokio::fs::File::open(&track.file_path)
+    let library_id = track
+        .library_id
+        .ok_or_else(|| AppError::BadRequest(format!("track {file_id} has no library_id")))?;
+    let library = LibrariesRepo::find_by_id(&ctx.db, library_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("library {library_id} not found")))?;
+    let source_id = library
+        .source_id
+        .ok_or_else(|| AppError::BadRequest(format!("library {library_id} has no source_id")))?;
+    let source_id_str = source_id.to_string();
+    let vfs = ctx
+        .sources
+        .ensure_vfs(&source_id_str)
         .await
-        .map_err(|e| AppError::NotFound(format!("file not found: {e}")))?;
-
+        .map_err(|error| {
+            AppError::Internal(format!("ensure VFS for source {source_id_str}: {error}"))
+        })?;
     let mime = track.mime.unwrap_or_else(|| "audio/mpeg".to_string());
 
-    let stream = ReaderStream::new(file);
-    let body = axum::body::Body::from_stream(stream);
-
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        mime.parse()
-            .unwrap_or_else(|_| "audio/mpeg".parse().unwrap()),
-    );
-    headers.insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
-
-    Ok((StatusCode::OK, headers, body).into_response())
+    stream_vfs_file(&vfs, &track.file_path, &mime, request.headers()).await
 }

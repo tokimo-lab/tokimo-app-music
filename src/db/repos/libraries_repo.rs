@@ -1,5 +1,8 @@
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, EntityTrait, QueryOrder};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, QueryOrder,
+    QuerySelect, TransactionSession, TransactionTrait,
+};
 use uuid::Uuid;
 
 use crate::db::entities::libraries::{self, Entity as Libraries};
@@ -10,6 +13,7 @@ pub struct LibrariesRepo;
 impl LibrariesRepo {
     pub async fn list_all<C: ConnectionTrait>(db: &C) -> Result<Vec<libraries::Model>, AppError> {
         Ok(Libraries::find()
+            .order_by_asc(libraries::Column::SortOrder)
             .order_by_asc(libraries::Column::CreatedAt)
             .all(db)
             .await?)
@@ -30,6 +34,15 @@ impl LibrariesRepo {
         source_id: Option<Uuid>,
         source_type: Option<String>,
     ) -> Result<libraries::Model, AppError> {
+        let max_sort_order = Libraries::find()
+            .select_only()
+            .column_as(libraries::Column::SortOrder.max(), "max_sort_order")
+            .into_tuple::<Option<i32>>()
+            .one(db)
+            .await?
+            .flatten()
+            .unwrap_or(-1);
+        let sort_order = max_sort_order + 1;
         let now = Utc::now().fixed_offset();
         let am = libraries::ActiveModel {
             name: Set(name),
@@ -37,6 +50,7 @@ impl LibrariesRepo {
             user_id: Set(user_id),
             source_id: Set(source_id),
             source_type: Set(source_type),
+            sort_order: Set(sort_order),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -73,6 +87,24 @@ impl LibrariesRepo {
         }
         am.updated_at = Set(Utc::now().fixed_offset());
         Ok(Some(am.update(db).await?))
+    }
+
+    pub async fn update_sort_orders<C: ConnectionTrait + TransactionTrait>(
+        db: &C,
+        orders: &[(Uuid, i32)],
+    ) -> Result<(), AppError> {
+        let txn = db.begin().await?;
+        for (id, sort_order) in orders {
+            let model = Libraries::find_by_id(*id).one(&txn).await?;
+            if let Some(model) = model {
+                let mut am: libraries::ActiveModel = model.into();
+                am.sort_order = Set(*sort_order);
+                am.updated_at = Set(Utc::now().fixed_offset());
+                am.update(&txn).await?;
+            }
+        }
+        txn.commit().await?;
+        Ok(())
     }
 
     pub async fn delete<C: ConnectionTrait>(db: &C, id: Uuid) -> Result<bool, AppError> {

@@ -18,7 +18,7 @@ impl std::fmt::Display for AppError {
             Self::NotFound(msg) => write!(f, "not found: {msg}"),
             Self::BadRequest(msg) => write!(f, "bad request: {msg}"),
             Self::Internal(msg) => write!(f, "internal: {msg}"),
-            Self::NotImplemented => write!(f, "not implemented"),
+            Self::NotImplemented => write!(f, "unsupported operation"),
             Self::Database(err) => write!(f, "database: {err}"),
         }
     }
