@@ -1,171 +1,150 @@
-use std::{
-    collections::VecDeque,
-    path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
-};
+use std::{collections::{HashSet, VecDeque}, path::{Path, PathBuf}, sync::Arc};
 
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, DatabaseConnection,
-    EntityTrait, PaginatorTrait, QueryFilter, TransactionTrait,
-};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, TransactionTrait};
 use serde::Serialize;
-use serde_json::json;
-use tokimo_bus_client::BusClient;
 use tokimo_vfs::Vfs;
 use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
-    bus_clients::jobs::{self as jobs_client, CreateJobRequest},
     db::{
-        entities::{albums, artists, genres, libraries, tracks},
-        repos::{libraries_repo::LibrariesRepo, sync_status_repo::SyncStatusRepo},
+        entities::{music_album_artists, music_albums, music_artists, music_files, music_tracks},
+        repos::MusicRepo,
     },
-    error::AppError,
-    services::source::{SourceRegistry, normalize_source_path},
+    error::{AppError, OptionExt},
+    services::{source::{SourceRegistry, normalize_source_path}, storage::StorageProvider},
 };
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResult {
     pub total_files: u64,
-    pub albums_seen: u64,
-    pub scrape_jobs: u64,
+    pub total_jobs: usize,
 }
 
 #[derive(Debug, Clone)]
 struct AudioFile {
+    source_id: Uuid,
     path: PathBuf,
-    size_bytes: i64,
+    size: i64,
 }
 
 #[derive(Debug)]
 struct ParsedTrack {
     title: String,
     artist: Option<String>,
-    album: Option<String>,
+    album: String,
 }
 
 pub struct AppSyncService;
 
 impl AppSyncService {
-    #[allow(dead_code)]
     pub async fn clear_library_data(
         db: &DatabaseConnection,
-        library_id: Uuid,
+        music_id: Uuid,
+        _music_type: &str,
     ) -> Result<(), AppError> {
         let txn = db.begin().await?;
-        tracks::Entity::delete_many()
-            .filter(tracks::Column::LibraryId.eq(library_id))
-            .exec(&txn)
+        let albums = music_albums::Entity::find()
+            .filter(music_albums::Column::MusicId.eq(music_id))
+            .all(&txn)
             .await?;
-        albums::Entity::delete_many()
-            .filter(albums::Column::LibraryId.eq(library_id))
-            .exec(&txn)
-            .await?;
-        artists::Entity::delete_many()
-            .filter(artists::Column::LibraryId.eq(library_id))
-            .exec(&txn)
-            .await?;
-        genres::Entity::delete_many()
-            .filter(genres::Column::LibraryId.eq(library_id))
-            .exec(&txn)
-            .await?;
+        let album_ids: Vec<Uuid> = albums.iter().map(|album| album.id).collect();
+
+        if !album_ids.is_empty() {
+            let tracks = music_tracks::Entity::find()
+                .filter(music_tracks::Column::AlbumId.is_in(album_ids.clone()))
+                .all(&txn)
+                .await?;
+            let track_ids: Vec<Uuid> = tracks.iter().map(|track| track.id).collect();
+
+            if !track_ids.is_empty() {
+                music_files::Entity::delete_many()
+                    .filter(music_files::Column::TrackId.is_in(track_ids.clone()))
+                    .exec(&txn)
+                    .await?;
+                music_tracks::Entity::delete_many()
+                    .filter(music_tracks::Column::Id.is_in(track_ids))
+                    .exec(&txn)
+                    .await?;
+            }
+
+            music_album_artists::Entity::delete_many()
+                .filter(music_album_artists::Column::AlbumId.is_in(album_ids.clone()))
+                .exec(&txn)
+                .await?;
+            music_albums::Entity::delete_many()
+                .filter(music_albums::Column::Id.is_in(album_ids))
+                .exec(&txn)
+                .await?;
+        }
         txn.commit().await?;
         Ok(())
     }
 
     pub async fn execute_music_sync(
-        db: DatabaseConnection,
-        sources: Arc<SourceRegistry>,
-        bus_client: Arc<OnceLock<Arc<BusClient>>>,
-        library_id: Uuid,
-    ) -> Result<(), AppError> {
-        SyncStatusRepo::upsert_status(
-            &db,
-            library_id,
-            "syncing",
-            None,
-            Some(json!({ "phase": "scan" })),
-        )
-        .await?;
+        db: &DatabaseConnection,
+        sources: &Arc<SourceRegistry>,
+        _storage: &Arc<dyn StorageProvider>,
+        music_id: Uuid,
+        _force: bool,
+        _user_id: Option<Uuid>,
+    ) -> Result<SyncResult, AppError> {
+        MusicRepo::update_sync_status(db, music_id, "syncing", None).await?;
+        let result = run_sync(db, sources, music_id).await;
+        match result {
+            Ok(result) => {
+                MusicRepo::update_sync_status(db, music_id, "completed", Some(Utc::now().fixed_offset())).await?;
+                Ok(result)
+            }
+            Err(error) => {
+                let _ = MusicRepo::update_sync_status(db, music_id, "failed", Some(Utc::now().fixed_offset())).await;
+                Err(error)
+            }
+        }
+    }
+}
 
-        let library = LibrariesRepo::find_by_id(&db, library_id)
-            .await?
-            .ok_or_else(|| AppError::NotFound(format!("library {library_id} not found")))?;
-        let source_id = library.source_id.ok_or_else(|| {
-            AppError::BadRequest(format!("library {library_id} has no source_id"))
-        })?;
-        let root_path = normalize_source_path(&library.root_path).map_err(AppError::BadRequest)?;
+async fn run_sync(
+    db: &DatabaseConnection,
+    sources: &Arc<SourceRegistry>,
+    music_id: Uuid,
+) -> Result<SyncResult, AppError> {
+    let music = MusicRepo::get_by_id(db, music_id)
+        .await?
+        .not_found(format!("music library {music_id} not found"))?;
+    let source_roots = MusicRepo::parse_sources(&music.sources);
+    if source_roots.is_empty() {
+        return Ok(SyncResult { total_files: 0, total_jobs: 0 });
+    }
+
+    let mut files = Vec::new();
+    for (source_id, root_path, _) in source_roots {
         let source_id_str = source_id.to_string();
         let vfs = sources.ensure_vfs(&source_id_str).await.map_err(|error| {
             AppError::Internal(format!("ensure VFS for source {source_id_str}: {error}"))
         })?;
-
-        let files = collect_audio_files(&vfs, &root_path).await?;
-        let mut seen_albums = Vec::new();
-
-        for file in files.iter().cloned() {
-            match process_audio_file_txn(&db, &library, file).await {
-                Ok(Some(album_id)) if !seen_albums.contains(&album_id) => {
-                    seen_albums.push(album_id)
-                }
-                Ok(_) => {}
-                Err(error) => warn!(%error, library_id = %library_id, "music sync skipped file"),
-            }
-        }
-
-        let mut scrape_jobs = 0;
-        if let Some(client) = bus_client.get() {
-            for album_id in &seen_albums {
-                if album_needs_scrape(&db, *album_id).await? {
-                    let request = CreateJobRequest {
-                        job_type: "music_scrape".to_string(),
-                        params: json!({
-                            "albumId": album_id,
-                            "libraryId": library_id,
-                        }),
-                        data: None,
-                        parent_job_id: None,
-                        task_type: Some("music_scrape".to_string()),
-                        dedupe_key: Some(format!("music_scrape:{album_id}")),
-                        priority: None,
-                    };
-                    match jobs_client::create(client, jobs_client::service_caller(), request).await
-                    {
-                        Ok(_) => scrape_jobs += 1,
-                        Err(error) => {
-                            warn!(%error, album_id = %album_id, "music scrape job dispatch failed")
-                        }
-                    }
-                }
-            }
-        } else {
-            warn!(library_id = %library_id, "music sync completed without bus client; skipping scrape jobs");
-        }
-
-        let result = SyncResult {
-            total_files: files.len() as u64,
-            albums_seen: seen_albums.len() as u64,
-            scrape_jobs,
-        };
-        SyncStatusRepo::upsert_status(
-            &db,
-            library_id,
-            "completed",
-            None,
-            Some(
-                serde_json::to_value(&result)
-                    .map_err(|error| AppError::Internal(format!("sync result encode: {error}")))?,
-            ),
-        )
-        .await?;
-        Ok(())
+        let root_path = normalize_source_path(&root_path).map_err(AppError::BadRequest)?;
+        let mut source_files = collect_audio_files(&vfs, source_id, &root_path).await?;
+        files.append(&mut source_files);
     }
+
+    let mut album_ids = HashSet::new();
+    let total_files = files.len() as u64;
+    for file in files {
+        match process_audio_file_txn(db, music_id, file).await {
+            Ok(album_id) => {
+                album_ids.insert(album_id);
+            }
+            Err(error) => warn!(%error, music_id = %music_id, "music sync skipped file"),
+        }
+    }
+
+    Ok(SyncResult { total_files, total_jobs: album_ids.len() })
 }
 
-async fn collect_audio_files(vfs: &Vfs, root_path: &str) -> Result<Vec<AudioFile>, AppError> {
+async fn collect_audio_files(vfs: &Vfs, source_id: Uuid, root_path: &str) -> Result<Vec<AudioFile>, AppError> {
     let mut files = Vec::new();
     let mut queue = VecDeque::from([PathBuf::from(root_path)]);
 
@@ -181,8 +160,9 @@ async fn collect_audio_files(vfs: &Vfs, root_path: &str) -> Result<Vec<AudioFile
                 queue.push_back(path_buf);
             } else if is_audio_path(&path_buf) {
                 files.push(AudioFile {
+                    source_id,
                     path: path_buf,
-                    size_bytes: i64::try_from(entry.size).unwrap_or(i64::MAX),
+                    size: i64::try_from(entry.size).unwrap_or(i64::MAX),
                 });
             }
         }
@@ -193,168 +173,212 @@ async fn collect_audio_files(vfs: &Vfs, root_path: &str) -> Result<Vec<AudioFile
 
 async fn process_audio_file_txn(
     db: &DatabaseConnection,
-    library: &libraries::Model,
+    music_id: Uuid,
     file: AudioFile,
-) -> Result<Option<Uuid>, AppError> {
+) -> Result<Uuid, AppError> {
     let txn = db.begin().await?;
-    let result = process_audio_file(&txn, library, file).await;
-    match result {
-        Ok(album_id) => {
-            txn.commit().await?;
-            Ok(album_id)
-        }
-        Err(error) => {
-            txn.rollback().await?;
-            Err(error)
-        }
-    }
+    let album_id = process_audio_file(&txn, music_id, file).await?;
+    txn.commit().await?;
+    Ok(album_id)
 }
 
-async fn process_audio_file(
-    db: &impl ConnectionTrait,
-    library: &libraries::Model,
+async fn process_audio_file<C: ConnectionTrait>(
+    db: &C,
+    music_id: Uuid,
     file: AudioFile,
-) -> Result<Option<Uuid>, AppError> {
+) -> Result<Uuid, AppError> {
     let parsed = parse_track(&file.path);
     let now = Utc::now().fixed_offset();
     let artist_id = match parsed.artist.as_deref() {
-        Some(artist) => Some(find_or_create_artist(db, library.id, artist, now).await?),
+        Some(artist) => Some(find_or_create_artist(db, artist, now).await?),
         None => None,
     };
-    let album_id = match parsed.album.as_deref() {
-        Some(album) => {
-            Some(find_or_create_album(db, library.id, album, parsed.artist.as_deref(), now).await?)
-        }
-        None => None,
-    };
+    let album_id = find_or_create_album(db, music_id, &parsed.album, now).await?;
+    if let Some(artist_id) = artist_id {
+        ensure_album_artist(db, album_id, artist_id).await?;
+    }
 
     let file_path = file.path.to_string_lossy().to_string();
-    if let Some(existing) = tracks::Entity::find()
-        .filter(tracks::Column::LibraryId.eq(library.id))
-        .filter(tracks::Column::FilePath.eq(file_path.clone()))
+    let filename = file.path.file_name().and_then(|name| name.to_str()).unwrap_or("audio").to_string();
+    let existing_file = music_files::Entity::find()
+        .filter(music_files::Column::SourceId.eq(file.source_id))
+        .filter(music_files::Column::Path.eq(file_path.clone()))
         .one(db)
-        .await?
-    {
-        let mut active: tracks::ActiveModel = existing.into();
-        active.title = Set(Some(parsed.title));
-        active.artist = Set(parsed.artist.clone());
-        active.album = Set(parsed.album.clone());
-        active.size_bytes = Set(Some(file.size_bytes));
-        active.mime = Set(mime_for_path(&file.path));
-        active.album_id = Set(album_id);
-        active.artist_id = Set(artist_id);
-        active.updated_at = Set(now);
+        .await?;
+
+    let track_id = match existing_file.as_ref().and_then(|f| f.track_id) {
+        Some(track_id) => {
+            if let Some(track) = music_tracks::Entity::find_by_id(track_id).one(db).await? {
+                let mut active: music_tracks::ActiveModel = track.into();
+                active.album_id = Set(album_id);
+                active.title = Set(parsed.title.clone());
+                active.genre = Set(None);
+                active.duration = Set(None);
+                active.codec = Set(codec_for_path(&file.path));
+                active.update(db).await?;
+                track_id
+            } else {
+                insert_track(db, album_id, &parsed, &file.path).await?
+            }
+        }
+        None => insert_track(db, album_id, &parsed, &file.path).await?,
+    };
+
+    if let Some(existing) = existing_file {
+        let mut active: music_files::ActiveModel = existing.into();
+        active.filename = Set(filename);
+        active.size = Set(Some(file.size));
+        active.mime_type = Set(mime_for_path(&file.path));
+        active.is_available = Set(true);
+        active.scanned_at = Set(Some(now));
+        active.updated_at = Set(Some(now));
+        active.track_id = Set(Some(track_id));
         active.update(db).await?;
     } else {
-        tracks::Entity::insert(tracks::ActiveModel {
+        music_files::Entity::insert(music_files::ActiveModel {
             id: Set(Uuid::new_v4()),
-            library_id: Set(Some(library.id)),
-            file_path: Set(file_path),
-            title: Set(Some(parsed.title)),
-            artist: Set(parsed.artist.clone()),
-            album: Set(parsed.album.clone()),
-            duration_secs: Set(None),
-            size_bytes: Set(Some(file.size_bytes)),
-            mime: Set(mime_for_path(&file.path)),
-            album_id: Set(album_id),
-            artist_id: Set(artist_id),
-            genre_id: Set(None),
-            lyrics_text: Set(None),
-            created_at: Set(now),
-            updated_at: Set(now),
-        })
-        .exec(db)
-        .await?;
+            source_id: Set(Some(file.source_id)),
+            path: Set(file_path),
+            filename: Set(filename),
+            size: Set(Some(file.size)),
+            mime_type: Set(mime_for_path(&file.path)),
+            duration: Set(None),
+            checksum: Set(None),
+            is_available: Set(true),
+            scanned_at: Set(Some(now)),
+            created_at: Set(Some(now)),
+            updated_at: Set(Some(now)),
+            track_id: Set(Some(track_id)),
+        }).exec(db).await?;
     }
 
-    if let Some(album_id) = album_id {
-        let track_count = tracks::Entity::find()
-            .filter(tracks::Column::AlbumId.eq(album_id))
-            .count(db)
-            .await?;
-        if let Some(album) = albums::Entity::find_by_id(album_id).one(db).await? {
-            let mut active: albums::ActiveModel = album.into();
-            active.track_count = Set(i32::try_from(track_count).unwrap_or(i32::MAX));
-            active.updated_at = Set(now);
-            active.update(db).await?;
-        }
-        return Ok(Some(album_id));
-    }
-
-    Ok(None)
+    refresh_album_track_count(db, album_id).await?;
+    Ok(album_id)
 }
 
-async fn find_or_create_artist(
-    db: &impl ConnectionTrait,
-    library_id: Uuid,
+async fn insert_track<C: ConnectionTrait>(
+    db: &C,
+    album_id: Uuid,
+    parsed: &ParsedTrack,
+    path: &Path,
+) -> Result<Uuid, AppError> {
+    let id = Uuid::new_v4();
+    music_tracks::Entity::insert(music_tracks::ActiveModel {
+        id: Set(id),
+        album_id: Set(album_id),
+        title: Set(parsed.title.clone()),
+        track_number: Set(track_number(path)),
+        disc_number: Set(None),
+        duration: Set(None),
+        genre: Set(None),
+        bitrate: Set(None),
+        sample_rate: Set(None),
+        codec: Set(codec_for_path(path)),
+        mb_track_id: Set(None),
+        lyrics_path: Set(None),
+    }).exec(db).await?;
+    Ok(id)
+}
+
+async fn find_or_create_artist<C: ConnectionTrait>(
+    db: &C,
     name: &str,
     now: chrono::DateTime<chrono::FixedOffset>,
 ) -> Result<Uuid, AppError> {
-    if let Some(model) = artists::Entity::find()
-        .filter(artists::Column::LibraryId.eq(library_id))
-        .filter(artists::Column::Name.eq(name.to_string()))
+    if let Some(model) = music_artists::Entity::find()
+        .filter(music_artists::Column::Name.eq(name.to_string()))
         .one(db)
         .await?
     {
         return Ok(model.id);
     }
-
     let id = Uuid::new_v4();
-    artists::Entity::insert(artists::ActiveModel {
+    music_artists::Entity::insert(music_artists::ActiveModel {
         id: Set(id),
-        library_id: Set(Some(library_id)),
         name: Set(name.to_string()),
-        bio: Set(None),
-        photo_url: Set(None),
-        created_at: Set(now),
-        updated_at: Set(now),
-    })
-    .exec(db)
-    .await?;
+        original_name: Set(None),
+        biography: Set(None),
+        profile_path: Set(None),
+        profile_key: Set(None),
+        popularity: Set(None),
+        followers: Set(None),
+        genres: Set(None),
+        mb_id: Set(None),
+        metadata: Set(None),
+        created_at: Set(Some(now)),
+        updated_at: Set(Some(now)),
+    }).exec(db).await?;
     Ok(id)
 }
 
-async fn find_or_create_album(
-    db: &impl ConnectionTrait,
-    library_id: Uuid,
-    name: &str,
-    artist: Option<&str>,
+async fn find_or_create_album<C: ConnectionTrait>(
+    db: &C,
+    music_id: Uuid,
+    title: &str,
     now: chrono::DateTime<chrono::FixedOffset>,
 ) -> Result<Uuid, AppError> {
-    let mut query = albums::Entity::find()
-        .filter(albums::Column::LibraryId.eq(library_id))
-        .filter(albums::Column::Name.eq(name.to_string()));
-    query = match artist {
-        Some(artist) => query.filter(albums::Column::Artist.eq(artist.to_string())),
-        None => query.filter(albums::Column::Artist.is_null()),
-    };
-    if let Some(model) = query.one(db).await? {
+    if let Some(model) = music_albums::Entity::find()
+        .filter(music_albums::Column::MusicId.eq(music_id))
+        .filter(music_albums::Column::Title.eq(title.to_string()))
+        .one(db)
+        .await?
+    {
         return Ok(model.id);
     }
-
     let id = Uuid::new_v4();
-    albums::Entity::insert(albums::ActiveModel {
+    music_albums::Entity::insert(music_albums::ActiveModel {
         id: Set(id),
-        library_id: Set(Some(library_id)),
-        name: Set(name.to_string()),
-        artist: Set(artist.map(str::to_string)),
+        music_id: Set(music_id),
+        title: Set(title.to_string()),
+        sort_title: Set(Some(sort_title(title))),
         year: Set(None),
-        cover_url: Set(None),
+        release_date: Set(None),
+        album_type: Set(None),
+        mb_album_id: Set(None),
+        cover_path: Set(None),
+        overview: Set(None),
+        total_tracks: Set(Some(0)),
+        total_discs: Set(None),
         is_favorite: Set(false),
-        track_count: Set(0),
-        created_at: Set(now),
-        updated_at: Set(now),
-    })
-    .exec(db)
-    .await?;
+        metadata: Set(None),
+        scraped_at: Set(None),
+        created_at: Set(Some(now)),
+        updated_at: Set(Some(now)),
+    }).exec(db).await?;
     Ok(id)
 }
 
-async fn album_needs_scrape(db: &impl ConnectionTrait, album_id: Uuid) -> Result<bool, AppError> {
-    Ok(albums::Entity::find_by_id(album_id)
+async fn ensure_album_artist<C: ConnectionTrait>(db: &C, album_id: Uuid, artist_id: Uuid) -> Result<(), AppError> {
+    let exists = music_album_artists::Entity::find()
+        .filter(music_album_artists::Column::AlbumId.eq(album_id))
+        .filter(music_album_artists::Column::ArtistId.eq(artist_id))
+        .filter(music_album_artists::Column::Role.eq("primary"))
         .one(db)
-        .await?
-        .is_some_and(|album| album.cover_url.is_none() || album.year.is_none()))
+        .await?;
+    if exists.is_none() {
+        music_album_artists::Entity::insert(music_album_artists::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            album_id: Set(album_id),
+            artist_id: Set(artist_id),
+            role: Set("primary".to_string()),
+            sort_order: Set(0),
+        }).exec(db).await?;
+    }
+    Ok(())
+}
+
+async fn refresh_album_track_count<C: ConnectionTrait>(db: &C, album_id: Uuid) -> Result<(), AppError> {
+    let count = music_tracks::Entity::find()
+        .filter(music_tracks::Column::AlbumId.eq(album_id))
+        .count(db)
+        .await?;
+    if let Some(album) = music_albums::Entity::find_by_id(album_id).one(db).await? {
+        let mut active: music_albums::ActiveModel = album.into();
+        active.total_tracks = Set(Some(i32::try_from(count).unwrap_or(i32::MAX)));
+        active.updated_at = Set(Some(Utc::now().fixed_offset()));
+        active.update(db).await?;
+    }
+    Ok(())
 }
 
 fn parse_track(path: &Path) -> ParsedTrack {
@@ -375,8 +399,9 @@ fn parse_track(path: &Path) -> ParsedTrack {
         .len()
         .checked_sub(2)
         .and_then(|index| components.get(index))
-        .map(|album| crate::services::scrape::music::MusicScrapeService::extract_clean_title(album))
-        .filter(|album| !album.is_empty());
+        .map(|album| album.trim().to_string())
+        .filter(|album| !album.is_empty())
+        .unwrap_or_else(|| "Unknown Album".to_string());
     let artist = components
         .len()
         .checked_sub(3)
@@ -384,36 +409,31 @@ fn parse_track(path: &Path) -> ParsedTrack {
         .map(|artist| artist.trim().to_string())
         .filter(|artist| !artist.is_empty());
 
-    ParsedTrack {
-        title,
-        artist,
-        album,
-    }
+    ParsedTrack { title, artist, album }
 }
 
 fn clean_track_title(value: &str) -> String {
     let trimmed = value.trim();
     let without_number = trimmed
-        .trim_start_matches(|ch: char| {
-            ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '_' || ch == ' '
-        })
+        .trim_start_matches(|ch: char| ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '_' || ch == ' ')
         .trim();
-    if without_number.is_empty() {
-        trimmed.to_string()
-    } else {
-        without_number.to_string()
-    }
+    if without_number.is_empty() { trimmed.to_string() } else { without_number.to_string() }
+}
+
+fn sort_title(value: &str) -> String {
+    value.trim_start_matches("The ").to_ascii_lowercase()
+}
+
+fn track_number(path: &Path) -> Option<i32> {
+    let stem = path.file_stem()?.to_str()?.trim();
+    let digits: String = stem.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
 }
 
 fn is_audio_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| {
-            matches!(
-                ext.to_ascii_lowercase().as_str(),
-                "mp3" | "flac" | "m4a" | "aac" | "ogg" | "opus" | "wav" | "aiff" | "alac"
-            )
-        })
+        .map(|ext| matches!(ext.to_ascii_lowercase().as_str(), "mp3" | "flac" | "m4a" | "aac" | "ogg" | "opus" | "wav" | "aiff" | "alac"))
         .unwrap_or(false)
 }
 
@@ -430,4 +450,10 @@ fn mime_for_path(path: &Path) -> Option<String> {
         _ => return None,
     };
     Some(mime.to_string())
+}
+
+fn codec_for_path(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
 }

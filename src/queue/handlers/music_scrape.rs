@@ -1,47 +1,49 @@
-use sea_orm::DatabaseConnection;
-use sea_orm::EntityTrait;
+use sea_orm::*;
 use serde_json::{Value as JsonValue, json};
-use tokio_util::sync::CancellationToken;
+use std::sync::Arc;
+use tracing::info;
 use uuid::Uuid;
 
-use crate::db::entities::albums;
-use crate::error::AppError;
+use crate::ctx::AppCtx;
+use crate::db::entities::music_albums;
+use tokio_util::sync::CancellationToken;
 use crate::services::scrape::music::MusicScrapeService;
 
 pub async fn handle(
     db: &DatabaseConnection,
+    state: &Arc<AppCtx>,
     _job_id: Uuid,
     params: &JsonValue,
-    cancel: &CancellationToken,
     _user_id: Option<Uuid>,
-) -> Result<Option<JsonValue>, AppError> {
-    if cancel.is_cancelled() {
-        return Ok(Some(json!({ "cancelled": true })));
-    }
-
+    cancel: &CancellationToken,
+) -> Result<Option<JsonValue>, Box<dyn std::error::Error + Send + Sync>> {
+    if cancel.is_cancelled() { return Ok(Some(json!({ "cancelled": true }))); }
     let album_id = params
         .get("albumId")
-        .or_else(|| params.get("album_id"))
         .and_then(|v| v.as_str())
-        .ok_or_else(|| AppError::BadRequest("missing albumId".to_string()))
-        .and_then(|s| {
-            Uuid::parse_str(s).map_err(|e| AppError::BadRequest(format!("albumId UUID: {e}")))
-        })?;
+        .ok_or("Missing albumId in params")?;
+    let album_id = Uuid::parse_str(album_id)?;
 
-    let Some(album) = albums::Entity::find_by_id(album_id).one(db).await? else {
+    // Idempotency: skip if already scraped (handles duplicate jobs from re-sync).
+    let album = music_albums::Entity::find_by_id(album_id).one(db).await?;
+    let Some(album) = album else {
+        info!("[music_scrape] Album {album_id} not found, skipping");
         return Ok(Some(json!({ "skipped": true, "reason": "not_found" })));
     };
 
-    if album.cover_url.is_some() && album.year.is_some() {
-        return Ok(Some(
-            json!({ "skipped": true, "reason": "already_enriched" }),
-        ));
+    if album.scraped_at.is_some() {
+        info!("[music_scrape] Album \"{}\" already scraped, skipping", album.title);
+        return Ok(Some(json!({ "skipped": true, "reason": "already_scraped" })));
     }
 
-    let updated = MusicScrapeService::auto_scrape_album(db, album_id).await?;
+    if cancel.is_cancelled() { return Ok(Some(json!({ "cancelled": true }))); }
+    let result = MusicScrapeService::auto_scrape_album(db, &state.storage, album_id).await;
+
     Ok(Some(json!({
-        "albumId": updated.id,
-        "coverUrl": updated.cover_url,
-        "year": updated.year,
+        "albumId": album_id,
+        "status": result.status,
+        "title": result.title,
+        "coverDownloaded": result.cover_downloaded,
+        "year": result.year,
     })))
 }
