@@ -1,16 +1,13 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { AppSetupGuide, Spin } from "@tokimo/ui";
 import { Disc3, FileMusic, ListMusic, Plus } from "lucide-react";
 import { Suspense, useCallback, useEffect } from "react";
+import { useAppCtx } from "../AppContext";
 import { api } from "../api/client";
 import { useLibraryItemProgress } from "../hooks/useLibraryItemProgress";
+import { registerBridge } from "../modal-bridge";
 import { useContainerWidth, useSidebarCollapsed } from "../shared/hooks/hooks";
-import {
-  PickCancelled,
-  pickWithBridge,
-  useWindowActions,
-  useWindowId,
-  useWindowNav,
-} from "../shell/hooks";
+import { useWindowActions, useWindowId, useWindowNav } from "../shell/hooks";
 import MusicContent from "./MusicContent";
 import MusicSidebar from "./MusicSidebar";
 
@@ -31,8 +28,30 @@ export default function MusicApp() {
 
   const windowId = useWindowId();
   const { openModalWindow } = useWindowActions();
+  const ctx = useAppCtx();
+  const queryClient = useQueryClient();
 
   const activeLibraryId = params.libraryId ?? null;
+
+  const openEditorModal = useCallback(
+    (opts: { musicId?: string } = {}) => {
+      const bridgeId = registerBridge({
+        kind: "editor",
+        shell: ctx.shell,
+        musicId: opts.musicId,
+        onMutated: () => api.music.list.invalidate(queryClient),
+      });
+      openModalWindow({
+        component: () => import("./MusicLibraryEditorWindow"),
+        parentWindowId: windowId,
+        title: opts.musicId ? "TokimoMusic · 设置" : "TokimoMusic · 新建音乐库",
+        width: 720,
+        height: 640,
+        metadata: { bridgeId },
+      });
+    },
+    [ctx.shell, queryClient, openModalWindow, windowId],
+  );
 
   useEffect(() => {
     if (!libraries?.length) return;
@@ -46,35 +65,6 @@ export default function MusicApp() {
 
   const activeLibrary = libraries?.find((l) => l.id === activeLibraryId);
   const isDetailPage = !!(params.albumId ?? params.personId);
-
-  // TODO: Editor modal is in main repo settings app, not available in sidecar yet
-  // const openEditorModal = useCallback(
-  //   async (opts: { musicId?: string } = {}) => {
-  //     const isEdit = !!opts.musicId;
-  //     try {
-  //       const created = await pickWithBridge<{ id: string }>(openModalWindow, {
-  //         component: () =>
-  //           import("@/apps/settings/admin/MusicLibraryEditorWindow"),
-  //         parentWindowId: windowId,
-  //         title: isEdit ? "TokimoMusic · 设置" : "TokimoMusic · 新建音乐库",
-  //         width: 720,
-  //         height: 640,
-  //         noResize: true,
-  //         noMinimize: true,
-  //         metadata: isEdit
-  //           ? ({ musicId: opts.musicId } as Record<string, unknown>)
-  //           : undefined,
-  //       });
-  //       if (!isEdit) {
-  //         replace(`/library/${created.id}`);
-  //       }
-  //     } catch (err) {
-  //       if (err instanceof PickCancelled) return;
-  //       throw err;
-  //     }
-  //   },
-  //   [openModalWindow, windowId, replace],
-  // );
 
   useEffect(() => {
     if (!isDetailPage && activeLibrary) {
@@ -111,8 +101,7 @@ export default function MusicApp() {
         actionLabel="添加音乐库"
         actionIcon={Plus}
         onAction={() => {
-          // TODO: openEditorModal not available in sidecar yet
-          // void openEditorModal();
+          openEditorModal();
         }}
       />
     );
@@ -126,13 +115,11 @@ export default function MusicApp() {
         onSelect={handleSelectLibrary}
         collapsed={sidebarCollapsed}
         onCreateClick={() => {
-          // TODO: openEditorModal not available in sidecar yet
-          // void openEditorModal();
+          openEditorModal();
         }}
         onSettingsClick={() => {
           if (activeLibraryId) {
-            // TODO: openEditorModal not available in sidecar yet
-            // void openEditorModal({ musicId: activeLibraryId });
+            openEditorModal({ musicId: activeLibraryId });
           }
         }}
         syncProgress={syncProgress}

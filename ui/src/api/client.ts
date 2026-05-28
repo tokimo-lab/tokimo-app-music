@@ -544,5 +544,63 @@ export const api = {
           ...options,
         }),
     },
+    create: {
+      useMutation: (
+        options?: UseMutationOptions<LibraryDto, Error, CreateLibraryInput>,
+      ) =>
+        useMutation<LibraryDto, Error, CreateLibraryInput>({
+          mutationFn: (input) =>
+            apiFetch<LibraryDto>(API_BASE, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(input),
+            }),
+          ...options,
+        }),
+      invalidate: (qc: QueryClient) => invalidate(qc, ["music", "list"]),
+    },
+    update: {
+      useMutation: (
+        options?: UseMutationOptions<
+          LibraryDto,
+          Error,
+          { id: string } & UpdateLibraryInput
+        >,
+      ) =>
+        useMutation<LibraryDto, Error, { id: string } & UpdateLibraryInput>({
+          mutationFn: ({ id, ...input }) =>
+            apiFetch<LibraryDto>(`${API_BASE}/${id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(input),
+            }),
+          ...options,
+        }),
+    },
+    delete: {
+      useMutation: (options?: UseMutationOptions<void, Error, string>) =>
+        useMutation<void, Error, string>({
+          mutationFn: async (id) => {
+            await apiFetch<unknown>(`${API_BASE}/${id}`, {
+              method: "DELETE",
+            });
+          },
+          ...options,
+        }),
+    },
   },
 };
+
+export interface CreateLibraryInput {
+  name: string;
+  rootPath: string;
+  sourceId?: string;
+  sourceType?: string;
+}
+
+export interface UpdateLibraryInput {
+  name?: string;
+  rootPath?: string;
+  sourceId?: string;
+  sourceType?: string;
+}
