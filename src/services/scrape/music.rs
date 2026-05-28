@@ -36,6 +36,7 @@ pub struct AlbumScrapeResult {
     pub error: Option<String>,
 }
 
+#[allow(dead_code)] // kept from presplit — wired up later
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchScrapeResult {
@@ -172,6 +173,7 @@ impl MusicScrapeService {
     /// Scrape an album during sync, using the artist name from file tags directly.
     /// Called per-album from `process_album_group` so MB is searched before any
     /// artist stub records exist in the DB.
+    #[allow(dead_code)] // kept from presplit — wired up later
     pub async fn scrape_album_inline(
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
@@ -769,6 +771,7 @@ impl MusicScrapeService {
     }
 
     /// Batch auto-scrape all unscraped albums in a music library.
+    #[allow(dead_code)] // kept from presplit — wired up later
     pub async fn batch_scrape_app(
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
@@ -825,6 +828,7 @@ impl MusicScrapeService {
     }
 
     /// Public wrapper for `get_album_artist` (used by handlers).
+    #[allow(dead_code)] // kept from presplit — wired up later
     pub async fn get_album_artist_pub(db: &DatabaseConnection, album_id: Uuid) -> String {
         Self::get_album_artist(db, album_id).await
     }

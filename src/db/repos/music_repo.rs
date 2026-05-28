@@ -19,6 +19,7 @@ pub struct UpdateMusicFields {
     pub sources: Option<serde_json::Value>,
 }
 
+#[allow(dead_code)] // kept from presplit — wired up later
 pub struct MusicStreamTarget {
     pub path: String,
     pub source_id: Option<String>,

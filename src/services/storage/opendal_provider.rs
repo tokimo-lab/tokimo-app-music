@@ -6,6 +6,7 @@ use super::types::{StorageObject, StorageProvider, UploadOptions};
 
 pub struct OpendalStorageProvider {
     op: Operator,
+    #[allow(dead_code)] // kept from presplit — wired up later
     root: PathBuf,
 }
 

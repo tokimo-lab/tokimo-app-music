@@ -17,6 +17,7 @@ pub struct StorageObject {
 ///
 /// 实现者必须是 `Send + Sync`（用于跨线程共享）。
 /// 所有方法均为异步，返回 `Result<T, String>`。
+#[allow(dead_code)] // kept from presplit — wired up later
 #[async_trait::async_trait]
 pub trait StorageProvider: Send + Sync {
     /// 上传文件。

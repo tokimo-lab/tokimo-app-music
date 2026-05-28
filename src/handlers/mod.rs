@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::db::entities::vfs;
 use crate::db::repos::MusicRepo;
-use crate::db::{ApiDateTimeExt, OptionalApiDateTimeExt};
+use crate::db::ApiDateTimeExt;
 use crate::error::AppError;
 
 pub use browse::*;
@@ -45,6 +45,7 @@ pub fn ok_empty() -> Json<ApiResponse<()>> {
     })
 }
 
+#[allow(dead_code)] // kept from presplit — wired up later
 pub fn err_resp<T: Serialize>(status: StatusCode, msg: String) -> (StatusCode, Json<ApiResponse<T>>) {
     (
         status,
@@ -56,10 +57,12 @@ pub fn err_resp<T: Serialize>(status: StatusCode, msg: String) -> (StatusCode, J
     )
 }
 
+#[allow(dead_code)] // kept from presplit — wired up later
 pub fn err500<T: Serialize>(msg: String) -> (StatusCode, Json<ApiResponse<T>>) {
     err_resp(StatusCode::INTERNAL_SERVER_ERROR, msg)
 }
 
+#[allow(dead_code)] // kept from presplit — wired up later
 pub fn err404<T: Serialize>(msg: String) -> (StatusCode, Json<ApiResponse<T>>) {
     err_resp(StatusCode::NOT_FOUND, msg)
 }
@@ -123,6 +126,7 @@ pub struct CreateMusicInput {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateMusicInput {
     pub name: Option<String>,
+    #[allow(dead_code)] // kept from presplit — wired up later
     pub r#type: Option<String>,
     pub avatar: Option<serde_json::Value>,
     pub description: Option<String>,
@@ -172,6 +176,7 @@ pub struct MusicListQuery {
     pub favorite: Option<bool>,
 }
 
+#[allow(dead_code)] // kept from presplit — wired up later
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicRecentlyAddedQuery {

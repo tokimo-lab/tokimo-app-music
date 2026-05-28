@@ -1,6 +1,6 @@
 mod opendal_provider;
 mod types;
-pub use types::{StorageObject, StorageProvider, UploadOptions};
+pub use types::{StorageProvider, UploadOptions};
 
 use std::path::Path;
 use std::sync::Arc;

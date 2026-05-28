@@ -10,6 +10,7 @@ use tokimo_bus_auth::TokimoUser;
 #[derive(Debug, Clone)]
 pub struct SessionAuth {
     pub user_id: String,
+    #[allow(dead_code)] // kept from presplit — wired up later
     pub session_id: String,
 }
 
