@@ -4,7 +4,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo 'music UI is served from the main web package'",
-    "dev": "echo 'music UI is served from the main web package'"
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.100.5",
+    "@tokimo/sdk": "link:../../../packages/tokimo-package-sdk",
+    "@tokimo/ui": "link:../../../packages/ui",
+    "framer-motion": "^12.0.0",
+    "lucide-react": "1.7.0",
+    "three": "^0.183.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@tokimo/app-builder": "link:../../../packages/tokimo-app-builder",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10",
+    "@types/three": "^0.183.1"
   }
 }
