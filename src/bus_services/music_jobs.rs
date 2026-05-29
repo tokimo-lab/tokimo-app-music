@@ -47,9 +47,27 @@ fn decode_request(raw: &[u8]) -> Result<(Uuid, JsonValue), BusError> {
 }
 
 pub fn register(builder: BusClientBuilder, ctx: Arc<AppCtx>) -> BusClientBuilder {
+    let ctx_scan = ctx.clone();
     let ctx_scrape = ctx.clone();
 
     builder
+        // ── dispatch_music_scan ───────────────────────────────────────────────
+        .method(decl(
+            "dispatch_music_scan",
+            "Run a music_scan job on behalf of the main worker",
+        ))
+        .on_invoke("dispatch_music_scan", move |req| {
+            let ctx = ctx_scan.clone();
+            async move {
+                let (job_id, params) = decode_request(&req.payload)?;
+                let user_id = caller_user_id(&req.caller);
+                let cancel = CancellationToken::new();
+                crate::queue::handlers::music_scan::handle(&ctx.db, &ctx, job_id, &params, user_id, &cancel)
+                    .await
+                    .map(|r| serde_json::to_vec(&r).unwrap_or_else(|_| b"{}".to_vec()))
+                    .map_err(|e| BusError::Internal(e.to_string()))
+            }
+        })
         // ── dispatch_music_scrape ─────────────────────────────────────────────
         .method(decl(
             "dispatch_music_scrape",
@@ -75,7 +93,7 @@ pub fn register(builder: BusClientBuilder, ctx: Arc<AppCtx>) -> BusClientBuilder
         .on_invoke("capabilities", |_req| async move {
             serde_json::to_vec(&serde_json::json!({
                 "version": env!("CARGO_PKG_VERSION"),
-                "methods": ["capabilities", "dispatch_music_scrape"],
+                "methods": ["capabilities", "dispatch_music_scan", "dispatch_music_scrape"],
             }))
             .map_err(|e| BusError::Internal(e.to_string()))
         })

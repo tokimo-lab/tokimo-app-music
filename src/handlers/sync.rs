@@ -53,11 +53,10 @@ pub async fn sync_music(
 
     let db = ctx.db.clone();
     let sources = ctx.sources.clone();
-    let storage = ctx.storage.clone();
     let bus_client = ctx.client.clone();
 
     tokio::spawn(async move {
-        match AppSyncService::execute_music_sync(&db, &sources, &storage, bus_client, uid, false, caller_user_id).await {
+        match AppSyncService::execute_music_sync(&db, &sources, bus_client, uid, caller_user_id).await {
             Ok(result) => {
                 info!("music sync completed, {} jobs dispatched", result.total_jobs);
             }
