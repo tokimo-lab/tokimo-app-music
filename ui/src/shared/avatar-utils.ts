@@ -9,10 +9,13 @@ const AVATAR_COLORS = [
   "#ec4899",
 ];
 
-export function getAvatarColor(id = "music"): string {
+export function getAvatarColor(
+  id: string | null | undefined = "music",
+): string {
+  const seed = id || "music";
   let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash << 5) - hash + id.charCodeAt(i);
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
     hash = hash & hash;
   }
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
