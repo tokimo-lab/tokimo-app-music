@@ -1,13 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { AppSetupGuide, Spin } from "@tokimo/ui";
 import { Disc3, FileMusic, ListMusic, Plus } from "lucide-react";
-import { Suspense, useCallback, useEffect } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useAppCtx } from "../AppContext";
 import { api } from "../api/client";
 import { useLibraryItemProgress } from "../hooks/useLibraryItemProgress";
+import { useMusicI18n } from "../i18n";
 import { registerBridge } from "../modal-bridge";
 import { useContainerWidth, useSidebarCollapsed } from "../shared/hooks/hooks";
-import { useWindowActions, useWindowId, useWindowNav } from "../shell/hooks";
+import {
+  useMessage,
+  useWindowActions,
+  useWindowId,
+  useWindowNav,
+} from "../shell/hooks";
 import MusicContent from "./MusicContent";
 import MusicSidebar from "./MusicSidebar";
 
@@ -30,6 +36,9 @@ export default function MusicApp() {
   const { openModalWindow } = useWindowActions();
   const ctx = useAppCtx();
   const queryClient = useQueryClient();
+  const message = useMessage();
+  const { t } = useMusicI18n();
+  const [syncingLibraryId, setSyncingLibraryId] = useState<string | null>(null);
 
   const activeLibraryId = params.libraryId ?? null;
 
@@ -75,6 +84,27 @@ export default function MusicApp() {
   const handleSelectLibrary = (id: string) => {
     replace(`/library/${id}`);
   };
+
+  const syncLibraryMutation = api.music.syncLibrary.useMutation({
+    onSuccess: () => {
+      message.success(t("syncStarted"));
+      api.music.list.invalidate(queryClient);
+      api.music.listAlbums.invalidate(queryClient);
+      api.music.listArtists.invalidate(queryClient);
+      api.music.listTracks.invalidate(queryClient);
+    },
+    onError: (e) => message.error(e.message || t("syncFailed")),
+    onSettled: () => setSyncingLibraryId(null),
+  });
+
+  const handleSyncLibrary = useCallback(
+    (id: string) => {
+      if (syncLibraryMutation.isPending) return;
+      setSyncingLibraryId(id);
+      syncLibraryMutation.mutate({ id });
+    },
+    [syncLibraryMutation],
+  );
 
   const syncProgress = useLibraryItemProgress(libraries);
 
@@ -123,6 +153,8 @@ export default function MusicApp() {
           }
         }}
         syncProgress={syncProgress}
+        onSyncLibrary={handleSyncLibrary}
+        syncingLibraryId={syncingLibraryId}
         onToggleCollapse={onToggleCollapse}
       />
       <div
