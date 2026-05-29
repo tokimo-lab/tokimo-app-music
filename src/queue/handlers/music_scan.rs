@@ -44,6 +44,10 @@ pub async fn handle(
         .get("fileSize")
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
+    let source_root = params
+        .get("sourceRoot")
+        .and_then(|v| v.as_str())
+        .map(PathBuf::from);
 
     let source_id = Uuid::parse_str(source_id_str)?;
     let music_id = Uuid::parse_str(music_id_str)?;
@@ -52,6 +56,7 @@ pub async fn handle(
     let file = AudioFile {
         source_id,
         path,
+        source_root,
         size: file_size,
     };
 
@@ -92,6 +97,7 @@ pub async fn handle(
 struct AudioFile {
     source_id: Uuid,
     path: PathBuf,
+    source_root: Option<PathBuf>,
     size: i64,
 }
 
@@ -106,7 +112,7 @@ async fn process_audio_file<C: ConnectionTrait>(
     music_id: Uuid,
     file: &AudioFile,
 ) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
-    let parsed = parse_track(&file.path);
+    let parsed = parse_track(&file.path, file.source_root.as_deref());
     tracing::info!(
         path = %file.path.display(),
         title = %parsed.title,
@@ -329,7 +335,7 @@ async fn refresh_album_track_count<C: ConnectionTrait>(
     Ok(())
 }
 
-fn parse_track(path: &Path) -> ParsedTrack {
+fn parse_track(path: &Path, source_root: Option<&Path>) -> ParsedTrack {
     let title = path
         .file_stem()
         .and_then(|name| name.to_str())
@@ -344,31 +350,78 @@ fn parse_track(path: &Path) -> ParsedTrack {
         })
         .collect();
 
-    tracing::info!(
-        path = %path.display(),
-        components = ?components,
-        title = %title,
-        "parse_track: analyzing path"
-    );
-
-    let album = components
+    // Extract album from path (2nd-to-last component)
+    let mut album = components
         .len()
         .checked_sub(2)
         .and_then(|index| components.get(index))
         .map(|album| album.trim().to_string())
-        .filter(|album| !album.is_empty())
-        .unwrap_or_else(|| "Unknown Album".to_string());
-    let artist = components
+        .filter(|album| !album.is_empty());
+
+    // Extract artist from path (3rd-to-last component)
+    let mut artist = components
         .len()
         .checked_sub(3)
         .and_then(|index| components.get(index))
         .map(|artist| artist.trim().to_string())
         .filter(|artist| !artist.is_empty());
 
+    // Fallback: for flat structures, extract from source_root directory names.
+    // source_root is like "/media/music-mp3/#MP3/Beyond/" — the last meaningful
+    // directory is the artist, and the parent is the album/collection.
+    if (artist.is_none() || album.is_none()) && components.len() < 3 {
+        if let Some(root) = source_root {
+            let root_components: Vec<String> = root
+                .components()
+                .filter_map(|c| match c {
+                    std::path::Component::Normal(part) => {
+                        let s = part.to_string_lossy().to_string();
+                        // Skip generic dir names
+                        if s.starts_with('#') || s.eq_ignore_ascii_case("music") || s.eq_ignore_ascii_case("mp3") {
+                            None
+                        } else {
+                            Some(s)
+                        }
+                    }
+                    _ => None,
+                })
+                .collect();
+            // Last meaningful dir = artist, second-to-last = album/category
+            if artist.is_none() {
+                artist = root_components.last().cloned().filter(|s| !s.is_empty());
+            }
+            if album.is_none() {
+                album = root_components
+                    .len()
+                    .checked_sub(2)
+                    .and_then(|i| root_components.get(i))
+                    .cloned()
+                    .filter(|s| !s.is_empty());
+            }
+        }
+    }
+
+    // Fallback: try "Artist-Title.mp3" filename pattern
+    if artist.is_none() {
+        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            if let Some((a, _t)) = stem.split_once('-') {
+                let trimmed = a.trim();
+                if !trimmed.is_empty() {
+                    artist = Some(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    if album.is_none() {
+        album = Some("Unknown Album".to_string());
+    }
+
     tracing::info!(
         path = %path.display(),
+        source_root = ?source_root,
         artist = ?artist,
-        album = %album,
+        album = %album.as_deref().unwrap_or("Unknown Album"),
         title = %title,
         component_count = components.len(),
         "parse_track: result"
@@ -377,7 +430,7 @@ fn parse_track(path: &Path) -> ParsedTrack {
     ParsedTrack {
         title,
         artist,
-        album,
+        album: album.unwrap_or_else(|| "Unknown Album".to_string()),
     }
 }
 
