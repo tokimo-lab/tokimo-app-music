@@ -10,6 +10,7 @@ use serde::Serialize;
 use serde_json::json;
 use tokimo_bus_client::BusClient;
 use tokimo_vfs::Vfs;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -108,7 +109,9 @@ async fn run_sync(
         .await?
         .not_found(format!("music library {music_id} not found"))?;
     let source_roots = MusicRepo::parse_sources(&music.sources);
+    info!(music_id = %music_id, source_count = source_roots.len(), "music sync: parsed sources");
     if source_roots.is_empty() {
+        warn!(music_id = %music_id, "music sync: no sources configured, returning 0 jobs");
         return Ok(SyncResult { total_files: 0, total_jobs: 0 });
     }
 
@@ -121,15 +124,19 @@ async fn run_sync(
     let mut files = Vec::new();
     for (source_id, root_path, _) in source_roots {
         let source_id_str = source_id.to_string();
+        info!(source_id = %source_id_str, root_path = %root_path, "music sync: resolving VFS source");
         let vfs = sources.ensure_vfs(&source_id_str).await.map_err(|error| {
+            warn!(source_id = %source_id_str, %error, "music sync: ensure_vfs failed");
             AppError::Internal(format!("ensure VFS for source {source_id_str}: {error}"))
         })?;
         let root_path = normalize_source_path(&root_path).map_err(AppError::BadRequest)?;
         let mut source_files = collect_audio_files(&vfs, source_id, &root_path).await?;
+        info!(source_id = %source_id_str, file_count = source_files.len(), "music sync: collected audio files");
         files.append(&mut source_files);
     }
 
     let total_files = files.len() as u64;
+    info!(music_id = %music_id, total_files, "music sync: file collection done, creating jobs");
     let mut total_jobs = 0;
 
     for file in files {
@@ -158,6 +165,7 @@ struct AudioFile {
 async fn collect_audio_files(vfs: &Vfs, source_id: Uuid, root_path: &str) -> Result<Vec<AudioFile>, AppError> {
     let mut files = Vec::new();
     let mut queue = VecDeque::from([PathBuf::from(root_path)]);
+    let root = PathBuf::from(root_path);
 
     while let Some(dir) = queue.pop_front() {
         let entries = vfs
@@ -170,9 +178,13 @@ async fn collect_audio_files(vfs: &Vfs, source_id: Uuid, root_path: &str) -> Res
             if entry.is_dir {
                 queue.push_back(path_buf);
             } else if is_audio_path(&path_buf) {
+                // Strip the root prefix so parse_track sees a relative path
+                // like "Artist/Album/track.mp3" instead of
+                // "/media/music/Artist/Album/track.mp3".
+                let relative = path_buf.strip_prefix(&root).unwrap_or(&path_buf);
                 files.push(AudioFile {
                     source_id,
-                    path: path_buf,
+                    path: relative.to_path_buf(),
                     size: i64::try_from(entry.size).unwrap_or(i64::MAX),
                 });
             }
