@@ -11,6 +11,7 @@ import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { AppCtxProvider } from "./AppContext";
 import MusicContent from "./MusicContent";
+import MusicMenuBar from "./components/MusicMenuBar";
 import "./index.css";
 
 export default defineApp({
@@ -38,7 +39,9 @@ export default defineApp({
           <QueryClientProvider client={queryClient}>
             <ConfigProvider locale={locale}>
               <ToastProvider>
-                <MusicContent />
+                <MusicMenuBar>
+                  <MusicContent />
+                </MusicMenuBar>
               </ToastProvider>
             </ConfigProvider>
           </QueryClientProvider>
