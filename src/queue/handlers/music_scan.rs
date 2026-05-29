@@ -107,6 +107,13 @@ async fn process_audio_file<C: ConnectionTrait>(
     file: &AudioFile,
 ) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
     let parsed = parse_track(&file.path);
+    tracing::info!(
+        path = %file.path.display(),
+        title = %parsed.title,
+        artist = ?parsed.artist,
+        album = %parsed.album,
+        "music_scan: parsed track"
+    );
     let now = Utc::now().fixed_offset();
     let artist_id = match parsed.artist.as_deref() {
         Some(artist) => Some(find_or_create_artist(db, artist, now).await?),
