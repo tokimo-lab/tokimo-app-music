@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::ctx::AppCtx;
 use crate::db::entities::{music_album_artists, music_albums, music_artists, music_files, music_tracks};
-use crate::bus_clients::jobs as jobs_client;
+use crate::bus_clients::{app_events, jobs as jobs_client};
 
 struct AudioMeta {
     artist: Option<String>,
@@ -59,13 +59,18 @@ pub async fn handle(
         .get("sourceRoot")
         .and_then(|v| v.as_str())
         .map(PathBuf::from);
+    let full_path = params
+        .get("fullPath")
+        .and_then(|v| v.as_str())
+        .map(PathBuf::from);
 
     let source_id = Uuid::parse_str(source_id_str)?;
     let music_id = Uuid::parse_str(music_id_str)?;
     let path = PathBuf::from(file_path);
 
-    // Try to read metadata via ffprobe through VFS
-    let meta = probe_metadata(state, source_id_str, &path, file_size).await;
+    // Try to read metadata via ffprobe through VFS (needs full path for SMB access)
+    let vfs_path = full_path.as_deref().unwrap_or(&path);
+    let meta = probe_metadata(state, source_id_str, vfs_path, file_size).await;
 
     let file = AudioFile {
         source_id,
@@ -78,6 +83,18 @@ pub async fn handle(
     let txn = db.begin().await?;
     let album_id = process_audio_file(&txn, music_id, &file).await?;
     txn.commit().await?;
+
+    // Notify frontend to refresh
+    if let (Some(uid), Some(client)) = (user_id, state.client.get()) {
+        let _ = app_events::emit_entity(
+            client,
+            uid,
+            "music_track",
+            Some(format!("library:{music_id}")),
+            json!({ "id": album_id.to_string(), "operation": "created", "libraryId": music_id.to_string() }),
+        )
+        .await;
+    }
 
     // For new albums, create a music_scrape job
     let album = music_albums::Entity::find_by_id(album_id).one(db).await?;

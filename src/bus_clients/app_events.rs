@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use tokimo_bus_client::BusClient;

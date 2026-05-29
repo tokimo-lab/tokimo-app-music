@@ -143,7 +143,8 @@ async fn run_sync(
         let request = jobs_client::CreateJobRequest::new(
             "music_scan",
             json!({
-                "filePath": file.path.to_string_lossy(),
+                "filePath": file.relative_path.to_string_lossy(),
+                "fullPath": file.full_path.to_string_lossy(),
                 "sourceRoot": file.source_root.to_string_lossy(),
                 "sourceId": file.source_id.to_string(),
                 "musicId": music_id.to_string(),
@@ -159,7 +160,8 @@ async fn run_sync(
 
 struct AudioFile {
     source_id: Uuid,
-    path: PathBuf,
+    full_path: PathBuf,
+    relative_path: PathBuf,
     source_root: PathBuf,
     size: i64,
 }
@@ -192,7 +194,8 @@ async fn collect_audio_files(vfs: &Vfs, source_id: Uuid, root_path: &str) -> Res
                 );
                 files.push(AudioFile {
                     source_id,
-                    path: relative.to_path_buf(),
+                    full_path: path_buf.clone(),
+                    relative_path: relative.to_path_buf(),
                     source_root: root.clone(),
                     size: i64::try_from(entry.size).unwrap_or(i64::MAX),
                 });

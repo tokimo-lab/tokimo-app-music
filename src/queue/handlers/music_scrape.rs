@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::ctx::AppCtx;
 use crate::db::entities::music_albums;
 use tokio_util::sync::CancellationToken;
+use crate::bus_clients::app_events;
 use crate::services::scrape::music::MusicScrapeService;
 
 pub async fn handle(
@@ -14,7 +15,7 @@ pub async fn handle(
     state: &Arc<AppCtx>,
     _job_id: Uuid,
     params: &JsonValue,
-    _user_id: Option<Uuid>,
+    user_id: Option<Uuid>,
     cancel: &CancellationToken,
 ) -> Result<Option<JsonValue>, Box<dyn std::error::Error + Send + Sync>> {
     if cancel.is_cancelled() { return Ok(Some(json!({ "cancelled": true }))); }
@@ -36,8 +37,22 @@ pub async fn handle(
         return Ok(Some(json!({ "skipped": true, "reason": "already_scraped" })));
     }
 
+    let music_id = params.get("musicId").and_then(|v| v.as_str()).unwrap_or("");
+
     if cancel.is_cancelled() { return Ok(Some(json!({ "cancelled": true }))); }
     let result = MusicScrapeService::auto_scrape_album(db, &state.storage, album_id).await;
+
+    // Notify frontend to refresh
+    if let (Some(uid), Some(client)) = (user_id, state.client.get()) {
+        let _ = app_events::emit_entity(
+            client,
+            uid,
+            "music_track",
+            Some(format!("library:{music_id}")),
+            json!({ "id": album_id.to_string(), "operation": "updated", "libraryId": music_id }),
+        )
+        .await;
+    }
 
     Ok(Some(json!({
         "albumId": album_id,
