@@ -481,6 +481,11 @@ export const api = {
               `${API_BASE}/${params.id}/albums${paramsToSearch({
                 page: params.page,
                 page_size: params.pageSize,
+                sort_by: params.sortBy,
+                sort_dir: params.sortDir,
+                genre: params.genre,
+                search: params.search,
+                favorite: params.favorite,
               })}`,
             ).then((page) => toPage(page, toAlbum)),
           ...options,
@@ -510,6 +515,9 @@ export const api = {
               `${API_BASE}/${params.id}/artists${paramsToSearch({
                 page: params.page,
                 page_size: params.pageSize,
+                sort_by: params.sortBy,
+                sort_dir: params.sortDir,
+                search: params.search,
               })}`,
             ).then((page) => toPage(page, (artist) => toArtist(artist))),
           ...options,
@@ -540,6 +548,10 @@ export const api = {
               `${API_BASE}/${params.id}/tracks${paramsToSearch({
                 page: params.page,
                 page_size: params.pageSize,
+                sort_by: params.sortBy,
+                sort_dir: params.sortDir,
+                genre: params.genre,
+                search: params.search,
               })}`,
             ).then((page) => toPage(page, toTrack)),
           ...options,
