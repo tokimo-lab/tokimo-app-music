@@ -366,42 +366,7 @@ fn parse_track(path: &Path, source_root: Option<&Path>) -> ParsedTrack {
         .map(|artist| artist.trim().to_string())
         .filter(|artist| !artist.is_empty());
 
-    // Fallback: for flat structures, extract from source_root directory names.
-    // source_root is like "/media/music-mp3/#MP3/Beyond/" — the last meaningful
-    // directory is the artist, and the parent is the album/collection.
-    if (artist.is_none() || album.is_none()) && components.len() < 3 {
-        if let Some(root) = source_root {
-            let root_components: Vec<String> = root
-                .components()
-                .filter_map(|c| match c {
-                    std::path::Component::Normal(part) => {
-                        let s = part.to_string_lossy().to_string();
-                        // Skip generic dir names
-                        if s.starts_with('#') || s.eq_ignore_ascii_case("music") || s.eq_ignore_ascii_case("mp3") {
-                            None
-                        } else {
-                            Some(s)
-                        }
-                    }
-                    _ => None,
-                })
-                .collect();
-            // Last meaningful dir = artist, second-to-last = album/category
-            if artist.is_none() {
-                artist = root_components.last().cloned().filter(|s| !s.is_empty());
-            }
-            if album.is_none() {
-                album = root_components
-                    .len()
-                    .checked_sub(2)
-                    .and_then(|i| root_components.get(i))
-                    .cloned()
-                    .filter(|s| !s.is_empty());
-            }
-        }
-    }
-
-    // Fallback: try "Artist-Title.mp3" filename pattern
+    // Fallback: try "Artist-Title.mp3" filename pattern first (higher priority)
     if artist.is_none() {
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
             if let Some((a, _t)) = stem.split_once('-') {
@@ -411,6 +376,20 @@ fn parse_track(path: &Path, source_root: Option<&Path>) -> ParsedTrack {
                 }
             }
         }
+    }
+
+    // Fallback: for flat structures, extract artist from source_root last directory.
+    // source_root is like "/media/music-mp3/#MP3/Beyond/" — the last meaningful
+    // directory is typically the artist.
+    if artist.is_none() && components.len() < 3 {
+        if let Some(root) = source_root {
+            artist = last_meaningful_dir(root);
+        }
+    }
+
+    // Don't use generic source_root parent dirs as album — only use path components.
+    if album.is_none() {
+        album = Some("Unknown Album".to_string());
     }
 
     if album.is_none() {
@@ -432,6 +411,28 @@ fn parse_track(path: &Path, source_root: Option<&Path>) -> ParsedTrack {
         artist,
         album: album.unwrap_or_else(|| "Unknown Album".to_string()),
     }
+}
+
+/// Extract the last meaningful directory name from a path, skipping generic
+/// names like "#MP3", "music", "mp3".
+fn last_meaningful_dir(path: &Path) -> Option<String> {
+    path.components()
+        .filter_map(|c| match c {
+            std::path::Component::Normal(part) => {
+                let s = part.to_string_lossy();
+                if s.starts_with('#')
+                    || s.eq_ignore_ascii_case("music")
+                    || s.eq_ignore_ascii_case("mp3")
+                {
+                    None
+                } else {
+                    Some(s.to_string())
+                }
+            }
+            _ => None,
+        })
+        .last()
+        .filter(|s| !s.is_empty())
 }
 
 fn clean_track_title(value: &str) -> String {
