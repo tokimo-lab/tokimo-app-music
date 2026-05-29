@@ -122,6 +122,17 @@ impl MusicScrapeService {
             }
         }
 
+        // Try "日-" separator pattern (e.g. "2001年09月14日-范特西")
+        if let Some(pos) = title.find("日-") {
+            let before = &title[..pos + '日'.len_utf8()];
+            let is_date_prefix = before
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == '年' || c == '月' || c == '日' || c == '-' || c == ' ');
+            if is_date_prefix {
+                return title[pos + '日'.len_utf8() + 1..].trim().to_string();
+            }
+        }
+
         // Try 《...》 bracket pattern — date then 《album name》 optional suffix
         if let (Some(start_byte), Some(end_byte)) = (title.find('《'), title.rfind('》')) {
             // Characters inside 《》
