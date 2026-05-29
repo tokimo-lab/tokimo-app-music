@@ -182,6 +182,12 @@ async fn collect_audio_files(vfs: &Vfs, source_id: Uuid, root_path: &str) -> Res
                 // like "Artist/Album/track.mp3" instead of
                 // "/media/music/Artist/Album/track.mp3".
                 let relative = path_buf.strip_prefix(&root).unwrap_or(&path_buf);
+                tracing::info!(
+                    full_path = %path_buf.display(),
+                    relative_path = %relative.display(),
+                    root = %root.display(),
+                    "collect_audio_files: found audio file"
+                );
                 files.push(AudioFile {
                     source_id,
                     path: relative.to_path_buf(),

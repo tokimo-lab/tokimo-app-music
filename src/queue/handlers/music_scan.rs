@@ -343,6 +343,14 @@ fn parse_track(path: &Path) -> ParsedTrack {
             _ => None,
         })
         .collect();
+
+    tracing::info!(
+        path = %path.display(),
+        components = ?components,
+        title = %title,
+        "parse_track: analyzing path"
+    );
+
     let album = components
         .len()
         .checked_sub(2)
@@ -356,6 +364,15 @@ fn parse_track(path: &Path) -> ParsedTrack {
         .and_then(|index| components.get(index))
         .map(|artist| artist.trim().to_string())
         .filter(|artist| !artist.is_empty());
+
+    tracing::info!(
+        path = %path.display(),
+        artist = ?artist,
+        album = %album,
+        title = %title,
+        component_count = components.len(),
+        "parse_track: result"
+    );
 
     ParsedTrack {
         title,
