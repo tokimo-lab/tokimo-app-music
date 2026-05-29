@@ -115,7 +115,13 @@ async fn probe_metadata(
     path: &Path,
     file_size: i64,
 ) -> Option<AudioMeta> {
-    let vfs = state.sources.ensure_vfs(source_id).await.ok()?;
+    let vfs = match state.sources.ensure_vfs(source_id).await {
+        Ok(vfs) => vfs,
+        Err(e) => {
+            tracing::warn!(source_id = %source_id, error = %e, "ffprobe: ensure_vfs failed");
+            return None;
+        }
+    };
     let ra = vfs.to_read_at(path).await;
     let filename_hint = path
         .file_name()
@@ -128,17 +134,30 @@ async fn probe_metadata(
         Some(256 * 1024), // 256KB buffer is enough for ID3 tags
     );
 
-    let probe = tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         tokimo_package_ffmpeg::probe_direct(direct_input)
     })
-    .await
-    .ok()?
-    .ok()?;
+    .await;
+
+    let probe = match result {
+        Ok(Ok(probe)) => probe,
+        Ok(Err(e)) => {
+            tracing::warn!(path = %path.display(), error = %e, "ffprobe: probe_direct failed");
+            return None;
+        }
+        Err(e) => {
+            tracing::warn!(path = %path.display(), error = %e, "ffprobe: spawn_blocking failed");
+            return None;
+        }
+    };
 
     let tags = &probe.format.tags;
     tracing::info!(
         path = %path.display(),
         tags = ?tags,
+        duration = %probe.format.duration,
+        bit_rate = %probe.format.bit_rate,
+        stream_count = probe.streams.len(),
         "ffprobe: extracted tags"
     );
 
@@ -217,7 +236,16 @@ async fn process_audio_file<C: ConnectionTrait>(
         title = %title,
         artist = ?artist,
         album = %album,
+        duration = ?file.meta.as_ref().and_then(|m| m.duration),
+        bitrate = ?file.meta.as_ref().and_then(|m| m.bitrate),
+        codec = ?file.meta.as_ref().and_then(|m| m.codec.as_deref()),
         has_ffprobe = file.meta.is_some(),
+        ffprobe_artist = ?file.meta.as_ref().and_then(|m| m.artist.as_deref()),
+        ffprobe_album = ?file.meta.as_ref().and_then(|m| m.album.as_deref()),
+        ffprobe_title = ?file.meta.as_ref().and_then(|m| m.title.as_deref()),
+        fallback_artist = ?fallback.artist.as_deref(),
+        fallback_album = %fallback.album,
+        fallback_title = %fallback.title,
         "music_scan: resolved track metadata"
     );
 
