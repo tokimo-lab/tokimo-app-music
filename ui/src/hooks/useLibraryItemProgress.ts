@@ -2,12 +2,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MusicOutput } from "../api/client";
 import { api } from "../api/client";
-import type { WsJobEvent } from "../lib/types";
 import {
-  type AppEntityEventData,
+  type AppEntityEvent,
   useAppEntityEvents,
   useJobEvents,
-} from "../shell/hooks";
+} from "@tokimo/sdk";
+import type { WsJobEvent } from "../lib/types";
 
 const MUSIC_SCAN_JOB_TYPES = ["music_scrape"] as const;
 
@@ -187,7 +187,7 @@ export function useLibraryItemProgress(
   );
 
   const handleEntityEvent = useCallback(
-    (event: AppEntityEventData) => {
+    (event: AppEntityEvent) => {
       const scope = event.scope ?? "";
       const libraryId = scope.startsWith("library:")
         ? scope.slice("library:".length)
