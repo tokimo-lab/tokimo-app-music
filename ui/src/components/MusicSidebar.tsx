@@ -1,23 +1,6 @@
-import {
-  AppSidebar,
-  CircularProgress,
-  Dropdown,
-  type DropdownMenuItem,
-  Tooltip,
-  type ContextMenuItem,
-  useContextMenu,
-} from "@tokimo/ui";
-import {
-  FolderSync,
-  MoreHorizontal,
-  PanelLeft,
-  PanelLeftClose,
-  Plus,
-  Settings,
-} from "lucide-react";
-import type React from "react";
+import { AppSidebar, CircularProgress, Tooltip } from "@tokimo/ui";
+import { PanelLeft, PanelLeftClose, Plus, Settings } from "lucide-react";
 import type { MusicOutput } from "../api/client";
-import { useMusicI18n } from "../i18n";
 import { getAvatarColor, getAvatarIcon } from "../shared/avatar-utils";
 import { AppIcon } from "../shared/components/icons";
 
@@ -29,8 +12,6 @@ export default function MusicSidebar({
   onCreateClick,
   onSettingsClick,
   syncProgress,
-  onSyncLibrary,
-  syncingLibraryId,
   onToggleCollapse,
   settingsActive = false,
 }: {
@@ -41,27 +22,10 @@ export default function MusicSidebar({
   onCreateClick: () => void;
   onSettingsClick: () => void;
   syncProgress?: Record<string, { isActive: boolean; pct: number }>;
-  onSyncLibrary: (id: string) => void;
-  syncingLibraryId?: string | null;
   onToggleCollapse?: () => void;
   /** When true, the settings (⚙) button shows a highlighted state. */
   settingsActive?: boolean;
 }) {
-  const { t } = useMusicI18n();
-  const contextMenu = useContextMenu();
-
-  const createLibraryMenuItems = (
-    lib: MusicOutput,
-  ): Array<DropdownMenuItem & ContextMenuItem> => [
-    {
-      key: `sync-${lib.id}`,
-      label: t("menuSyncLibrary"),
-      icon: <FolderSync size={14} />,
-      disabled: syncingLibraryId !== null && syncingLibraryId !== undefined,
-      onClick: () => onSyncLibrary(lib.id),
-    },
-  ];
-
   const sections = [
     {
       items: libraries.map((lib) => {
@@ -95,34 +59,14 @@ export default function MusicSidebar({
           label: lib.name,
           extra: (() => {
             if (collapsed) return undefined;
-            return (
-              <div className="flex items-center gap-1">
-                {sp?.isActive ? (
-                  <CircularProgress value={sp.pct} size={24} />
-                ) : lib.itemCount > 0 ? (
-                  <span className="text-[10px] tabular-nums text-fg-muted">
-                    {lib.itemCount}
-                  </span>
-                ) : null}
-                <Dropdown
-                  menu={{ items: createLibraryMenuItems(lib) }}
-                  trigger={["click"]}
-                  placement="bottomRight"
-                >
-                  <button
-                    type="button"
-                    aria-label={t("menuActions")}
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-fg-muted opacity-0 transition-all hover:bg-black/[0.08] hover:text-fg-secondary group-hover/sidebar-item:opacity-100 dark:hover:bg-white/[0.08]"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                </Dropdown>
-              </div>
-            );
+            return sp?.isActive ? (
+              <CircularProgress value={sp.pct} size={24} />
+            ) : lib.itemCount > 0 ? (
+              <span className="text-[10px] tabular-nums text-fg-muted">
+                {lib.itemCount}
+              </span>
+            ) : null;
           })(),
-          onContextMenu: (e: React.MouseEvent) =>
-            contextMenu.open(e, createLibraryMenuItems(lib)),
         };
       }),
     },
@@ -201,15 +145,12 @@ export default function MusicSidebar({
   );
 
   return (
-    <>
-      <AppSidebar
-        sections={sections}
-        activeKey={activeId ?? undefined}
-        onSelect={onSelect}
-        collapsed={collapsed}
-        footer={collapsed ? collapsedFooter : fullFooter}
-      />
-      {contextMenu.contextMenu}
-    </>
+    <AppSidebar
+      sections={sections}
+      activeKey={activeId ?? undefined}
+      onSelect={onSelect}
+      collapsed={collapsed}
+      footer={collapsed ? collapsedFooter : fullFooter}
+    />
   );
 }
