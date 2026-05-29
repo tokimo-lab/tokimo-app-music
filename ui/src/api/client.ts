@@ -635,6 +635,8 @@ export const api = {
           mutationFn: async (params) => {
             await apiFetch<unknown>(`${API_BASE}/${params.id}/sync`, {
               method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ clearData: params.clearData }),
             });
           },
           ...options,

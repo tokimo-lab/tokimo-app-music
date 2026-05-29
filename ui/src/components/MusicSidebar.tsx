@@ -66,20 +66,21 @@ export default function MusicSidebar({
     {
       items: libraries.map((lib) => {
         const sp = syncProgress?.[lib.id];
+        const avatarId = typeof lib.avatar === "string" ? lib.avatar : null;
         return {
           key: lib.id,
           icon: (
             <AppIcon
-              icon={getAvatarIcon(lib.avatar) || lib.name}
-              color={getAvatarColor(lib.avatar)}
+              icon={getAvatarIcon(avatarId) || lib.name}
+              color={getAvatarColor(avatarId)}
               size={24}
             />
           ),
           collapsedIcon: sp?.isActive ? (
             <span className="relative flex h-8 w-8 items-center justify-center">
               <AppIcon
-                icon={getAvatarIcon(lib.avatar)}
-                color={getAvatarColor(lib.avatar)}
+                icon={getAvatarIcon(avatarId)}
+                color={getAvatarColor(avatarId)}
                 size={24}
               />
               <CircularProgress

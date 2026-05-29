@@ -11,7 +11,6 @@ import { useContainerWidth, useSidebarCollapsed } from "../shared/hooks/hooks";
 import {
   useMessage,
   useWindowActions,
-  useWindowId,
   useWindowNav,
 } from "../shell/hooks";
 import MusicContent from "./MusicContent";
@@ -32,7 +31,6 @@ export default function MusicApp() {
     containerWidth > 0 && containerWidth < 720,
   );
 
-  const windowId = useWindowId();
   const { openModalWindow } = useWindowActions();
   const ctx = useAppCtx();
   const queryClient = useQueryClient();
@@ -52,14 +50,13 @@ export default function MusicApp() {
       });
       openModalWindow({
         component: () => import("./MusicLibraryEditorWindow"),
-        parentWindowId: windowId,
         title: opts.musicId ? "TokimoMusic · 设置" : "TokimoMusic · 新建音乐库",
         width: 720,
         height: 640,
         metadata: { bridgeId },
       });
     },
-    [ctx.shell, queryClient, openModalWindow, windowId],
+    [ctx.shell, queryClient, openModalWindow],
   );
 
   useEffect(() => {

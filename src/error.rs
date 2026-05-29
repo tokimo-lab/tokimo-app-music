@@ -6,6 +6,7 @@ use axum::response::{IntoResponse, Response};
 pub enum AppError {
     NotFound(String),
     BadRequest(String),
+    Unauthorized(String),
     Conflict(String),
     Internal(String),
     Database(sea_orm::DbErr),
@@ -16,6 +17,7 @@ impl std::fmt::Display for AppError {
         match self {
             Self::NotFound(msg) => write!(f, "not found: {msg}"),
             Self::BadRequest(msg) => write!(f, "bad request: {msg}"),
+            Self::Unauthorized(msg) => write!(f, "unauthorized: {msg}"),
             Self::Conflict(msg) => write!(f, "conflict: {msg}"),
             Self::Internal(msg) => write!(f, "internal: {msg}"),
             Self::Database(err) => write!(f, "database: {err}"),
@@ -36,6 +38,7 @@ impl IntoResponse for AppError {
         let status = match &self {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Internal(_) | Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

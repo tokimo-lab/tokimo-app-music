@@ -3,6 +3,7 @@ import { Checkbox, Modal } from "@tokimo/ui";
 import { FolderSync, RefreshCw } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { api } from "../api/client";
+import { useMusicI18n } from "../i18n";
 import type { MenuBarConfig } from "../shell/hooks";
 import { useMenuBar, useMessage, useWindowNav } from "../shell/hooks";
 
@@ -11,19 +12,20 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
   const musicId = params.libraryId ?? undefined;
   const message = useMessage();
   const qc = useQueryClient();
+  const { t } = useMusicI18n();
 
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncClearData, setSyncClearData] = useState(false);
 
   const syncMutation = api.music.sync.useMutation({
     onSuccess: () => {
-      message.success("同步已开始");
+      message.success(t("syncStarted"));
       api.music.list.invalidate(qc);
       api.music.listAlbums.invalidate(qc);
       api.music.listArtists.invalidate(qc);
       api.music.listTracks.invalidate(qc);
     },
-    onError: (e) => message.error(e.message || "同步失败"),
+    onError: (e) => message.error(e.message || t("syncFailed")),
   });
 
   const menuBarConfig: MenuBarConfig | null = useMemo(() => {
@@ -32,11 +34,11 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
       menus: [
         {
           key: "actions",
-          label: "操作",
+          label: t("menuActions"),
           items: [
             {
               key: "refresh",
-              label: "刷新",
+              label: t("menuRefresh"),
               icon: <RefreshCw size={14} />,
               onClick: () => {
                 api.music.listAlbums.invalidate(qc);
@@ -47,7 +49,7 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
             { type: "divider" as const },
             {
               key: "sync",
-              label: "同步资料库",
+              label: t("menuSyncLibrary"),
               icon: <FolderSync size={14} />,
               disabled: syncMutation.isPending,
               onClick: () => {
@@ -68,7 +70,7 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
           ),
       },
     };
-  }, [musicId, qc, navigate, syncMutation.isPending]);
+  }, [musicId, qc, navigate, syncMutation.isPending, t]);
 
   useMenuBar(menuBarConfig);
 
@@ -78,9 +80,9 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
 
       <Modal
         open={syncModalOpen}
-        title="同步资料库"
-        okText="开始同步"
-        cancelText="取消"
+        title={t("syncModalTitle")}
+        okText={t("syncModalOk")}
+        cancelText={t("commonCancel")}
         confirmLoading={syncMutation.isPending}
         onCancel={() => setSyncModalOpen(false)}
         onOk={async () => {
@@ -99,10 +101,10 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
           checked={syncClearData}
           onChange={(e) => setSyncClearData(e.target.checked)}
         >
-          清空数据重新同步
+          {t("syncClearData")}
         </Checkbox>
         <p className="mt-2 text-xs text-[var(--text-muted)]">
-          勾选后将删除所有音乐数据并重新完整同步，适合修复数据异常。
+          {t("syncClearDataHint")}
         </p>
       </Modal>
     </>

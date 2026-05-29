@@ -1,13 +1,16 @@
-use std::{collections::{HashSet, VecDeque}, path::{Path, PathBuf}, sync::Arc};
+use std::{collections::{HashSet, VecDeque}, path::{Path, PathBuf}, sync::{Arc, OnceLock}};
 
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, TransactionTrait};
 use serde::Serialize;
+use serde_json::json;
+use tokimo_bus_client::BusClient;
 use tokimo_vfs::Vfs;
 use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
+    bus_clients::jobs as jobs_client,
     db::{
         entities::{music_album_artists, music_albums, music_artists, music_files, music_tracks},
         repos::MusicRepo,
@@ -87,12 +90,13 @@ impl AppSyncService {
         db: &DatabaseConnection,
         sources: &Arc<SourceRegistry>,
         _storage: &Arc<dyn StorageProvider>,
+        bus_client: Arc<OnceLock<Arc<BusClient>>>,
         music_id: Uuid,
         _force: bool,
-        _user_id: Option<Uuid>,
+        user_id: Uuid,
     ) -> Result<SyncResult, AppError> {
         MusicRepo::update_sync_status(db, music_id, "syncing", None).await?;
-        let result = run_sync(db, sources, music_id).await;
+        let result = run_sync(db, sources, &bus_client, music_id, user_id).await;
         match result {
             Ok(result) => {
                 MusicRepo::update_sync_status(db, music_id, "completed", Some(Utc::now().fixed_offset())).await?;
@@ -109,7 +113,9 @@ impl AppSyncService {
 async fn run_sync(
     db: &DatabaseConnection,
     sources: &Arc<SourceRegistry>,
+    bus_client: &Arc<OnceLock<Arc<BusClient>>>,
     music_id: Uuid,
+    user_id: Uuid,
 ) -> Result<SyncResult, AppError> {
     let music = MusicRepo::get_by_id(db, music_id)
         .await?
@@ -118,6 +124,12 @@ async fn run_sync(
     if source_roots.is_empty() {
         return Ok(SyncResult { total_files: 0, total_jobs: 0 });
     }
+
+    let Some(client) = bus_client.get() else {
+        return Err(AppError::Internal(
+            "bus client is not initialized; refusing to write jobs directly".into(),
+        ));
+    };
 
     let mut files = Vec::new();
     for (source_id, root_path, _) in source_roots {
@@ -141,7 +153,25 @@ async fn run_sync(
         }
     }
 
-    Ok(SyncResult { total_files, total_jobs: album_ids.len() })
+    let mut total_jobs = 0;
+    for album_id in album_ids {
+        let album = music_albums::Entity::find_by_id(album_id).one(db).await?;
+        if let Some(album) = album {
+            if album.scraped_at.is_none() {
+                let request = jobs_client::CreateJobRequest::new(
+                    "music_scrape",
+                    json!({
+                        "albumId": album_id.to_string(),
+                        "musicId": music_id.to_string(),
+                    }),
+                );
+                jobs_client::create(client, jobs_client::music_caller(Some(user_id)), request).await?;
+                total_jobs += 1;
+            }
+        }
+    }
+
+    Ok(SyncResult { total_files, total_jobs })
 }
 
 async fn collect_audio_files(vfs: &Vfs, source_id: Uuid, root_path: &str) -> Result<Vec<AudioFile>, AppError> {

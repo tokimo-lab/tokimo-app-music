@@ -25,6 +25,11 @@ pub async fn sync_music(
     AuthUser(auth): AuthUser,
     body: Option<Json<MusicSyncInput>>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let caller_user_id: Uuid = auth
+        .user_id
+        .parse()
+        .map_err(|_| AppError::Unauthorized("invalid user_id in auth token".into()))?;
+
     let uid: Uuid = id
         .parse()
         .map_err(|_| AppError::BadRequest("invalid music id".into()))?;
@@ -49,10 +54,10 @@ pub async fn sync_music(
     let db = ctx.db.clone();
     let sources = ctx.sources.clone();
     let storage = ctx.storage.clone();
-    let user_id: Option<Uuid> = auth.user_id.parse().ok();
+    let bus_client = ctx.client.clone();
 
     tokio::spawn(async move {
-        match AppSyncService::execute_music_sync(&db, &sources, &storage, uid, false, user_id).await {
+        match AppSyncService::execute_music_sync(&db, &sources, &storage, bus_client, uid, false, caller_user_id).await {
             Ok(result) => {
                 info!("music sync completed, {} jobs dispatched", result.total_jobs);
             }
