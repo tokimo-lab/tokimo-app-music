@@ -334,11 +334,12 @@ function toPage<TIn, TOut>(
   page: RawPage<TIn>,
   map: (item: TIn) => TOut,
 ): PagedResult<TOut> {
+  const safeItems = page.items ?? [];
   return {
-    items: page.items.map(map),
+    items: safeItems.map(map),
     total: page.total,
     page: page.page,
-    pageSize: page.pageSize ?? page.page_size ?? page.items.length,
+    pageSize: page.pageSize ?? page.page_size ?? safeItems.length,
   };
 }
 
@@ -531,7 +532,10 @@ export const api = {
           queryFn: () =>
             apiFetch<RawPage<GenreDto>>(
               `${API_BASE}/${params.id}/genres?page=1&page_size=200`,
-            ).then((page) => page.items.map((genre) => genre.name)),
+            ).then((page) => {
+              const rawItems = Array.isArray(page) ? page : (page.items ?? []);
+              return rawItems.map((genre) => genre.name);
+            }),
           ...options,
         }),
     },

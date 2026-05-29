@@ -61,7 +61,9 @@ export function useInfiniteScroll<T>({
   useEffect(() => {
     if (!queryData) return;
     setItems((prev) =>
-      queryData.page <= 1 ? queryData.items : [...prev, ...queryData.items],
+      queryData.page <= 1
+        ? (queryData.items ?? [])
+        : [...prev, ...(queryData.items ?? [])],
     );
   }, [queryData]);
 
