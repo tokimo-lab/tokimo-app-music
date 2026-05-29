@@ -82,6 +82,10 @@ async fn run_server() -> anyhow::Result<()> {
         .set(Arc::clone(&client))
         .map_err(|_| anyhow::anyhow!("client_slot already set"))?;
 
+    // Register job handlers with the main server (appId inferred from bus caller).
+    bus_clients::jobs::register_handler(&client, "music_scan", "dispatch_music_scan").await?;
+    bus_clients::jobs::register_handler(&client, "music_scrape", "dispatch_music_scrape").await?;
+
     info!("music: registered with broker");
 
     let shutdown = {
