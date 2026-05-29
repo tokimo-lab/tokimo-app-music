@@ -2,6 +2,7 @@
 //!
 //! Params: `{ "filePath", "sourceId", "musicId", "fileSize" }`
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -16,9 +17,19 @@ use crate::ctx::AppCtx;
 use crate::db::entities::{music_album_artists, music_albums, music_artists, music_files, music_tracks};
 use crate::bus_clients::jobs as jobs_client;
 
+struct AudioMeta {
+    artist: Option<String>,
+    album: Option<String>,
+    title: Option<String>,
+    duration: Option<i32>,
+    bitrate: Option<i32>,
+    sample_rate: Option<i32>,
+    codec: Option<String>,
+}
+
 pub async fn handle(
     db: &DatabaseConnection,
-    _state: &Arc<AppCtx>,
+    state: &Arc<AppCtx>,
     _job_id: Uuid,
     params: &JsonValue,
     user_id: Option<Uuid>,
@@ -53,11 +64,15 @@ pub async fn handle(
     let music_id = Uuid::parse_str(music_id_str)?;
     let path = PathBuf::from(file_path);
 
+    // Try to read metadata via ffprobe through VFS
+    let meta = probe_metadata(state, source_id_str, &path, file_size).await;
+
     let file = AudioFile {
         source_id,
         path,
         source_root,
         size: file_size,
+        meta,
     };
 
     let txn = db.begin().await?;
@@ -78,7 +93,7 @@ pub async fn handle(
                     }),
                 );
                 jobs_client::create(
-                    _state.client.get().ok_or("bus client not initialized")?,
+                    state.client.get().ok_or("bus client not initialized")?,
                     jobs_client::music_caller(Some(uid)),
                     request,
                 )
@@ -94,11 +109,83 @@ pub async fn handle(
     })))
 }
 
+async fn probe_metadata(
+    state: &Arc<AppCtx>,
+    source_id: &str,
+    path: &Path,
+    file_size: i64,
+) -> Option<AudioMeta> {
+    let vfs = state.sources.ensure_vfs(source_id).await.ok()?;
+    let ra = vfs.to_read_at(path).await;
+    let filename_hint = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_string);
+    let direct_input = tokimo_package_ffmpeg::DirectInput::from_read_at(
+        ra,
+        file_size as u64,
+        filename_hint,
+        Some(256 * 1024), // 256KB buffer is enough for ID3 tags
+    );
+
+    let probe = tokio::task::spawn_blocking(move || {
+        tokimo_package_ffmpeg::probe_direct(direct_input)
+    })
+    .await
+    .ok()?
+    .ok()?;
+
+    let tags = &probe.format.tags;
+    tracing::info!(
+        path = %path.display(),
+        tags = ?tags,
+        "ffprobe: extracted tags"
+    );
+
+    let audio_stream = probe.streams.iter().find(|s| s.codec_type == "audio");
+
+    Some(AudioMeta {
+        artist: tag_get(tags, "artist").or_else(|| tag_get(tags, "album_artist")),
+        album: tag_get(tags, "album"),
+        title: tag_get(tags, "title"),
+        duration: probe.format.duration_secs().round().to_i32().filter(|&d| d > 0),
+        bitrate: tag_get(tags, "bitrate")
+            .and_then(|s| s.parse().ok())
+            .or_else(|| probe.format.bit_rate.parse().ok()),
+        sample_rate: audio_stream
+            .and_then(|s| s.audio.as_ref())
+            .and_then(|a| a.sample_rate.parse().ok()),
+        codec: audio_stream.map(|s| s.codec_name.clone()),
+    })
+}
+
+fn tag_get(tags: &BTreeMap<String, String>, key: &str) -> Option<String> {
+    tags.get(key)
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+trait RoundToInt32 {
+    fn to_i32(&self) -> Option<i32>;
+}
+
+impl RoundToInt32 for f64 {
+    fn to_i32(&self) -> Option<i32> {
+        let rounded = self.round();
+        if rounded >= 0.0 && rounded <= i32::MAX as f64 {
+            Some(rounded as i32)
+        } else {
+            None
+        }
+    }
+}
+
 struct AudioFile {
     source_id: Uuid,
     path: PathBuf,
     source_root: Option<PathBuf>,
     size: i64,
+    meta: Option<AudioMeta>,
 }
 
 struct ParsedTrack {
@@ -112,20 +199,34 @@ async fn process_audio_file<C: ConnectionTrait>(
     music_id: Uuid,
     file: &AudioFile,
 ) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
-    let parsed = parse_track(&file.path, file.source_root.as_deref());
+    let fallback = parse_track(&file.path, file.source_root.as_deref());
+
+    // Merge: ffprobe tags take priority, filename parsing as fallback
+    let artist = file.meta.as_ref().and_then(|m| m.artist.as_deref())
+        .or(fallback.artist.as_deref())
+        .map(|s| s.to_string());
+    let album = file.meta.as_ref().and_then(|m| m.album.as_deref())
+        .unwrap_or(&fallback.album)
+        .to_string();
+    let title = file.meta.as_ref().and_then(|m| m.title.as_deref())
+        .unwrap_or(&fallback.title)
+        .to_string();
+
     tracing::info!(
         path = %file.path.display(),
-        title = %parsed.title,
-        artist = ?parsed.artist,
-        album = %parsed.album,
-        "music_scan: parsed track"
+        title = %title,
+        artist = ?artist,
+        album = %album,
+        has_ffprobe = file.meta.is_some(),
+        "music_scan: resolved track metadata"
     );
+
     let now = Utc::now().fixed_offset();
-    let artist_id = match parsed.artist.as_deref() {
+    let artist_id = match artist.as_deref() {
         Some(artist) => Some(find_or_create_artist(db, artist, now).await?),
         None => None,
     };
-    let album_id = find_or_create_album(db, music_id, &parsed.album, now).await?;
+    let album_id = find_or_create_album(db, music_id, &album, now).await?;
     if let Some(artist_id) = artist_id {
         ensure_album_artist(db, album_id, artist_id).await?;
     }
@@ -143,6 +244,8 @@ async fn process_audio_file<C: ConnectionTrait>(
         .one(db)
         .await?;
 
+    let parsed = ParsedTrack { title, artist, album };
+
     let track_id = match existing_file.as_ref().and_then(|f| f.track_id) {
         Some(track_id) => {
             if let Some(track) = music_tracks::Entity::find_by_id(track_id).one(db).await? {
@@ -150,15 +253,15 @@ async fn process_audio_file<C: ConnectionTrait>(
                 active.album_id = Set(album_id);
                 active.title = Set(parsed.title.clone());
                 active.genre = Set(None);
-                active.duration = Set(None);
-                active.codec = Set(codec_for_path(&file.path));
+                active.duration = Set(file.meta.as_ref().and_then(|m| m.duration));
+                active.codec = Set(file.meta.as_ref().and_then(|m| m.codec.clone()).or_else(|| codec_for_path(&file.path)));
                 active.update(db).await?;
                 track_id
             } else {
-                insert_track(db, album_id, &parsed, &file.path).await?
+                insert_track(db, album_id, &parsed, &file.path, file.meta.as_ref()).await?
             }
         }
-        None => insert_track(db, album_id, &parsed, &file.path).await?,
+        None => insert_track(db, album_id, &parsed, &file.path, file.meta.as_ref()).await?,
     };
 
     if let Some(existing) = existing_file {
@@ -200,6 +303,7 @@ async fn insert_track<C: ConnectionTrait>(
     album_id: Uuid,
     parsed: &ParsedTrack,
     path: &Path,
+    meta: Option<&AudioMeta>,
 ) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
     let id = Uuid::new_v4();
     music_tracks::Entity::insert(music_tracks::ActiveModel {
@@ -208,11 +312,11 @@ async fn insert_track<C: ConnectionTrait>(
         title: Set(parsed.title.clone()),
         track_number: Set(track_number(path)),
         disc_number: Set(None),
-        duration: Set(None),
+        duration: Set(meta.and_then(|m| m.duration)),
         genre: Set(None),
-        bitrate: Set(None),
-        sample_rate: Set(None),
-        codec: Set(codec_for_path(path)),
+        bitrate: Set(meta.and_then(|m| m.bitrate)),
+        sample_rate: Set(meta.and_then(|m| m.sample_rate)),
+        codec: Set(meta.and_then(|m| m.codec.clone()).or_else(|| codec_for_path(path))),
         mb_track_id: Set(None),
         lyrics_path: Set(None),
     })

@@ -12,6 +12,7 @@ tokimo-bus-protocol = { git = "https://github.com/tokimo-lab/tokimo-bus.git", re
 tokimo-bus-auth     = { git = "https://github.com/tokimo-lab/tokimo-bus.git", rev = "80063cb4391c5249df9cd3b570b1eabed64c3843", features = ["axum", "cli-db"] }
 tokimo-bus-cli      = { git = "https://github.com/tokimo-lab/tokimo-bus.git", rev = "80063cb4391c5249df9cd3b570b1eabed64c3843" }
 tokimo-vfs          = { git = "https://github.com/tokimo-lab/tokimo-package-vfs.git", rev = "17e3c7a9" }
+tokimo-package-ffmpeg = { path = "../../packages/tokimo-package-ffmpeg" }
 
 clap              = { version = "4", features = ["derive", "env"] }
 tokio             = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }
