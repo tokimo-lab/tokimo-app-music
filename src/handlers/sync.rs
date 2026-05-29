@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::ctx::AppCtx;
 use crate::db::ApiDateTimeExt;
 use crate::handlers::MusicSyncStatusOutput;
+use crate::bus_clients::jobs::{cancel_by_filter, service_caller, JobFilter};
 use crate::db::repos::MusicRepo;
 use crate::error::AppError;
 use crate::error::OptionExt;
@@ -46,6 +47,20 @@ pub async fn sync_music(
 
     // Clear data synchronously so frontend sees empty state immediately
     if clear_data {
+        // Cancel any running jobs for this library first
+        if let Some(client) = ctx.client.get() {
+            let filter = JobFilter {
+                params_match: Some(std::collections::HashMap::from([
+                    ("musicId".to_string(), uid.to_string()),
+                ])),
+                ..Default::default()
+            };
+            let cancelled = cancel_by_filter(client, service_caller(), filter).await.unwrap_or(0);
+            if cancelled > 0 {
+                info!("Cancelled {cancelled} jobs before clearing music library {uid}");
+            }
+        }
+
         AppSyncService::clear_library_data(&ctx.db, uid, &music.r#type).await?;
 
         // Notify frontend that all tracks were deleted
