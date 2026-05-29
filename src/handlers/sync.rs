@@ -47,6 +47,18 @@ pub async fn sync_music(
     // Clear data synchronously so frontend sees empty state immediately
     if clear_data {
         AppSyncService::clear_library_data(&ctx.db, uid, &music.r#type).await?;
+
+        // Notify frontend that all tracks were deleted
+        if let Some(client) = ctx.client.get() {
+            let _ = crate::bus_clients::app_events::emit_entity(
+                client,
+                caller_user_id,
+                "music_track",
+                Some(format!("library:{uid}")),
+                serde_json::json!({ "id": uid.to_string(), "operation": "deleted", "libraryId": uid.to_string() }),
+            )
+            .await;
+        }
     }
 
     MusicRepo::update_sync_status(&ctx.db, uid, "syncing", None).await?;

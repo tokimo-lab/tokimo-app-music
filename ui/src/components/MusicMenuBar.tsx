@@ -20,10 +20,8 @@ export default function MusicMenuBar({ children }: { children: ReactNode }) {
   const syncMutation = api.music.sync.useMutation({
     onSuccess: () => {
       message.success(t("syncStarted"));
-      api.music.list.invalidate(qc);
-      api.music.listAlbums.invalidate(qc);
-      api.music.listArtists.invalidate(qc);
-      api.music.listTracks.invalidate(qc);
+      // Use refetchQueries to force refetch even for disabled queries (e.g. when syncing=true)
+      qc.refetchQueries({ queryKey: ["music"], type: "all" });
     },
     onError: (e) => message.error(e.message || t("syncFailed")),
   });
