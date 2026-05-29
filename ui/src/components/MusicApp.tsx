@@ -89,7 +89,7 @@ export default function MusicApp() {
   if (!libraries?.length) {
     return (
       <AppSetupGuide
-        imageSrc="/page-icons/music.png"
+        imageSrc="/api/apps/music/assets/icon.png"
         accentColor="rose"
         title="添加音乐库"
         description="连接一个音乐目录后即可浏览专辑、艺术家和曲目。"
