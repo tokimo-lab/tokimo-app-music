@@ -4,3 +4,4 @@ ui/.vite/
 **/.DS_Store
 *.log
 /ui/dist
+.data/
