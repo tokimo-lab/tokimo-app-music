@@ -2,7 +2,6 @@ use sea_orm::{DatabaseBackend, DatabaseConnection, QueryResult, Statement, Value
 use serde_json::{Value as JsonValue, json};
 use uuid::Uuid;
 
-use crate::db::{ApiDateTimeExt, OptionalApiDateTimeExt};
 use crate::error::AppError;
 
 #[async_trait::async_trait]
@@ -54,100 +53,297 @@ impl MediaContentRepo {
         db: &DatabaseConnection,
         input: ListAlbumsInput,
     ) -> Result<(Vec<JsonValue>, i64), AppError> {
-        let sort_col = allow_album_sort(&input.sort_by);
-        let sort_dir = allow_sort_dir(&input.sort_dir);
-        let mut params = vec![input.music_id.into()];
-        let mut where_parts = vec!["a.music_id = $1".to_string()];
+        let mut conds = vec!["a.music_id = $1".to_string()];
+        let mut params: Vec<Value> = vec![input.music_id.into()];
+        let mut n = 2usize;
 
-        if let Some(search) = input.search.filter(|s| !s.trim().is_empty()) {
-            let p = push_param(&mut params, format!("%{}%", search.trim()));
-            where_parts.push(format!("a.title ILIKE {p}"));
+        if let Some(s) = input.search.filter(|s| !s.trim().is_empty()) {
+            conds.push(format!("a.title ILIKE ${n}"));
+            params.push(format!("%{s}%").into());
+            n += 1;
         }
-        if let Some(genre) = input.genre.filter(|s| !s.trim().is_empty()) {
-            let p = push_param(&mut params, genre);
-            where_parts.push(format!(
-                "EXISTS (SELECT 1 FROM music_tracks gt WHERE gt.album_id = a.id AND gt.genre = {p})"
+        if let Some(g) = input.genre.filter(|s| !s.trim().is_empty()) {
+            conds.push(format!(
+                "EXISTS (SELECT 1 FROM music_tracks mt WHERE mt.album_id = a.id AND mt.genre ILIKE ${n})"
             ));
+            params.push(format!("%{g}%").into());
+            n += 1;
         }
-        if let Some(artist_id) = input.artist_id {
-            let p = push_param(&mut params, artist_id);
-            where_parts.push(format!(
-                "EXISTS (SELECT 1 FROM music_album_artists fa WHERE fa.album_id = a.id AND fa.artist_id = {p})"
+        if let Some(aid) = input.artist_id {
+            conds.push(format!(
+                "EXISTS (SELECT 1 FROM music_album_artists maa2 WHERE maa2.album_id = a.id AND maa2.artist_id = ${n})"
             ));
+            params.push(aid.into());
+            n += 1;
         }
-        if let Some(favorite) = input.favorite {
-            let p = push_param(&mut params, favorite);
-            where_parts.push(format!("a.is_favorite = {p}"));
+        if let Some(true) = input.favorite {
+            conds.push("a.is_favorite = true".to_string());
         }
 
-        let limit = input.page_size.clamp(1, 200);
-        let offset = (input.page.max(1) - 1) * limit;
-        let limit_p = push_param(&mut params, limit);
-        let offset_p = push_param(&mut params, offset);
-        let where_sql = where_parts.join(" AND ");
-        let sql = format!(
-            "SELECT a.id, a.title, a.year, a.release_date, a.album_type, a.cover_path, a.overview, \
-                    a.total_tracks, a.total_discs, a.is_favorite, a.created_at, a.updated_at, \
-                    COUNT(*) OVER()::bigint AS total, \
-                    COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', ar.id, 'name', ar.name)) \
-                        FILTER (WHERE ar.id IS NOT NULL), '[]'::jsonb) AS artists \
-             FROM music_albums a \
-             LEFT JOIN music_album_artists aa ON aa.album_id = a.id \
-             LEFT JOIN music_artists ar ON ar.id = aa.artist_id \
-             WHERE {where_sql} \
-             GROUP BY a.id \
-             ORDER BY {sort_col} {sort_dir}, a.created_at DESC \
-             LIMIT {limit_p} OFFSET {offset_p}"
+        let wh = conds.join(" AND ");
+        let order = match input.sort_by.as_str() {
+            "year" => "a.year",
+            "addedAt" | "createdAt" => "a.created_at",
+            _ => "a.title",
+        };
+        let d = dir(&input.sort_dir);
+
+        let total = query_count(
+            db,
+            &format!("SELECT COUNT(*) as total FROM music_albums a WHERE {wh}"),
+            params.clone(),
+        )
+        .await?;
+
+        let lim = n;
+        let off = n + 1;
+        let isql = format!(
+            "SELECT a.id, a.music_id, a.title, a.sort_title, a.year, \
+             a.album_type, a.cover_path, a.is_favorite, a.mb_album_id, \
+             a.scraped_at::text as scraped_at, \
+             a.metadata->>'genres' as genres_json, \
+             a.created_at::text as created_at, a.updated_at::text as updated_at, \
+             (SELECT COUNT(*) FROM music_tracks mt WHERE mt.album_id = a.id) as track_count, \
+             (SELECT COALESCE(SUM(mt.duration), 0) FROM music_tracks mt WHERE mt.album_id = a.id) as total_duration, \
+             (SELECT ma.name FROM music_album_artists maa JOIN music_artists ma ON ma.id = maa.artist_id \
+              WHERE maa.album_id = a.id LIMIT 1) as artist_name \
+             FROM music_albums a WHERE {wh} ORDER BY {order} {d} NULLS LAST LIMIT ${lim} OFFSET ${off}"
         );
-        let rows = db.query_all(Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, params)).await?;
-        let total = rows.first().map(row_total).transpose()?.unwrap_or(0);
-        let items = rows.iter().map(album_row).collect::<Result<Vec<_>, _>>()?;
+        let offset_val = (input.page - 1) * input.page_size;
+        params.push(input.page_size.into());
+        params.push(offset_val.into());
+
+        let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &isql, params);
+        let rows = db.query_all(stmt).await?;
+        let items = rows
+            .iter()
+            .map(|r| {
+                let genres: Vec<String> = get_opt::<String>(r, "genres_json")?
+                    .and_then(|s| serde_json::from_str(&s).ok())
+                    .unwrap_or_default();
+                Ok(json!({
+                    "id": get::<Uuid>(r, "id")?.to_string(),
+                    "musicId": get::<Uuid>(r, "music_id")?.to_string(),
+                    "title": get::<String>(r, "title")?,
+                    "sortTitle": get_opt::<String>(r, "sort_title")?,
+                    "year": get_opt::<i32>(r, "year")?,
+                    "albumType": get_opt::<String>(r, "album_type")?,
+                    "coverPath": get_opt::<String>(r, "cover_path")?,
+                    "isFavorite": get::<bool>(r, "is_favorite").unwrap_or(false),
+                    "mbAlbumId": get_opt::<String>(r, "mb_album_id")?,
+                    "scrapedAt": get_opt::<String>(r, "scraped_at")?,
+                    "genres": genres,
+                    "trackCount": get::<i64>(r, "track_count").unwrap_or(0),
+                    "totalDuration": get::<i64>(r, "total_duration").unwrap_or(0),
+                    "artistName": get_opt::<String>(r, "artist_name")?,
+                    "createdAt": get_opt::<String>(r, "created_at")?,
+                    "updatedAt": get_opt::<String>(r, "updated_at")?,
+                }))
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
         Ok((items, total))
     }
+
+    // ── Music: Album Detail ──
+
+    pub async fn get_album_detail(db: &DatabaseConnection, album_id: Uuid) -> Result<Option<JsonValue>, AppError> {
+        let stmt = Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT a.id, a.music_id, a.title, a.sort_title, a.year, \
+             a.release_date::text as release_date, a.album_type, a.cover_path, \
+             a.overview, a.total_tracks, a.total_discs, a.is_favorite, \
+             a.mb_album_id, a.metadata, \
+             a.scraped_at::text as scraped_at, \
+             a.created_at::text as created_at, a.updated_at::text as updated_at \
+             FROM music_albums a WHERE a.id = $1",
+            [album_id.into()],
+        );
+        let Some(a) = db.query_one(stmt).await? else {
+            return Ok(None);
+        };
+
+        let album_cover: Option<String> = get_opt(&a, "cover_path")?;
+        let album_id_str = get::<Uuid>(&a, "id")?.to_string();
+
+        // Tracks
+        let album_title: String = get(&a, "title")?;
+        let track_stmt = Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT t.id, t.title, t.track_number, t.disc_number, t.duration, \
+             t.bitrate, t.codec, t.genre, t.sample_rate, t.lyrics_path, \
+             mf.id as file_id, mf.path as file_path, mf.filename as file_name, \
+             mf.size as file_size, mf.mime_type as file_mime, \
+             (SELECT ma.name FROM music_album_artists maa JOIN music_artists ma ON ma.id = maa.artist_id \
+              WHERE maa.album_id = t.album_id LIMIT 1) as artist_name \
+             FROM music_tracks t \
+             LEFT JOIN music_files mf ON mf.track_id = t.id \
+             WHERE t.album_id = $1 \
+             ORDER BY t.disc_number ASC NULLS FIRST, t.track_number ASC NULLS LAST",
+            [album_id.into()],
+        );
+        let track_rows = db.query_all(track_stmt).await?;
+        let tracks: Vec<JsonValue> = track_rows
+            .iter()
+            .map(|r| -> Result<JsonValue, AppError> {
+                let fid = get_opt::<Uuid>(r, "file_id")?;
+                let file = fid.map(|id| json!({
+                    "id": id.to_string(),
+                    "path": get_opt::<String>(r, "file_path").unwrap_or_default(),
+                    "filename": get_opt::<String>(r, "file_name").unwrap_or_default(),
+                    "size": get_opt::<i64>(r, "file_size").unwrap_or_default(),
+                    "mimeType": get_opt::<String>(r, "file_mime").unwrap_or_default(),
+                }));
+                Ok(json!({
+                    "id": get::<Uuid>(r, "id").map(|v| v.to_string()).unwrap_or_default(),
+                    "albumId": &album_id_str,
+                    "albumTitle": &album_title,
+                    "title": get::<String>(r, "title").unwrap_or_default(),
+                    "artistName": get_opt::<String>(r, "artist_name")?,
+                    "trackNumber": get_opt::<i32>(r, "track_number")?,
+                    "discNumber": get_opt::<i32>(r, "disc_number")?,
+                    "duration": get_opt::<i32>(r, "duration")?,
+                    "bitrate": get_opt::<i32>(r, "bitrate")?,
+                    "codec": get_opt::<String>(r, "codec")?,
+                    "genre": get_opt::<String>(r, "genre")?,
+                    "sampleRate": get_opt::<i32>(r, "sample_rate")?,
+                    "lyricsPath": get_opt::<String>(r, "lyrics_path")?,
+                    "coverPath": &album_cover,
+                    "fileId": fid.map(|v| v.to_string()),
+                    "file": file,
+                }))
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+
+        // Credits
+        let credits = Self::query_album_credits(db, album_id).await?;
+
+        // Parse genres from metadata
+        let metadata: Option<JsonValue> = get_opt(&a, "metadata")?;
+        let genres: Vec<String> = metadata
+            .as_ref()
+            .and_then(|m| m.get("genres"))
+            .and_then(|g| g.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+
+        Ok(Some(json!({
+            "id": &album_id_str,
+            "musicId": get::<Uuid>(&a, "music_id")?.to_string(),
+            "title": get::<String>(&a, "title")?,
+            "sortTitle": get_opt::<String>(&a, "sort_title")?,
+            "year": get_opt::<i32>(&a, "year")?,
+            "releaseDate": get_opt::<String>(&a, "release_date")?,
+            "albumType": get_opt::<String>(&a, "album_type")?,
+            "coverPath": &album_cover,
+            "overview": get_opt::<String>(&a, "overview")?,
+            "totalTracks": get_opt::<i32>(&a, "total_tracks")?,
+            "totalDiscs": get_opt::<i32>(&a, "total_discs")?,
+            "isFavorite": get::<bool>(&a, "is_favorite").unwrap_or(false),
+            "mbAlbumId": get_opt::<String>(&a, "mb_album_id")?,
+            "genres": genres,
+            "scrapedAt": get_opt::<String>(&a, "scraped_at")?,
+            "metadata": metadata,
+            "createdAt": get_opt::<String>(&a, "created_at")?,
+            "updatedAt": get_opt::<String>(&a, "updated_at")?,
+            "tracks": tracks,
+            "credits": credits,
+        })))
+    }
+
+    // ── Music: Tracks ──
 
     pub async fn list_tracks(
         db: &DatabaseConnection,
         input: ListTracksInput,
     ) -> Result<(Vec<JsonValue>, i64), AppError> {
-        let sort_col = allow_track_sort(&input.sort_by);
-        let sort_dir = allow_sort_dir(&input.sort_dir);
-        let mut params = vec![input.music_id.into()];
-        let mut where_parts = vec!["a.music_id = $1".to_string()];
-        if let Some(search) = input.search.filter(|s| !s.trim().is_empty()) {
-            let p = push_param(&mut params, format!("%{}%", search.trim()));
-            where_parts.push(format!("(t.title ILIKE {p} OR a.title ILIKE {p})"));
+        let mut conds = vec!["a.music_id = $1".to_string()];
+        let mut params: Vec<Value> = vec![input.music_id.into()];
+        let mut n = 2usize;
+
+        if let Some(s) = input.search.filter(|s| !s.trim().is_empty()) {
+            conds.push(format!("t.title ILIKE ${n}"));
+            params.push(format!("%{s}%").into());
+            n += 1;
         }
-        if let Some(genre) = input.genre.filter(|s| !s.trim().is_empty()) {
-            let p = push_param(&mut params, genre);
-            where_parts.push(format!("t.genre = {p}"));
+        if let Some(g) = input.genre.filter(|s| !s.trim().is_empty()) {
+            conds.push(format!("t.genre ILIKE ${n}"));
+            params.push(format!("%{g}%").into());
+            n += 1;
         }
-        let limit = input.page_size.clamp(1, 200);
-        let offset = (input.page.max(1) - 1) * limit;
-        let limit_p = push_param(&mut params, limit);
-        let offset_p = push_param(&mut params, offset);
-        let where_sql = where_parts.join(" AND ");
-        let sql = format!(
-            "SELECT t.id, t.album_id, t.title, t.track_number, t.disc_number, t.duration, t.genre, \
-                    t.bitrate, t.sample_rate, t.codec, t.lyrics_path, \
-                    a.title AS album_title, f.id AS file_id, f.path AS file_path, f.mime_type, f.size, \
-                    COUNT(*) OVER()::bigint AS total, \
-                    COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', ar.id, 'name', ar.name)) \
-                        FILTER (WHERE ar.id IS NOT NULL), '[]'::jsonb) AS artists \
+
+        let wh = conds.join(" AND ");
+        let order = match input.sort_by.as_str() {
+            "duration" => "t.duration",
+            "addedAt" | "createdAt" => "a.created_at",
+            _ => "t.title",
+        };
+        let d = dir(&input.sort_dir);
+
+        let total = query_count(
+            db,
+            &format!(
+                "SELECT COUNT(*) as total FROM music_tracks t \
+                 JOIN music_albums a ON a.id = t.album_id WHERE {wh}"
+            ),
+            params.clone(),
+        )
+        .await?;
+
+        let lim = n;
+        let off = n + 1;
+        let isql = format!(
+            "SELECT t.id, t.title, t.track_number, t.disc_number, t.duration, \
+             t.bitrate, t.codec, t.genre, t.sample_rate, \
+             a.title as album_title, a.cover_path as album_cover, \
+             mf.id as file_id, mf.path as file_path, mf.filename as file_name, \
+             mf.size as file_size, mf.mime_type as file_mime, \
+             (SELECT ma.name FROM music_album_artists maa JOIN music_artists ma ON ma.id = maa.artist_id \
+              WHERE maa.album_id = a.id LIMIT 1) as artist_name \
              FROM music_tracks t \
              JOIN music_albums a ON a.id = t.album_id \
-             LEFT JOIN music_files f ON f.track_id = t.id \
-             LEFT JOIN music_album_artists aa ON aa.album_id = a.id \
-             LEFT JOIN music_artists ar ON ar.id = aa.artist_id \
-             WHERE {where_sql} \
-             GROUP BY t.id, a.id, f.id \
-             ORDER BY {sort_col} {sort_dir}, t.track_number ASC NULLS LAST \
-             LIMIT {limit_p} OFFSET {offset_p}"
+             LEFT JOIN music_files mf ON mf.track_id = t.id \
+             WHERE {wh} ORDER BY {order} {d} NULLS LAST LIMIT ${lim} OFFSET ${off}"
         );
-        let rows = db.query_all(Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, params)).await?;
-        let total = rows.first().map(row_total).transpose()?.unwrap_or(0);
-        let items = rows.iter().map(track_row).collect::<Result<Vec<_>, _>>()?;
+        let offset_val = (input.page - 1) * input.page_size;
+        params.push(input.page_size.into());
+        params.push(offset_val.into());
+
+        let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &isql, params);
+        let rows = db.query_all(stmt).await?;
+        let items = rows
+            .iter()
+            .map(|r| -> Result<JsonValue, AppError> {
+                let fid = get_opt::<Uuid>(r, "file_id")?;
+                let file = fid.map(|id| json!({
+                    "id": id.to_string(),
+                    "path": get_opt::<String>(r, "file_path").unwrap_or_default(),
+                    "filename": get_opt::<String>(r, "file_name").unwrap_or_default(),
+                    "size": get_opt::<i64>(r, "file_size").unwrap_or_default(),
+                    "mimeType": get_opt::<String>(r, "file_mime").unwrap_or_default(),
+                }));
+                Ok(json!({
+                    "id": get::<Uuid>(r, "id")?.to_string(),
+                    "title": get::<String>(r, "title")?,
+                    "trackNumber": get_opt::<i32>(r, "track_number")?,
+                    "discNumber": get_opt::<i32>(r, "disc_number")?,
+                    "duration": get_opt::<i32>(r, "duration")?,
+                    "bitrate": get_opt::<i32>(r, "bitrate")?,
+                    "codec": get_opt::<String>(r, "codec")?,
+                    "genre": get_opt::<String>(r, "genre")?,
+                    "sampleRate": get_opt::<i32>(r, "sample_rate")?,
+                    "albumTitle": get_opt::<String>(r, "album_title")?,
+                    "albumCover": get_opt::<String>(r, "album_cover")?,
+                    "coverPath": get_opt::<String>(r, "album_cover")?,
+                    "artistName": get_opt::<String>(r, "artist_name")?,
+                    "fileId": fid.map(|v| v.to_string()),
+                    "file": file,
+                }))
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
         Ok((items, total))
     }
+
+    // ── Music: Artists ──
 
     pub async fn list_artists(
         db: &DatabaseConnection,
@@ -158,61 +354,64 @@ impl MediaContentRepo {
         sort_dir: &str,
         search: Option<&str>,
     ) -> Result<(Vec<JsonValue>, i64), AppError> {
-        let sort_col = match sort_by { "createdAt" => "ar.created_at", _ => "ar.name" };
-        let sort_dir = allow_sort_dir(sort_dir);
-        let mut params = vec![music_id.into()];
-        let mut where_parts = vec!["a.music_id = $1".to_string()];
-        if let Some(search) = search.filter(|s| !s.trim().is_empty()) {
-            let p = push_param(&mut params, format!("%{}%", search.trim()));
-            where_parts.push(format!("ar.name ILIKE {p}"));
+        let mut conds = vec!["a.music_id = $1".to_string()];
+        let mut params: Vec<Value> = vec![music_id.into()];
+        let mut n = 2usize;
+
+        if let Some(s) = search.filter(|s| !s.trim().is_empty()) {
+            conds.push(format!("ma.name ILIKE ${n}"));
+            params.push(format!("%{s}%").into());
+            n += 1;
         }
-        let limit = page_size.clamp(1, 200);
-        let offset = (page.max(1) - 1) * limit;
-        let limit_p = push_param(&mut params, limit);
-        let offset_p = push_param(&mut params, offset);
-        let where_sql = where_parts.join(" AND ");
-        let sql = format!(
-            "SELECT ar.id, ar.name, ar.original_name, ar.biography, ar.profile_path, ar.profile_key, \
-                    ar.popularity, ar.followers, ar.genres, ar.created_at, ar.updated_at, \
-                    COUNT(DISTINCT a.id)::bigint AS album_count, COUNT(DISTINCT t.id)::bigint AS track_count, \
-                    COUNT(*) OVER()::bigint AS total \
-             FROM music_artists ar \
-             JOIN music_album_artists aa ON aa.artist_id = ar.id \
-             JOIN music_albums a ON a.id = aa.album_id \
-             LEFT JOIN music_tracks t ON t.album_id = a.id \
-             WHERE {where_sql} \
-             GROUP BY ar.id \
-             ORDER BY {sort_col} {sort_dir} \
-             LIMIT {limit_p} OFFSET {offset_p}"
+
+        let wh = conds.join(" AND ");
+        let order = match sort_by {
+            "albumCount" => "album_count",
+            "addedAt" | "createdAt" => "ma.created_at",
+            _ => "ma.name",
+        };
+        let d = dir(sort_dir);
+
+        let count_sql = format!(
+            "SELECT COUNT(DISTINCT ma.id) as total FROM music_artists ma \
+             JOIN music_album_artists maa ON maa.artist_id = ma.id \
+             JOIN music_albums a ON a.id = maa.album_id WHERE {wh}"
         );
-        let rows = db.query_all(Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, params)).await?;
-        let total = rows.first().map(row_total).transpose()?.unwrap_or(0);
-        let items = rows.iter().map(artist_row).collect::<Result<Vec<_>, _>>()?;
+        let total = query_count(db, &count_sql, params.clone()).await?;
+
+        let lim = n;
+        let off = n + 1;
+        let isql = format!(
+            "SELECT ma.id, ma.name, ma.profile_path, \
+             COUNT(DISTINCT maa.album_id) as album_count \
+             FROM music_artists ma \
+             JOIN music_album_artists maa ON maa.artist_id = ma.id \
+             JOIN music_albums a ON a.id = maa.album_id \
+             WHERE {wh} \
+             GROUP BY ma.id \
+             ORDER BY {order} {d} NULLS LAST LIMIT ${lim} OFFSET ${off}"
+        );
+        let offset_val = (page - 1) * page_size;
+        params.push(page_size.into());
+        params.push(offset_val.into());
+
+        let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &isql, params);
+        let rows = db.query_all(stmt).await?;
+        let items = rows
+            .iter()
+            .map(|r| {
+                Ok(json!({
+                    "id": get::<Uuid>(r, "id")?.to_string(),
+                    "name": get::<String>(r, "name")?,
+                    "profilePath": get_opt::<String>(r, "profile_path")?,
+                    "albumCount": get::<i64>(r, "album_count").unwrap_or(0),
+                }))
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
         Ok((items, total))
     }
 
-    pub async fn get_album_detail(db: &DatabaseConnection, album_id: Uuid) -> Result<Option<JsonValue>, AppError> {
-        let stmt = Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            "SELECT a.id, a.music_id, a.title, a.year, a.release_date, a.album_type, a.cover_path, a.overview, \
-                    a.total_tracks, a.total_discs, a.is_favorite, a.metadata, a.created_at, a.updated_at, \
-                    COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', ar.id, 'name', ar.name)) \
-                        FILTER (WHERE ar.id IS NOT NULL), '[]'::jsonb) AS artists \
-             FROM music_albums a \
-             LEFT JOIN music_album_artists aa ON aa.album_id = a.id \
-             LEFT JOIN music_artists ar ON ar.id = aa.artist_id \
-             WHERE a.id = $1 \
-             GROUP BY a.id",
-            [album_id.into()],
-        );
-        let Some(row) = db.query_one(stmt).await? else { return Ok(None); };
-        let mut album = album_row(&row)?;
-        let tracks = Self::tracks_for_album(db, album_id).await?;
-        if let Some(obj) = album.as_object_mut() {
-            obj.insert("tracks".to_string(), JsonValue::Array(tracks));
-        }
-        Ok(Some(album))
-    }
+    // ── Music: Artist Detail ──
 
     pub async fn get_artist_detail(
         db: &DatabaseConnection,
@@ -221,35 +420,75 @@ impl MediaContentRepo {
     ) -> Result<Option<JsonValue>, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT ar.id, ar.name, ar.original_name, ar.biography, ar.profile_path, ar.profile_key, \
-                    ar.popularity, ar.followers, ar.genres, ar.created_at, ar.updated_at, \
-                    COUNT(DISTINCT a.id)::bigint AS album_count, COUNT(DISTINCT t.id)::bigint AS track_count, 1::bigint AS total \
-             FROM music_artists ar \
-             JOIN music_album_artists aa ON aa.artist_id = ar.id \
-             JOIN music_albums a ON a.id = aa.album_id \
-             LEFT JOIN music_tracks t ON t.album_id = a.id \
-             WHERE ar.id = $1 AND a.music_id = $2 \
-             GROUP BY ar.id",
+            "SELECT ma.id, ma.name, ma.original_name, ma.profile_path, ma.biography, \
+             ma.popularity, ma.followers, ma.mb_id, \
+             (SELECT COUNT(*) FROM music_album_artists maa2 \
+              JOIN music_albums a2 ON a2.id = maa2.album_id AND a2.music_id = $2 \
+              WHERE maa2.artist_id = ma.id) as album_count, \
+             (SELECT COUNT(*) FROM music_album_artists maa3 \
+              JOIN music_tracks t3 ON t3.album_id = maa3.album_id \
+              JOIN music_albums a3 ON a3.id = maa3.album_id AND a3.music_id = $2 \
+              WHERE maa3.artist_id = ma.id) as track_count \
+             FROM music_artists ma WHERE ma.id = $1",
             [person_id.into(), music_id.into()],
         );
-        let Some(row) = db.query_one(stmt).await? else { return Ok(None); };
-        let mut artist = artist_row(&row)?;
-        let albums = Self::albums_for_artist(db, person_id, music_id).await?;
-        if let Some(obj) = artist.as_object_mut() {
-            obj.insert("albums".to_string(), JsonValue::Array(albums));
-        }
-        Ok(Some(artist))
+        let Some(p) = db.query_one(stmt).await? else {
+            return Ok(None);
+        };
+
+        let album_stmt = Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT a.id, a.title, a.year, a.cover_path, a.is_favorite, a.album_type \
+             FROM music_albums a \
+             JOIN music_album_artists maa ON maa.album_id = a.id AND maa.artist_id = $1 \
+             WHERE a.music_id = $2 \
+             ORDER BY a.year DESC NULLS LAST",
+            [person_id.into(), music_id.into()],
+        );
+        let album_rows = db.query_all(album_stmt).await?;
+        let albums: Vec<JsonValue> = album_rows
+            .iter()
+            .map(|r| {
+                Ok(json!({
+                    "id": get::<Uuid>(r, "id").map(|v| v.to_string()).unwrap_or_default(),
+                    "title": get::<String>(r, "title").unwrap_or_default(),
+                    "year": get_opt::<i32>(r, "year")?,
+                    "coverPath": get_opt::<String>(r, "cover_path")?,
+                    "isFavorite": get::<bool>(r, "is_favorite").unwrap_or(false),
+                    "albumType": get_opt::<String>(r, "album_type")?,
+                }))
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+
+        Ok(Some(json!({
+            "id": get::<Uuid>(&p, "id")?.to_string(),
+            "name": get::<String>(&p, "name")?,
+            "originalName": get_opt::<String>(&p, "original_name")?,
+            "profilePath": get_opt::<String>(&p, "profile_path")?,
+            "biography": get_opt::<String>(&p, "biography")?,
+            "popularity": get_opt::<i32>(&p, "popularity")?,
+            "followers": get_opt::<i32>(&p, "followers")?,
+            "mbArtistId": get_opt::<String>(&p, "mb_id")?,
+            "albumCount": get::<i64>(&p, "album_count").unwrap_or(0),
+            "trackCount": get::<i64>(&p, "track_count").unwrap_or(0),
+            "albums": albums,
+        })))
     }
+
+    // ── Music: Toggle Album Favorite ──
 
     pub async fn toggle_album_favorite(db: &DatabaseConnection, album_id: Uuid) -> Result<bool, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "UPDATE music_albums SET is_favorite = NOT is_favorite, updated_at = NOW() WHERE id = $1 RETURNING is_favorite",
+            "UPDATE music_albums SET is_favorite = NOT is_favorite WHERE id = $1 RETURNING is_favorite",
             [album_id.into()],
         );
-        let row = db.query_one(stmt).await?.ok_or_else(|| AppError::NotFound(format!("album {album_id} not found")))?;
+        let row = db.query_one(stmt).await?
+            .ok_or_else(|| AppError::NotFound(format!("album {album_id} not found")))?;
         get::<bool>(&row, "is_favorite")
     }
+
+    // ── Track Lyrics ──
 
     pub async fn get_track_lyrics(db: &DatabaseConnection, track_id: Uuid) -> Result<Option<String>, AppError> {
         let stmt = Statement::from_sql_and_values(
@@ -257,142 +496,53 @@ impl MediaContentRepo {
             "SELECT lyrics_path FROM music_tracks WHERE id = $1",
             [track_id.into()],
         );
-        let row = db.query_one(stmt).await?.ok_or_else(|| AppError::NotFound(format!("track {track_id} not found")))?;
+        let row = db.query_one(stmt).await?
+            .ok_or_else(|| AppError::NotFound(format!("track {track_id} not found")))?;
         get_opt::<String>(&row, "lyrics_path")
     }
 
-    async fn tracks_for_album(db: &DatabaseConnection, album_id: Uuid) -> Result<Vec<JsonValue>, AppError> {
-        let rows = db.query_all(Statement::from_sql_and_values(
+    // ── Album Credits ──
+
+    async fn query_album_credits(db: &DatabaseConnection, album_id: Uuid) -> Result<Vec<JsonValue>, AppError> {
+        let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT t.id, t.album_id, t.title, t.track_number, t.disc_number, t.duration, t.genre, \
-                    t.bitrate, t.sample_rate, t.codec, t.lyrics_path, a.title AS album_title, \
-                    f.id AS file_id, f.path AS file_path, f.mime_type, f.size, 0::bigint AS total, '[]'::jsonb AS artists \
-             FROM music_tracks t \
-             JOIN music_albums a ON a.id = t.album_id \
-             LEFT JOIN music_files f ON f.track_id = t.id \
-             WHERE t.album_id = $1 \
-             ORDER BY t.disc_number ASC NULLS LAST, t.track_number ASC NULLS LAST, t.title ASC",
+            "SELECT aa.id, aa.role, NULL::text as character, aa.sort_order, \
+             ma.id as person_id, ma.name, ma.profile_path \
+             FROM music_album_artists aa JOIN music_artists ma ON ma.id = aa.artist_id \
+             WHERE aa.album_id = $1 ORDER BY aa.sort_order ASC",
             [album_id.into()],
-        )).await?;
-        rows.iter().map(track_row).collect()
-    }
-
-    async fn albums_for_artist(db: &DatabaseConnection, artist_id: Uuid, music_id: Uuid) -> Result<Vec<JsonValue>, AppError> {
-        let rows = db.query_all(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            "SELECT a.id, a.title, a.year, a.release_date, a.album_type, a.cover_path, a.overview, \
-                    a.total_tracks, a.total_discs, a.is_favorite, a.created_at, a.updated_at, 0::bigint AS total, \
-                    COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', ar.id, 'name', ar.name)) \
-                        FILTER (WHERE ar.id IS NOT NULL), '[]'::jsonb) AS artists \
-             FROM music_albums a \
-             JOIN music_album_artists aa_filter ON aa_filter.album_id = a.id AND aa_filter.artist_id = $1 \
-             LEFT JOIN music_album_artists aa ON aa.album_id = a.id \
-             LEFT JOIN music_artists ar ON ar.id = aa.artist_id \
-             WHERE a.music_id = $2 \
-             GROUP BY a.id \
-             ORDER BY a.year DESC NULLS LAST, a.title ASC",
-            [artist_id.into(), music_id.into()],
-        )).await?;
-        rows.iter().map(album_row).collect()
+        );
+        let rows = db.query_all(stmt).await?;
+        rows.iter()
+            .map(|r| {
+                Ok(json!({
+                    "id": get::<Uuid>(r, "id").map(|v| v.to_string()).unwrap_or_default(),
+                    "role": get::<String>(r, "role").unwrap_or_default(),
+                    "character": get_opt::<String>(r, "character").unwrap_or_default(),
+                    "sortOrder": get::<i32>(r, "sort_order").unwrap_or(0),
+                    "person": {
+                        "id": get::<Uuid>(r, "person_id").map(|v| v.to_string()).unwrap_or_default(),
+                        "name": get::<String>(r, "name").unwrap_or_default(),
+                        "profilePath": get_opt::<String>(r, "profile_path").unwrap_or_default(),
+                    }
+                }))
+            })
+            .collect()
     }
 }
 
-fn push_param<T: Into<Value>>(params: &mut Vec<Value>, value: T) -> String {
-    params.push(value.into());
-    format!("${}", params.len())
+fn dir(d: &str) -> &'static str {
+    if d.eq_ignore_ascii_case("desc") { "DESC" } else { "ASC" }
 }
 
-fn allow_sort_dir(sort_dir: &str) -> &'static str {
-    if sort_dir.eq_ignore_ascii_case("desc") { "DESC" } else { "ASC" }
-}
-
-fn allow_album_sort(sort_by: &str) -> &'static str {
-    match sort_by {
-        "year" => "a.year",
-        "createdAt" => "a.created_at",
-        "updatedAt" => "a.updated_at",
-        "favorite" | "isFavorite" => "a.is_favorite",
-        "trackCount" | "totalTracks" => "a.total_tracks",
-        _ => "a.title",
+fn query_count<'a>(db: &'a DatabaseConnection, sql: &'a str, params: Vec<Value>) -> impl std::future::Future<Output = Result<i64, AppError>> + 'a {
+    // Wrap async block to avoid lifetime issues
+    async move {
+        let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, params);
+        let row = db.query_one(stmt).await?
+            .ok_or_else(|| AppError::Internal("count query returned no rows".into()))?;
+        get::<i64>(&row, "total")
     }
-}
-
-fn allow_track_sort(sort_by: &str) -> &'static str {
-    match sort_by {
-        "trackNumber" => "t.track_number",
-        "discNumber" => "t.disc_number",
-        "duration" => "t.duration",
-        "genre" => "t.genre",
-        _ => "t.title",
-    }
-}
-
-fn row_total(row: &QueryResult) -> Result<i64, AppError> {
-    get::<i64>(row, "total")
-}
-
-fn album_row(row: &QueryResult) -> Result<JsonValue, AppError> {
-    let created_at = get_opt::<chrono::DateTime<chrono::FixedOffset>>(row, "created_at")?
-        .and_then(|dt| dt.to_api_datetime());
-    let updated_at = get_opt::<chrono::DateTime<chrono::FixedOffset>>(row, "updated_at")?;
-    Ok(json!({
-        "id": get::<Uuid>(row, "id")?.to_string(),
-        "title": get::<String>(row, "title")?,
-        "year": get_opt::<i32>(row, "year")?,
-        "releaseDate": get_opt::<chrono::NaiveDate>(row, "release_date")?.map(|d| d.to_string()),
-        "albumType": get_opt::<String>(row, "album_type")?,
-        "coverPath": get_opt::<String>(row, "cover_path")?,
-        "overview": get_opt::<String>(row, "overview")?,
-        "totalTracks": get_opt::<i32>(row, "total_tracks")?,
-        "totalDiscs": get_opt::<i32>(row, "total_discs")?,
-        "isFavorite": get::<bool>(row, "is_favorite")?,
-        "artists": get_opt::<JsonValue>(row, "artists")?.unwrap_or_else(|| json!([])),
-        "createdAt": created_at,
-        "updatedAt": updated_at.to_api_datetime(),
-    }))
-}
-
-fn track_row(row: &QueryResult) -> Result<JsonValue, AppError> {
-    Ok(json!({
-        "id": get::<Uuid>(row, "id")?.to_string(),
-        "albumId": get::<Uuid>(row, "album_id")?.to_string(),
-        "title": get::<String>(row, "title")?,
-        "trackNumber": get_opt::<i32>(row, "track_number")?,
-        "discNumber": get_opt::<i32>(row, "disc_number")?,
-        "duration": get_opt::<i32>(row, "duration")?,
-        "genre": get_opt::<String>(row, "genre")?,
-        "bitrate": get_opt::<i32>(row, "bitrate")?,
-        "sampleRate": get_opt::<i32>(row, "sample_rate")?,
-        "codec": get_opt::<String>(row, "codec")?,
-        "lyricsPath": get_opt::<String>(row, "lyrics_path")?,
-        "albumTitle": get::<String>(row, "album_title")?,
-        "fileId": get_opt::<Uuid>(row, "file_id")?.map(|id| id.to_string()),
-        "filePath": get_opt::<String>(row, "file_path")?,
-        "mimeType": get_opt::<String>(row, "mime_type")?,
-        "size": get_opt::<i64>(row, "size")?,
-        "artists": get_opt::<JsonValue>(row, "artists")?.unwrap_or_else(|| json!([])),
-    }))
-}
-
-fn artist_row(row: &QueryResult) -> Result<JsonValue, AppError> {
-    let created_at = get_opt::<chrono::DateTime<chrono::FixedOffset>>(row, "created_at")?
-        .and_then(|dt| dt.to_api_datetime());
-    let updated_at = get_opt::<chrono::DateTime<chrono::FixedOffset>>(row, "updated_at")?;
-    Ok(json!({
-        "id": get::<Uuid>(row, "id")?.to_string(),
-        "name": get::<String>(row, "name")?,
-        "originalName": get_opt::<String>(row, "original_name")?,
-        "biography": get_opt::<String>(row, "biography")?,
-        "profilePath": get_opt::<String>(row, "profile_path")?,
-        "profileKey": get_opt::<String>(row, "profile_key")?,
-        "popularity": get_opt::<i32>(row, "popularity")?,
-        "followers": get_opt::<i32>(row, "followers")?,
-        "genres": get_opt::<Vec<String>>(row, "genres")?,
-        "albumCount": get::<i64>(row, "album_count")?,
-        "trackCount": get::<i64>(row, "track_count")?,
-        "createdAt": created_at,
-        "updatedAt": updated_at.to_api_datetime(),
-    }))
 }
 
 fn get<T>(row: &QueryResult, col: &str) -> Result<T, AppError>

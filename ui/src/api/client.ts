@@ -74,45 +74,59 @@ interface LibraryDto {
 
 interface TrackDto {
   id: string;
-  libraryId?: string | null;
-  filePath: string;
   title?: string | null;
-  artist?: string | null;
-  album?: string | null;
-  durationSecs?: number | null;
-  sizeBytes?: number | null;
-  mime?: string | null;
-  albumId?: string | null;
-  artistId?: string | null;
-  genreId?: string | null;
-  lyricsText?: string | null;
-  createdAt: string;
-  updatedAt: string;
+  trackNumber?: number | null;
+  discNumber?: number | null;
+  duration?: number | null;
+  bitrate?: number | null;
+  codec?: string | null;
+  genre?: string | null;
+  sampleRate?: number | null;
+  albumTitle?: string | null;
+  albumCover?: string | null;
+  coverPath?: string | null;
+  artistName?: string | null;
+  fileId?: string | null;
+  file?: {
+    id: string;
+    path?: string | null;
+    filename?: string | null;
+    size?: number | null;
+    mimeType?: string | null;
+  } | null;
 }
 
 interface AlbumDto {
   id: string;
-  libraryId?: string | null;
+  musicId?: string;
   name: string;
-  artist?: string | null;
+  artistName?: string | null;
+  sortTitle?: string | null;
   year?: number | null;
-  coverUrl?: string | null;
+  albumType?: string | null;
+  coverPath?: string | null;
   isFavorite: boolean;
+  mbAlbumId?: string | null;
+  scrapedAt?: string | null;
+  genres?: string[];
   trackCount: number;
-  createdAt: string;
-  updatedAt: string;
+  totalDuration?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface ArtistDto {
   id: string;
-  libraryId?: string | null;
   name: string;
-  bio?: string | null;
-  photoUrl?: string | null;
+  originalName?: string | null;
+  profilePath?: string | null;
+  biography?: string | null;
+  popularity?: number | null;
+  followers?: number | null;
+  mbArtistId?: string | null;
   albumCount?: number;
   trackCount?: number;
-  createdAt: string;
-  updatedAt: string;
+  albums?: AlbumDto[];
 }
 
 interface GenreDto {
@@ -167,7 +181,7 @@ export interface MusicTrackOutput {
   posterId?: string | null;
   filePath: string;
   fileId?: string;
-  file?: { id: string };
+  file?: { id: string; path?: string | null; filename?: string | null; size?: number | null; mimeType?: string | null };
   fileSize: number;
   bitrate?: number;
   sampleRate?: number;
@@ -187,12 +201,14 @@ export interface MusicAlbumOutput {
   musicId: string;
   libraryId?: string | null;
   title: string;
+  sortTitle?: string | null;
   artistName?: string;
   artistId?: string;
   year?: number;
   coverPath?: string | null;
   posterId?: string | null;
   isFavorite: boolean;
+  mbAlbumId?: string | null;
   trackCount: number;
   totalDuration?: number;
   albumType?: string;
@@ -217,10 +233,13 @@ export interface MusicArtistOutput {
   birthplace?: string;
   profilePath?: string | null;
   posterId?: string | null;
+  popularity?: number;
+  followers?: number;
+  mbArtistId?: string | null;
   albumCount: number;
   trackCount: number;
   albums?: MusicAlbumOutput[];
-  createdAt: string;
+  createdAt?: string;
 }
 
 export interface PagedResult<T> {
@@ -273,40 +292,45 @@ function toLibrary(dto: LibraryDto, sync?: SyncStatusDto): MusicOutput {
 function toTrack(dto: TrackDto): MusicTrackOutput {
   return {
     id: dto.id,
-    musicId: dto.libraryId ?? "",
-    libraryId: dto.libraryId,
+    musicId: "",
     title: dto.title ?? "未知曲目",
-    artistName: dto.artist ?? undefined,
-    albumTitle: dto.album ?? undefined,
-    albumId: dto.albumId ?? undefined,
-    artistId: dto.artistId ?? undefined,
-    duration: dto.durationSecs ?? 0,
-    durationSecs: dto.durationSecs,
-    coverPath: null,
-    filePath: dto.filePath,
-    fileId: dto.id,
-    file: { id: dto.id },
-    fileSize: dto.sizeBytes ?? 0,
-    codec: dto.mime ?? undefined,
-    genre: dto.genreId ?? undefined,
-    createdAt: dto.createdAt,
+    trackNumber: dto.trackNumber ?? undefined,
+    discNumber: dto.discNumber ?? undefined,
+    artistName: dto.artistName ?? undefined,
+    albumTitle: dto.albumTitle ?? undefined,
+    coverPath: dto.coverPath ?? dto.albumCover ?? null,
+    duration: dto.duration ?? 0,
+    durationSecs: dto.duration,
+    bitrate: dto.bitrate ?? undefined,
+    codec: dto.codec ?? undefined,
+    genre: dto.genre ?? undefined,
+    sampleRate: dto.sampleRate ?? undefined,
+    filePath: dto.file?.path ?? undefined,
+    fileId: dto.fileId ?? undefined,
+    file: dto.file ? { id: dto.file.id, path: dto.file.path, filename: dto.file.filename, size: dto.file.size, mimeType: dto.file.mimeType } : undefined,
+    fileSize: dto.file?.size ?? 0,
   };
 }
 
 function toAlbum(dto: AlbumDto): MusicAlbumOutput {
   return {
     id: dto.id,
-    musicId: dto.libraryId ?? "",
-    libraryId: dto.libraryId,
+    musicId: dto.musicId ?? "",
+    libraryId: dto.musicId,
     title: dto.name,
-    artistName: dto.artist ?? undefined,
+    artistName: dto.artistName ?? undefined,
+    sortTitle: dto.sortTitle ?? undefined,
     year: dto.year ?? undefined,
-    coverPath: dto.coverUrl ?? null,
-    posterId: dto.coverUrl ?? null,
+    albumType: dto.albumType ?? undefined,
+    coverPath: dto.coverPath ?? null,
+    posterId: dto.coverPath ?? null,
     isFavorite: dto.isFavorite,
+    mbAlbumId: dto.mbAlbumId ?? undefined,
+    scrapedAt: dto.scrapedAt ?? null,
+    genres: dto.genres ?? [],
     trackCount: dto.trackCount,
-    scrapedAt: dto.coverUrl ? dto.updatedAt : null,
-    createdAt: dto.createdAt,
+    totalDuration: dto.totalDuration ?? 0,
+    createdAt: dto.createdAt ?? "",
   };
 }
 
@@ -316,17 +340,18 @@ function toArtist(
 ): MusicArtistOutput {
   return {
     id: dto.id,
-    musicId: dto.libraryId ?? "",
-    libraryId: dto.libraryId,
+    musicId: "",
     name: dto.name,
-    biography: dto.bio ?? undefined,
-    bio: dto.bio,
-    profilePath: dto.photoUrl ?? null,
-    posterId: dto.photoUrl ?? null,
+    originalName: dto.originalName ?? undefined,
+    biography: dto.biography ?? undefined,
+    profilePath: dto.profilePath ?? null,
+    posterId: dto.profilePath ?? null,
+    popularity: dto.popularity ?? undefined,
+    followers: dto.followers ?? undefined,
+    mbArtistId: dto.mbArtistId ?? undefined,
     albumCount: dto.albumCount ?? albums?.length ?? 0,
     trackCount: dto.trackCount ?? 0,
-    albums,
-    createdAt: dto.createdAt,
+    albums: albums ?? (dto.albums?.map((a) => toAlbum(a))),
   };
 }
 
