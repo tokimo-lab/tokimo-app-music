@@ -13,9 +13,9 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
+import { posterThumbUrl } from "@tokimo/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLyrics } from "../hooks/useLyrics";
-import { posterThumbUrl } from "../lib/utils";
 import { type RepeatMode, useMusicPlayer } from "../shell/hooks";
 import { FullScreenPlayer } from "./FullScreenPlayer";
 import { NowPlayingPanel } from "./NowPlayingPanel";

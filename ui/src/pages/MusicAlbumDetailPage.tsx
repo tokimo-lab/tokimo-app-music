@@ -9,11 +9,11 @@ import {
   Play,
   Sparkles,
 } from "lucide-react";
+import { posterThumbUrl } from "@tokimo/sdk";
 import { useCallback, useEffect } from "react";
 import { api } from "../api/client";
 import { MusicLayout } from "../components/MusicLayout";
 import type { CreditOutput, MusicTrackOutput } from "../lib/types";
-import { posterThumbUrl } from "../lib/utils";
 import { PersonCard, SectionTitle } from "../shared/components/SectionTitle";
 import { useBackgroundArt, useMusicPlayer, useWindowNav } from "../shell/hooks";
 import { formatDuration, formatTotalDuration } from "./music-shared";

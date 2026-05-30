@@ -1,9 +1,9 @@
+import { posterThumbUrl } from "@tokimo/sdk";
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokimo/ui";
 import { User } from "lucide-react";
 import { useEffect } from "react";
 import { api } from "../api/client";
 import { MusicLayout } from "../components/MusicLayout";
-import { posterThumbUrl } from "../lib/utils";
 import { SectionTitle } from "../shared/components/SectionTitle";
 import { useBackgroundArt, useWindowNav } from "../shell/hooks";
 import { AlbumCard } from "./music-shared";
