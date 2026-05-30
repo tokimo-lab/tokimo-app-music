@@ -184,7 +184,6 @@ impl MusicScrapeService {
     /// Scrape an album during sync, using the artist name from file tags directly.
     /// Called per-album from `process_album_group` so MB is searched before any
     /// artist stub records exist in the DB.
-    #[allow(dead_code)] // kept from presplit — wired up later
     pub async fn scrape_album_inline(
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,

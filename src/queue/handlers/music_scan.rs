@@ -11,11 +11,14 @@ use sea_orm::*;
 use sea_orm::ActiveValue::Set;
 use serde_json::{Value as JsonValue, json};
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::ctx::AppCtx;
 use crate::db::entities::{music_album_artists, music_albums, music_artists, music_files, music_tracks};
-use crate::bus_clients::{app_events, jobs as jobs_client};
+use crate::bus_clients::app_events;
+use crate::services::scrape::music::MusicScrapeService;
+use rust_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
 
 struct AudioMeta {
     artist: Option<String>,
@@ -84,36 +87,50 @@ pub async fn handle(
     let album_id = process_audio_file(&txn, music_id, &file).await?;
     txn.commit().await?;
 
-    // Don't emit frontend event here — the scrape job will emit after metadata is fetched.
-    // This prevents showing "unknown artist" before scraping completes.
+    // Scrape metadata inline (MusicBrainz + cover art) before notifying frontend.
+    // This ensures the UI never shows "unknown artist" or missing covers.
+    let album_title = file.meta.as_ref().and_then(|m| m.album.as_deref()).unwrap_or("Unknown Album");
 
-    // For new albums, create a music_scrape job
+    // Use artist from file metadata or filename parsing
+    let fallback = parse_track(&file.path, file.source_root.as_deref());
+    let effective_artist = file.meta.as_ref().and_then(|m| m.artist.as_deref())
+        .or(fallback.artist.as_deref())
+        .unwrap_or("Unknown Artist");
+
+    // Only scrape if album hasn't been scraped yet
     let album = music_albums::Entity::find_by_id(album_id).one(db).await?;
-    let mut scrape_created = false;
     if let Some(album) = album {
         if album.scraped_at.is_none() {
-            if let Some(uid) = user_id {
-                let request = jobs_client::CreateJobRequest::new(
-                    "music_scrape",
-                    json!({
-                        "albumId": album_id.to_string(),
-                        "musicId": music_id.to_string(),
-                    }),
-                );
-                jobs_client::create(
-                    state.client.get().ok_or("bus client not initialized")?,
-                    jobs_client::music_caller(Some(uid)),
-                    request,
-                )
-                .await?;
-                scrape_created = true;
-            }
+            let mb = MusicBrainzClient::new();
+            let scrape_result = MusicScrapeService::scrape_album_inline(
+                db,
+                &state.storage,
+                &mb,
+                album_id,
+                effective_artist,
+                album_title,
+            ).await;
+            info!(
+                "[music_scan] Scrape result for \"{}\": status={}, cover={}, year={:?}",
+                album_title, scrape_result.status, scrape_result.cover_downloaded, scrape_result.year
+            );
         }
+    }
+
+    // Notify frontend after scraping is complete
+    if let (Some(uid), Some(client)) = (user_id, state.client.get()) {
+        let _ = app_events::emit_entity(
+            client,
+            uid,
+            "music_track",
+            Some(format!("library:{music_id}")),
+            json!({ "id": album_id.to_string(), "operation": "created", "libraryId": music_id.to_string() }),
+        )
+        .await;
     }
 
     Ok(Some(json!({
         "albumId": album_id,
-        "scrapeCreated": scrape_created,
     })))
 }
 
