@@ -181,7 +181,13 @@ export interface MusicTrackOutput {
   posterId?: string | null;
   filePath: string;
   fileId?: string;
-  file?: { id: string; path?: string | null; filename?: string | null; size?: number | null; mimeType?: string | null };
+  file?: {
+    id: string;
+    path?: string | null;
+    filename?: string | null;
+    size?: number | null;
+    mimeType?: string | null;
+  };
   fileSize: number;
   bitrate?: number;
   sampleRate?: number;
@@ -307,7 +313,15 @@ function toTrack(dto: TrackDto): MusicTrackOutput {
     sampleRate: dto.sampleRate ?? undefined,
     filePath: dto.file?.path ?? undefined,
     fileId: dto.fileId ?? undefined,
-    file: dto.file ? { id: dto.file.id, path: dto.file.path, filename: dto.file.filename, size: dto.file.size, mimeType: dto.file.mimeType } : undefined,
+    file: dto.file
+      ? {
+          id: dto.file.id,
+          path: dto.file.path,
+          filename: dto.file.filename,
+          size: dto.file.size,
+          mimeType: dto.file.mimeType,
+        }
+      : undefined,
     fileSize: dto.file?.size ?? 0,
   };
 }
@@ -351,7 +365,7 @@ function toArtist(
     mbArtistId: dto.mbArtistId ?? undefined,
     albumCount: dto.albumCount ?? albums?.length ?? 0,
     trackCount: dto.trackCount ?? 0,
-    albums: albums ?? (dto.albums?.map((a) => toAlbum(a))),
+    albums: albums ?? dto.albums?.map((a) => toAlbum(a)),
   };
 }
 

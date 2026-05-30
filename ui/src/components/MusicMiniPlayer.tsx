@@ -1,3 +1,4 @@
+import { posterThumbUrl } from "@tokimo/sdk";
 import { cn, Tooltip } from "@tokimo/ui";
 import {
   Disc3,
@@ -13,7 +14,6 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { posterThumbUrl } from "@tokimo/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLyrics } from "../hooks/useLyrics";
 import { type RepeatMode, useMusicPlayer } from "../shell/hooks";

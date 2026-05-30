@@ -1,3 +1,4 @@
+import { posterThumbUrl } from "@tokimo/sdk";
 import { cn } from "@tokimo/ui";
 import {
   ChartNoAxesColumn,
@@ -20,7 +21,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { posterThumbUrl } from "@tokimo/sdk";
 import { createPortal } from "react-dom";
 import { useLyrics } from "../hooks/useLyrics";
 import type { PlayerPrefs, PlayerVisualMode } from "../lib/types";

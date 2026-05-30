@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { posterThumbUrl } from "@tokimo/sdk";
 import { ArrowLeftOutlined, Button, ScrollArea, Spin, Tag } from "@tokimo/ui";
 import {
   Clock,
@@ -9,7 +10,6 @@ import {
   Play,
   Sparkles,
 } from "lucide-react";
-import { posterThumbUrl } from "@tokimo/sdk";
 import { useCallback, useEffect } from "react";
 import { api } from "../api/client";
 import { MusicLayout } from "../components/MusicLayout";

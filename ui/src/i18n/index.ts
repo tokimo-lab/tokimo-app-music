@@ -79,7 +79,8 @@ export const zhCN = {
   syncModalTitle: "同步资料库",
   syncModalOk: "开始同步",
   syncClearData: "清空数据重新同步",
-  syncClearDataHint: "勾选后将删除所有音乐数据并重新完整同步，适合修复数据异常。",
+  syncClearDataHint:
+    "勾选后将删除所有音乐数据并重新完整同步，适合修复数据异常。",
   libraryTypeMusic: "音乐",
   libraryTypeAudiobook: "有声书",
   libraryTypePodcast: "播客",
@@ -99,7 +100,8 @@ export const zhCN = {
   editorDescriptionPlaceholder: "可选描述",
   editorPathConfig: "路径配置",
   deleteLibraryTitle: "⚠️ 删除音乐库",
-  deleteLibraryMessage: "此操作将永久删除 {name} 及其所有数据，{irreversible}。",
+  deleteLibraryMessage:
+    "此操作将永久删除 {name} 及其所有数据，{irreversible}。",
   irreversible: "不可恢复",
   confirmDelete: "确认删除",
   selectDirectory: "选择目录",
@@ -179,7 +181,8 @@ export const enUS = {
   commonUnknownArtist: "Unknown Artist",
   commonUnknownTrack: "Unknown Track",
   setupTitle: "Add Music Library",
-  setupDescription: "Connect a music folder to browse albums, artists, and tracks.",
+  setupDescription:
+    "Connect a music folder to browse albums, artists, and tracks.",
   setupFeatureScan: "Scan local music files",
   setupFeatureOrganize: "Organize by album and artist",
   setupFeatureQueueLyrics: "Playback queue and lyrics",
@@ -240,7 +243,8 @@ export const enUS = {
   syncModalTitle: "Sync Library",
   syncModalOk: "Start Sync",
   syncClearData: "Clear data and resync",
-  syncClearDataHint: "Deletes all music data and performs a full resync. Use this to repair inconsistent data.",
+  syncClearDataHint:
+    "Deletes all music data and performs a full resync. Use this to repair inconsistent data.",
   libraryTypeMusic: "Music",
   libraryTypeAudiobook: "Audiobook",
   libraryTypePodcast: "Podcast",
@@ -260,7 +264,8 @@ export const enUS = {
   editorDescriptionPlaceholder: "Optional description",
   editorPathConfig: "Path Configuration",
   deleteLibraryTitle: "⚠️ Delete Music Library",
-  deleteLibraryMessage: "This will permanently delete {name} and all of its data. {irreversible}.",
+  deleteLibraryMessage:
+    "This will permanently delete {name} and all of its data. {irreversible}.",
   irreversible: "This cannot be undone",
   confirmDelete: "Confirm Delete",
   selectDirectory: "Select Directory",

@@ -10,8 +10,8 @@ import {
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { AppCtxProvider } from "./AppContext";
-import MusicContent from "./MusicContent";
 import MusicMenuBar from "./components/MusicMenuBar";
+import MusicContent from "./MusicContent";
 import "./index.css";
 
 export default defineApp({
