@@ -17,6 +17,7 @@ use crate::db::entities::{music_album_artists, music_albums, music_artists, musi
 use crate::error::AppError;
 use crate::services::scrape::shared::artwork::upload_image_buffer;
 use crate::services::storage::StorageProvider;
+use rust_client_api::metadata_providers::deezer::DeezerClient;
 use rust_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
 use rust_client_api::types::{ArtistCredit, MusicMatchCandidate, MusicTrack as MbTrack};
 
@@ -407,7 +408,7 @@ impl MusicScrapeService {
         };
 
         if !detail.artist_credits.is_empty() {
-            Self::save_album_artists(db, album_id, &detail.artist_credits).await;
+            Self::save_album_artists(db, storage, album_id, &detail.artist_credits).await;
         }
 
         info!(
@@ -432,7 +433,13 @@ impl MusicScrapeService {
     ///
     /// Deduplicates by `mb_id` (MusicBrainz Artist ID), so Simplified/Traditional
     /// variants and case differences in the name never produce duplicate records.
-    async fn save_album_artists(db: &DatabaseConnection, album_id: Uuid, artist_credits: &[ArtistCredit]) {
+    /// Also fetches artist profile images from Deezer for artists that lack one.
+    async fn save_album_artists(
+        db: &DatabaseConnection,
+        storage: &Arc<dyn StorageProvider>,
+        album_id: Uuid,
+        artist_credits: &[ArtistCredit],
+    ) {
         if artist_credits.is_empty() {
             return;
         }
@@ -449,12 +456,23 @@ impl MusicScrapeService {
 
             let artist_id = if let Some(artist) = existing {
                 // Update name if MB returns a corrected spelling.
-                if artist.name != credit.name {
+                let need_name_update = artist.name != credit.name;
+                let need_profile = artist.profile_path.is_none();
+                if need_name_update || need_profile {
                     let mut active: music_artists::ActiveModel = artist.clone().into();
-                    active.name = Set(credit.name.clone());
+                    if need_name_update {
+                        active.name = Set(credit.name.clone());
+                    }
+                    if need_profile {
+                        if let Some(path) = Self::download_artist_profile(storage, artist.id, &credit.name).await {
+                            let key = format!("library-images/music/{}/profile.jpg", artist.id);
+                            active.profile_path = Set(Some(path));
+                            active.profile_key = Set(Some(key));
+                        }
+                    }
                     active.updated_at = Set(Some(now));
                     if let Err(e) = active.update(db).await {
-                        warn!("[music_scrape] failed to update artist name for {}: {e}", artist.id);
+                        warn!("[music_scrape] failed to update artist {}: {e}", artist.id);
                     }
                 }
                 artist.id
@@ -469,7 +487,25 @@ impl MusicScrapeService {
                     ..Default::default()
                 };
                 match music_artists::Entity::insert(active).exec(db).await {
-                    Ok(_) => new_id,
+                    Ok(_) => {
+                        // Fetch profile image for newly created artist.
+                        if let Some(path) = Self::download_artist_profile(storage, new_id, &credit.name).await {
+                            let key = format!("library-images/music/{new_id}/profile.jpg");
+                            let mut active: music_artists::ActiveModel =
+                                music_artists::Entity::find_by_id(new_id)
+                                    .one(db)
+                                    .await
+                                    .ok()
+                                    .flatten()
+                                    .unwrap()
+                                    .into();
+                            active.profile_path = Set(Some(path));
+                            active.profile_key = Set(Some(key));
+                            active.updated_at = Set(Some(now));
+                            let _ = active.update(db).await;
+                        }
+                        new_id
+                    }
                     Err(e) => {
                         // Race: another task inserted with the same mb_id — re-fetch.
                         if let Some(a) = music_artists::Entity::find()
@@ -570,6 +606,61 @@ impl MusicScrapeService {
 
         warn!("[music_scrape] No cover found for \"{}\"", clean_title);
         None
+    }
+
+    /// Fetch artist profile image from Deezer and upload to storage.
+    /// Returns the storage path on success.
+    async fn download_artist_profile(
+        storage: &Arc<dyn StorageProvider>,
+        artist_id: Uuid,
+        artist_name: &str,
+    ) -> Option<String> {
+        let deezer = DeezerClient::new();
+        let photo_url = match deezer.get_artist_photo(artist_name).await {
+            Ok(Some(url)) => url,
+            Ok(None) => {
+                info!("[music_scrape] No Deezer photo for \"{}\"", artist_name);
+                return None;
+            }
+            Err(e) => {
+                warn!("[music_scrape] Deezer photo fetch failed for \"{}\": {}", artist_name, e);
+                return None;
+            }
+        };
+
+        let http = reqwest::Client::builder()
+            .user_agent("tokimo/1.0")
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_default();
+
+        match http.get(&photo_url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(bytes) = resp.bytes().await {
+                    let key = format!("library-images/music/{artist_id}/profile.jpg");
+                    match upload_image_buffer(storage, &bytes, &key).await {
+                        Ok(path) => {
+                            info!("[music_scrape] Artist profile saved for \"{}\": {}", artist_name, path);
+                            return Some(path);
+                        }
+                        Err(e) => warn!("[music_scrape] Artist profile upload failed for \"{}\": {}", artist_name, e),
+                    }
+                }
+                None
+            }
+            Ok(resp) => {
+                info!(
+                    "[music_scrape] Deezer photo not available for \"{}\" ({})",
+                    artist_name,
+                    resp.status()
+                );
+                None
+            }
+            Err(e) => {
+                warn!("[music_scrape] Deezer photo download failed for \"{}\": {}", artist_name, e);
+                None
+            }
+        }
     }
 
     /// Fetch lyrics for a single track via LrcLib and upload to storage.
