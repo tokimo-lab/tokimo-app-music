@@ -51,7 +51,8 @@ async fn run_server() -> anyhow::Result<()> {
     let db = db::init_pool().await?;
     info!("music: db connected");
 
-    let data_path = std::env::var("TOKIMO_DATA_PATH")
+    let data_path = std::env::var("DATA_LOCAL_PATH")
+        .or_else(|_| std::env::var("TOKIMO_DATA_PATH"))
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(".data"));
     let storage = services::storage::create_storage_from_env(&data_path);
