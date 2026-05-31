@@ -33,7 +33,7 @@ rust-client-api   = { path = "../../packages/rust-client-api" }
 reqwest           = { workspace = true }
 bytes             = "1"
 async-trait       = "0.1"
-opendal           = { version = "0.55", features = ["services-fs"] }
+base64            = "0.22"
 
 [profile.release]
 lto       = "thin"

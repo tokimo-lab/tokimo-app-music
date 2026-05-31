@@ -14,7 +14,6 @@ mod handlers;
 mod queue;
 mod services;
 
-use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use tokimo_bus_client::{BusClient, ClientConfig};
@@ -51,13 +50,8 @@ async fn run_server() -> anyhow::Result<()> {
     let db = db::init_pool().await?;
     info!("music: db connected");
 
-    let data_path = std::env::var("DATA_LOCAL_PATH")
-        .or_else(|_| std::env::var("TOKIMO_DATA_PATH"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(".data"));
-    let storage = services::storage::create_storage_from_env(&data_path);
-
     let client_slot: Arc<OnceLock<Arc<BusClient>>> = Arc::new(OnceLock::new());
+    let storage = services::storage::create_storage_from_bus(Arc::clone(&client_slot), "music");
     let sources = Arc::new(SourceRegistry::new(Arc::clone(&client_slot)));
     let context = Arc::new(ctx::AppCtx {
         db: db.clone(),

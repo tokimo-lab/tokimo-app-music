@@ -1,23 +1,15 @@
-mod opendal_provider;
+mod bus_provider;
 mod types;
 pub use types::{StorageProvider, UploadOptions};
 
-use std::path::Path;
-use std::sync::Arc;
-use tracing::info;
+use std::sync::{Arc, OnceLock};
+use tokimo_bus_client::BusClient;
 
-use opendal_provider::OpendalStorageProvider;
+use bus_provider::BusStorageProvider;
 
-/// 从环境变量读取存储配置，创建对应的 `StorageProvider`。
+/// 创建基于 bus RPC 的 `StorageProvider`。
 ///
-/// 使用 `{data_local_path}/storage` 作为本地文件系统后端。
-pub fn create_storage_from_env(data_local_path: &Path) -> Arc<dyn StorageProvider> {
-    let base_path = data_local_path.join("storage");
-
-    info!(
-        "Storage: using local filesystem via OpenDAL (path={})",
-        base_path.display()
-    );
-
-    Arc::new(OpendalStorageProvider::new(&base_path).expect("Storage provider initialization failed"))
+/// 通过主进程的 storage service 读写文件，app 不需要知道 S3 凭证或本地路径。
+pub fn create_storage_from_bus(client: Arc<OnceLock<Arc<BusClient>>>, app_id: &str) -> Arc<dyn StorageProvider> {
+    Arc::new(BusStorageProvider::new(client, app_id.to_string()))
 }
