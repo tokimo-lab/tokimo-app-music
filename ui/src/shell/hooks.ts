@@ -11,7 +11,7 @@ import {
   useShellToast,
   useShellWindowNav,
 } from "@tokimo/sdk/react";
-import { useCallback, useEffect, useMemo } from "react";
+import { lazy, useCallback, useEffect, useMemo } from "react";
 import { useAppCtx } from "../AppContext";
 import type { MusicTrackOutput, RepeatMode } from "../lib/types";
 
@@ -57,6 +57,10 @@ function parseRouteParams(route: string): WindowRouteParams {
   return {};
 }
 
+// Lazy-loaded detail pages — only imported when the route matches.
+const LazyAlbumDetail = lazy(() => import("../pages/MusicAlbumDetailPage"));
+const LazyArtistDetail = lazy(() => import("../pages/MusicArtistPage"));
+
 export function useWindowNav(): WindowNavResult {
   const ctx = useAppCtx();
   const shellNav = useShellWindowNav(ctx);
@@ -68,9 +72,17 @@ export function useWindowNav(): WindowNavResult {
     () => ({ appId: params.libraryId, ...params }),
     [params],
   );
+
+  // Resolve the lazy view component based on route params.
+  const LazyViewComponent = params.albumId
+    ? LazyAlbumDetail
+    : params.personId
+      ? LazyArtistDetail
+      : null;
+
   return {
     ...shellNav,
-    LazyViewComponent: null,
+    LazyViewComponent,
     params,
     metadata,
     updateTitle: (_title: string) => {},
