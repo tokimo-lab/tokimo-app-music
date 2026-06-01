@@ -99,7 +99,8 @@ interface TrackDto {
 interface AlbumDto {
   id: string;
   musicId?: string;
-  name: string;
+  title: string;
+  name?: string; // legacy alias
   artistName?: string | null;
   sortTitle?: string | null;
   year?: number | null;
@@ -331,7 +332,7 @@ function toAlbum(dto: AlbumDto): MusicAlbumOutput {
     id: dto.id,
     musicId: dto.musicId ?? "",
     libraryId: dto.musicId,
-    title: dto.name,
+    title: dto.title ?? dto.name ?? "",
     artistName: dto.artistName ?? undefined,
     sortTitle: dto.sortTitle ?? undefined,
     year: dto.year ?? undefined,
@@ -598,30 +599,19 @@ export const api = {
         useQuery<MusicAlbumOutput>({
           queryKey: ["music", "album", params.id],
           queryFn: async () => {
-            const detail = await apiFetch<{
-              album: AlbumDto;
-              tracks: TrackDto[];
-            }>(`${API_BASE}/album/${params.id}`);
+            // API returns flat album object with tracks/credits embedded
+            const detail = await apiFetch<AlbumDto & { tracks: TrackDto[]; credits?: unknown[] }>(
+              `${API_BASE}/album/${params.id}`,
+            );
             return {
-              ...toAlbum(detail.album),
-              tracks: detail.tracks.map(toTrack),
-              totalDuration: detail.tracks.reduce(
+              ...toAlbum(detail),
+              tracks: (detail.tracks ?? []).map(toTrack),
+              totalDuration: (detail.tracks ?? []).reduce(
                 (sum, track) => sum + (track.durationSecs ?? 0),
                 0,
               ),
-              credits: detail.album.artist
-                ? [
-                    {
-                      id: `${detail.album.id}-artist`,
-                      role: "artist",
-                      person: {
-                        id: detail.album.id,
-                        name: detail.album.artist,
-                      },
-                    },
-                  ]
-                : [],
-              genres: [],
+              credits: (detail.credits as MusicAlbumOutput["credits"]) ?? [],
+              genres: detail.genres ?? [],
             };
           },
           ...options,
