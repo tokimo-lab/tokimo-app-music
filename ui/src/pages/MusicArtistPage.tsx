@@ -1,11 +1,12 @@
 import { posterThumbUrl } from "@tokimo/sdk";
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokimo/ui";
-import { User } from "lucide-react";
-import { useEffect } from "react";
+import { Play, User } from "lucide-react";
+import { useCallback, useEffect } from "react";
 import { api } from "../api/client";
 import { MusicLayout } from "../components/MusicLayout";
 import { SectionTitle } from "../shared/components/SectionTitle";
-import { useBackgroundArt, useWindowNav } from "../shell/hooks";
+import { useBackgroundArt, useMusicPlayer, useWindowNav } from "../shell/hooks";
+import type { MusicTrackOutput } from "../lib/types";
 import { AlbumCard } from "./music-shared";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ export default function MusicArtistPage() {
   const personId = params.personId;
 
   const { setBackgroundArt } = useBackgroundArt();
+  const { playTracks } = useMusicPlayer();
 
   const { data: artist, isLoading } = api.music.getArtistDetail.useQuery(
     { id: personId!, musicId: musicId! },
@@ -49,15 +51,33 @@ export default function MusicArtistPage() {
 
   const albums = artist.albums ?? [];
 
+  const handlePlayAll = useCallback(() => {
+    // Collect all tracks from all albums
+    const allTracks: MusicTrackOutput[] = albums.flatMap(
+      (album) => album.tracks ?? [],
+    );
+    if (allTracks.length > 0) {
+      playTracks(allTracks, 0);
+    }
+  }, [albums, playTracks]);
+
   return (
     <MusicLayout>
       <div className="-mx-3 -mt-3 -mb-3 min-h-full lg:-mx-4 lg:-mt-4 lg:-mb-4">
         {/* Header */}
         <div className="relative z-10 px-6 pt-6 pb-6">
-          <div className="mb-6">
+          <div className="mb-6 flex items-center gap-2">
             <Button icon={<ArrowLeftOutlined />} onClick={() => goBack()}>
               返回
             </Button>
+            {albums.length > 0 && (
+              <Button
+                icon={<Play className="h-4 w-4" fill="currentColor" />}
+                onClick={handlePlayAll}
+              >
+                播放全部
+              </Button>
+            )}
           </div>
 
           <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
