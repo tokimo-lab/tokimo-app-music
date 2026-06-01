@@ -53,8 +53,10 @@ function parseRouteParams(route: string): WindowRouteParams {
   const parts = route.split("/").filter(Boolean);
   if (parts[0] === "library" && parts[1]) {
     // /library/{id} or /library/{id}/albums/{albumId} or /library/{id}/artists/{artistId}
-    if (parts[2] === "albums" && parts[3]) return { libraryId: parts[1], albumId: parts[3] };
-    if (parts[2] === "artists" && parts[3]) return { libraryId: parts[1], personId: parts[3] };
+    if (parts[2] === "albums" && parts[3])
+      return { libraryId: parts[1], albumId: parts[3] };
+    if (parts[2] === "artists" && parts[3])
+      return { libraryId: parts[1], personId: parts[3] };
     return { libraryId: parts[1] };
   }
   if (parts[0] === "albums" && parts[1]) return { albumId: parts[1] };

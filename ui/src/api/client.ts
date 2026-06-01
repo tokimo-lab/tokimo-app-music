@@ -629,9 +629,9 @@ export const api = {
           queryFn: async () => {
             const qs = params.musicId ? `?musicId=${params.musicId}` : "";
             // API returns flat artist object with albums embedded
-            const detail = await apiFetch<
-              ArtistDto & { albums?: AlbumDto[] }
-            >(`${API_BASE}/artist/${params.id}${qs}`);
+            const detail = await apiFetch<ArtistDto & { albums?: AlbumDto[] }>(
+              `${API_BASE}/artist/${params.id}${qs}`,
+            );
             const albums = (detail.albums ?? []).map(toAlbum);
             return toArtist(detail, albums);
           },

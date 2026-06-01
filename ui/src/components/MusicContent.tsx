@@ -442,14 +442,20 @@ export default function MusicContent({
           <AlbumsGrid
             albums={items as MusicAlbumOutput[]}
             onAlbumClick={(albumId, albumTitle) =>
-              navigate(`/library/${musicId}/albums/${albumId}`, `TokimoMusic · ${albumTitle}`)
+              navigate(
+                `/library/${musicId}/albums/${albumId}`,
+                `TokimoMusic · ${albumTitle}`,
+              )
             }
           />
         ) : tab === "artists" ? (
           <ArtistsGrid
             artists={items as MusicArtistOutput[]}
             onArtistClick={(artistId, artistName) =>
-              navigate(`/library/${musicId}/artists/${artistId}`, `TokimoMusic · ${artistName}`)
+              navigate(
+                `/library/${musicId}/artists/${artistId}`,
+                `TokimoMusic · ${artistName}`,
+              )
             }
           />
         ) : (

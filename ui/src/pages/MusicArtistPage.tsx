@@ -23,6 +23,17 @@ export default function MusicArtistPage() {
     { enabled: !!personId && !!musicId },
   );
 
+  const albums = artist?.albums ?? [];
+
+  const handlePlayAll = useCallback(() => {
+    const allTracks: MusicTrackOutput[] = albums.flatMap(
+      (album) => album.tracks ?? [],
+    );
+    if (allTracks.length > 0) {
+      playTracks(allTracks, 0);
+    }
+  }, [albums, playTracks]);
+
   useEffect(() => {
     if (artist?.profilePath) {
       setBackgroundArt(posterThumbUrl(artist.profilePath, 1280) ?? null);
@@ -48,18 +59,6 @@ export default function MusicArtistPage() {
       </div>
     );
   }
-
-  const albums = artist.albums ?? [];
-
-  const handlePlayAll = useCallback(() => {
-    // Collect all tracks from all albums
-    const allTracks: MusicTrackOutput[] = albums.flatMap(
-      (album) => album.tracks ?? [],
-    );
-    if (allTracks.length > 0) {
-      playTracks(allTracks, 0);
-    }
-  }, [albums, playTracks]);
 
   return (
     <MusicLayout>
