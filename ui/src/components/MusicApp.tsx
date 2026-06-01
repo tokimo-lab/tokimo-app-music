@@ -5,7 +5,6 @@ import { Suspense, useCallback, useEffect } from "react";
 import { useAppCtx } from "../AppContext";
 import { api } from "../api/client";
 import { useLibraryItemProgress } from "../hooks/useLibraryItemProgress";
-import { useMusicI18n } from "../i18n";
 import { registerBridge } from "../modal-bridge";
 import { useContainerWidth, useSidebarCollapsed } from "../shared/hooks/hooks";
 import { useWindowActions, useWindowNav } from "../shell/hooks";
@@ -30,7 +29,6 @@ export default function MusicApp() {
   const { openModalWindow } = useWindowActions();
   const ctx = useAppCtx();
   const queryClient = useQueryClient();
-  const { t } = useMusicI18n();
 
   const activeLibraryId = params.libraryId ?? null;
 
@@ -53,18 +51,19 @@ export default function MusicApp() {
     [ctx.shell, queryClient, openModalWindow],
   );
 
+  const isDetailPage = !!(params.albumId ?? params.personId);
+
   useEffect(() => {
-    if (!libraries?.length) return;
+    if (!libraries?.length || isDetailPage) return;
     if (params.libraryId) {
       const valid = libraries.some((l) => l.id === params.libraryId);
       if (!valid) replace(`/library/${libraries[0].id}`);
       return;
     }
     replace(`/library/${libraries[0].id}`);
-  }, [libraries, params.libraryId, replace]);
+  }, [libraries, params.libraryId, replace, isDetailPage]);
 
   const activeLibrary = libraries?.find((l) => l.id === activeLibraryId);
-  const isDetailPage = !!(params.albumId ?? params.personId);
 
   useEffect(() => {
     if (!isDetailPage && activeLibrary) {
