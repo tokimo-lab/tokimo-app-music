@@ -600,9 +600,9 @@ export const api = {
           queryKey: ["music", "album", params.id],
           queryFn: async () => {
             // API returns flat album object with tracks/credits embedded
-            const detail = await apiFetch<AlbumDto & { tracks: TrackDto[]; credits?: unknown[] }>(
-              `${API_BASE}/album/${params.id}`,
-            );
+            const detail = await apiFetch<
+              AlbumDto & { tracks: TrackDto[]; credits?: unknown[] }
+            >(`${API_BASE}/album/${params.id}`);
             return {
               ...toAlbum(detail),
               tracks: (detail.tracks ?? []).map(toTrack),
