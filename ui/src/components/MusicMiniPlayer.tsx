@@ -257,11 +257,14 @@ export function MusicMiniPlayer() {
   const [queueOpen, setQueueOpen] = useState(false);
   const [fullScreen, setFullScreen] = useState(false);
 
-  const { lines, currentIdx, progressRef } = useLyrics(
+  const { lines, currentIdx, progressRef, plainText } = useLyrics(
     currentTrack?.id,
     getCurrentTime,
   );
-  const lyricText = currentIdx >= 0 ? lines[currentIdx]?.text : null;
+  // Show synced lyrics line if available, otherwise show first line of plain lyrics
+  const syncedLine = currentIdx >= 0 ? lines[currentIdx]?.text : null;
+  const plainLine = plainText?.split('\n').find((l) => l.trim()) ?? null;
+  const lyricText = syncedLine ?? plainLine;
 
   const cycleRepeat = useCallback(() => {
     const modes: RepeatMode[] = ["off", "all", "one"];
