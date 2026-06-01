@@ -14,7 +14,7 @@ pub async fn upload_image_buffer(
         "webp" => "image/webp",
         _ => "image/jpeg",
     };
-    storage
+    let returned_key = storage
         .upload(
             storage_key,
             Bytes::from(buf.to_vec()),
@@ -24,5 +24,5 @@ pub async fn upload_image_buffer(
         )
         .await
         .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(format!("Storage upload failed: {e}")))?;
-    Ok(format!("/storage/{storage_key}"))
+    Ok(format!("/storage/{returned_key}"))
 }

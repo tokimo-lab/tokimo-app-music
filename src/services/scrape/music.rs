@@ -736,9 +736,9 @@ impl MusicScrapeService {
                         )
                         .await
                     {
-                        Ok(()) => {
+                        Ok(returned_key) => {
                             info!("[music_scrape] Lyrics saved for \"{}\"", title);
-                            return Some(format!("/storage/{key}"));
+                            return Some(format!("/storage/{returned_key}"));
                         }
                         Err(e) => warn!("[music_scrape] Lyrics upload failed: {}", e),
                     }
