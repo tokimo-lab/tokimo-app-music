@@ -438,9 +438,11 @@ impl MediaContentRepo {
 
         let album_stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT a.id, a.title, a.year, a.cover_path, a.is_favorite, a.album_type \
+            "SELECT a.id, a.title, a.year, a.cover_path, a.is_favorite, a.album_type, \
+             ar.name as artist_name \
              FROM music_albums a \
              JOIN music_album_artists maa ON maa.album_id = a.id AND maa.artist_id = $1 \
+             LEFT JOIN music_artists ar ON ar.id = maa.artist_id \
              WHERE a.music_id = $2 \
              ORDER BY a.year DESC NULLS LAST",
             [person_id.into(), music_id.into()],
@@ -452,6 +454,7 @@ impl MediaContentRepo {
                 Ok(json!({
                     "id": get::<Uuid>(r, "id").map(|v| v.to_string()).unwrap_or_default(),
                     "title": get::<String>(r, "title").unwrap_or_default(),
+                    "artistName": get_opt::<String>(r, "artist_name")?,
                     "year": get_opt::<i32>(r, "year")?,
                     "coverPath": get_opt::<String>(r, "cover_path")?,
                     "isFavorite": get::<bool>(r, "is_favorite").unwrap_or(false),
