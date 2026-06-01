@@ -628,12 +628,12 @@ export const api = {
           queryKey: ["music", "artist", params.id],
           queryFn: async () => {
             const qs = params.musicId ? `?musicId=${params.musicId}` : "";
-            const detail = await apiFetch<{
-              artist: ArtistDto;
-              albums: AlbumDto[];
-            }>(`${API_BASE}/artist/${params.id}${qs}`);
-            const albums = detail.albums.map(toAlbum);
-            return toArtist(detail.artist, albums);
+            // API returns flat artist object with albums embedded
+            const detail = await apiFetch<
+              ArtistDto & { albums?: AlbumDto[] }
+            >(`${API_BASE}/artist/${params.id}${qs}`);
+            const albums = (detail.albums ?? []).map(toAlbum);
+            return toArtist(detail, albums);
           },
           ...options,
         }),
