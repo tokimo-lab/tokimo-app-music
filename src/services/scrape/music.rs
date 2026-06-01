@@ -1,8 +1,9 @@
 //! Music album scraping service.
 //!
-//! Scrape flow: MusicBrainz search → pick best candidate → fetch full release detail.
+//! Multi-source scrape flow: Netease → QQ Music → MusicBrainz → fallbacks.
+//! Uses ProviderRegistry for concurrent search across all sources.
 //! Lyrics: LrcLib (free, no API key).
-//! Cover art: Cover Art Archive (primary) → iTunes (fallback).
+//! Cover art: from metadata source (primary) → iTunes (fallback).
 
 use urlencoding::encode;
 use std::sync::Arc;
@@ -19,7 +20,10 @@ use crate::services::scrape::shared::artwork::upload_image_buffer;
 use crate::services::storage::StorageProvider;
 use rust_client_api::metadata_providers::deezer::DeezerClient;
 use rust_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
-use rust_client_api::types::{ArtistCredit, MusicMatchCandidate, MusicTrack as MbTrack};
+use rust_client_api::metadata_providers::netease::NeteaseClient;
+use rust_client_api::metadata_providers::qqmusic::QQMusicClient;
+use rust_client_api::metadata_providers::{MusicMetadataProvider, ProviderRegistry, ProviderSelector};
+use rust_client_api::types::{AlbumDetail, AlbumSearchResult, MetadataSource};
 
 // ── Public DTOs ──────────────────────────────────────────────────────────────
 
@@ -188,7 +192,6 @@ impl MusicScrapeService {
     pub async fn scrape_album_inline(
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
-        mb: &MusicBrainzClient,
         album_id: Uuid,
         artist_name: &str,
         album_title: &str,
@@ -198,7 +201,8 @@ impl MusicScrapeService {
             "[music_scrape] Inline scraping \"{}\" by \"{}\"",
             clean_title, artist_name
         );
-        Self::do_search_and_scrape(db, storage, album_id, album_title, &clean_title, artist_name, mb).await
+        let registry = Self::build_registry();
+        Self::do_search_and_scrape(db, storage, album_id, album_title, &clean_title, artist_name, &registry).await
     }
 
     async fn search_and_scrape(
@@ -208,9 +212,19 @@ impl MusicScrapeService {
         raw_title: &str,
         clean_title: &str,
     ) -> AlbumScrapeResult {
-        let mb = MusicBrainzClient::new();
         let artist_name = Self::get_album_artist(db, album_id).await;
-        Self::do_search_and_scrape(db, storage, album_id, raw_title, clean_title, &artist_name, &mb).await
+        let registry = Self::build_registry();
+
+        Self::do_search_and_scrape(db, storage, album_id, raw_title, clean_title, &artist_name, &registry).await
+    }
+
+    /// Build a provider registry with all available sources.
+    fn build_registry() -> ProviderRegistry {
+        let mut registry = ProviderRegistry::new();
+        registry.register(Arc::new(NeteaseClient::new()));
+        registry.register(Arc::new(QQMusicClient::new()));
+        registry.register(Arc::new(MusicBrainzClient::new()));
+        registry
     }
 
     async fn do_search_and_scrape(
@@ -220,7 +234,7 @@ impl MusicScrapeService {
         raw_title: &str,
         clean_title: &str,
         artist_name: &str,
-        mb: &MusicBrainzClient,
+        registry: &ProviderRegistry,
     ) -> AlbumScrapeResult {
         let track_count = music_tracks::Entity::find()
             .filter(music_tracks::Column::AlbumId.eq(album_id))
@@ -238,34 +252,26 @@ impl MusicScrapeService {
             .trim()
             .to_string();
 
-        let mut candidates: Vec<MusicMatchCandidate> = Vec::new();
-        if known_artist {
-            match mb.search_release(artist_name, clean_title, 10).await {
-                Ok(r) => candidates = r,
-                Err(e) => warn!("[music_scrape] MusicBrainz search failed: {}", e),
-            }
-        }
-        if candidates.is_empty() {
-            match mb.search_release_by_keyword(clean_title, 10).await {
-                Ok(r) => candidates = r,
-                Err(e) => warn!("[music_scrape] MusicBrainz keyword search failed: {}", e),
-            }
-        }
-        if known_artist && candidates.is_empty() && stripped != clean_title {
-            match mb.search_release(artist_name, &stripped, 10).await {
-                Ok(r) => candidates = r,
-                Err(e) => warn!("[music_scrape] MusicBrainz stripped search failed: {}", e),
-            }
-        }
+        // Search across all providers concurrently
+        let mut candidates = if known_artist {
+            registry.search_albums(artist_name, clean_title, 10).await
+        } else {
+            registry.search_albums_by_keyword(clean_title, 10).await
+        };
+
+        // If no results, try stripped title
         if candidates.is_empty() && stripped != clean_title {
-            match mb.search_release_by_keyword(&stripped, 10).await {
-                Ok(r) => candidates = r,
-                Err(e) => warn!("[music_scrape] MusicBrainz stripped keyword search failed: {}", e),
-            }
+            candidates = if known_artist {
+                registry.search_albums(artist_name, &stripped, 10).await
+            } else {
+                registry.search_albums_by_keyword(&stripped, 10).await
+            };
         }
 
-        let Some(candidate) = Self::pick_best_candidate(&candidates, clean_title, track_count) else {
-            warn!("[music_scrape] No MusicBrainz match for \"{}\"", clean_title);
+        // Use selector to pick best match
+        let selector = ProviderSelector::auto_detect(artist_name, clean_title);
+        let Some(candidate) = selector.select_best(&candidates, artist_name, clean_title, Some(track_count)) else {
+            warn!("[music_scrape] No match for \"{}\" across all providers", clean_title);
             return AlbumScrapeResult {
                 album_id: album_id.to_string(),
                 title: raw_title.to_string(),
@@ -280,83 +286,48 @@ impl MusicScrapeService {
         };
 
         info!(
-            "[music_scrape] Best MusicBrainz match: \"{}\" by {} ({})",
-            candidate.title, candidate.artist, candidate.mb_release_id
+            "[music_scrape] Best match: \"{}\" by {} (source={}, id={})",
+            candidate.title, candidate.artist, candidate.source, candidate.external_id
         );
-        let mb_release_id = candidate.mb_release_id.clone();
-        Self::do_scrape(
-            db,
-            storage,
-            album_id,
-            &mb_release_id,
-            raw_title,
-            clean_title,
-            artist_name,
-            mb,
-        )
-        .await
+
+        // Get full album detail from the matched provider
+        let detail = match registry.get_album_detail(&candidate.source, &candidate.external_id).await {
+            Ok(d) => d,
+            Err(e) => {
+                error!("[music_scrape] Failed to get album detail from {}: {}", candidate.source, e);
+                return Self::make_error(album_id, raw_title, clean_title, &e.to_string());
+            }
+        };
+
+        Self::do_scrape_from_detail(db, storage, album_id, raw_title, clean_title, artist_name, &detail).await
     }
 
-    /// Fetch full MusicBrainz release detail and persist to DB.
-    async fn do_scrape(
+    /// Fetch album detail from metadata provider and persist to DB.
+    async fn do_scrape_from_detail(
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
         album_id: Uuid,
-        mb_release_id: &str,
         raw_title: &str,
         clean_title: &str,
         artist_name: &str,
-        mb: &MusicBrainzClient,
+        detail: &AlbumDetail,
     ) -> AlbumScrapeResult {
         let Ok(Some(album)) = music_albums::Entity::find_by_id(album_id).one(db).await else {
             return Self::make_error(album_id, raw_title, clean_title, "Album not found");
-        };
-
-        // Guard: another album already uses this MB release ID
-        let duplicate = music_albums::Entity::find()
-            .filter(music_albums::Column::MbAlbumId.eq(mb_release_id))
-            .filter(music_albums::Column::Id.ne(album_id))
-            .one(db)
-            .await
-            .unwrap_or(None);
-        if let Some(dup) = duplicate {
-            warn!(
-                "[music_scrape] MB ID {} already used by \"{}\" — skipping \"{}\"",
-                mb_release_id, dup.title, clean_title
-            );
-            return AlbumScrapeResult {
-                album_id: album_id.to_string(),
-                title: raw_title.to_string(),
-                clean_title: clean_title.to_string(),
-                status: "no_match".to_string(),
-                cover_downloaded: false,
-                genres: vec![],
-                year: None,
-                track_count_updated: 0,
-                error: None,
-            };
-        }
-
-        let detail = match mb.get_release(mb_release_id).await {
-            Ok(d) => d,
-            Err(e) => {
-                error!("[music_scrape] MusicBrainz get_release failed: {}", e);
-                return Self::make_error(album_id, raw_title, clean_title, &e.to_string());
-            }
         };
 
         let genres = detail.genres.clone().unwrap_or_default();
         let year = detail.year;
         let now = Utc::now().fixed_offset();
 
-        // Download cover: Cover Art Archive → iTunes fallback
+        // Download cover from metadata source
         let cover_path =
             Self::download_cover(storage, album_id, artist_name, clean_title, detail.cover_url.as_deref()).await;
         let cover_downloaded = cover_path.is_some();
 
         // Persist album metadata
         let mut active: music_albums::ActiveModel = album.into();
-        active.mb_album_id = Set(Some(mb_release_id.to_string()));
+        active.mb_album_id = Set(Some(detail.external_id.clone()));
         active.year = Set(year);
         if let Some(ref rd) = detail.release_date {
             if let Ok(date) = chrono::NaiveDate::parse_from_str(rd, "%Y-%m-%d") {
@@ -382,7 +353,8 @@ impl MusicScrapeService {
         }
         active.metadata = Set(Some(serde_json::json!({
             "genres": genres,
-            "scrapedFrom": "musicbrainz",
+            "scrapedFrom": detail.source.to_string(),
+            "externalId": detail.external_id,
         })));
         active.scraped_at = Set(Some(now));
         active.updated_at = Set(Some(now));
@@ -392,12 +364,15 @@ impl MusicScrapeService {
             return Self::make_error(album_id, raw_title, clean_title, &e.to_string());
         }
 
-        let track_count_updated = if let Some(ref mb_tracks) = detail.tracks {
+        // Save external ID mapping
+        Self::save_external_id(db, album_id, &detail.source, &detail.external_id).await;
+
+        let track_count_updated = if let Some(ref tracks) = detail.tracks {
             Self::update_tracks(
                 db,
                 storage,
                 album_id,
-                mb_tracks,
+                tracks,
                 genres.first().map(String::as_str),
                 artist_name,
                 clean_title,
@@ -408,12 +383,12 @@ impl MusicScrapeService {
         };
 
         if !detail.artist_credits.is_empty() {
-            Self::save_album_artists(db, storage, album_id, &detail.artist_credits).await;
+            Self::save_album_artists_from_credits(db, storage, album_id, &detail.artist_credits).await;
         }
 
         info!(
-            "[music_scrape] ✓ MusicBrainz scraped \"{}\" → year={:?} genres={:?} cover={} tracks_updated={}",
-            clean_title, year, genres, cover_downloaded, track_count_updated
+            "[music_scrape] ✓ Scraped \"{}\" from {} → year={:?} genres={:?} cover={} tracks_updated={}",
+            clean_title, detail.source, year, genres, cover_downloaded, track_count_updated
         );
 
         AlbumScrapeResult {
@@ -429,66 +404,54 @@ impl MusicScrapeService {
         }
     }
 
-    /// Upsert artists from MusicBrainz credits.
-    ///
-    /// Deduplicates by `mb_id` (MusicBrainz Artist ID), so Simplified/Traditional
-    /// variants and case differences in the name never produce duplicate records.
-    /// Also fetches artist profile images from Deezer for artists that lack one.
-    async fn save_album_artists(
+    /// Save external ID mapping for an album.
+    async fn save_external_id(db: &DatabaseConnection, album_id: Uuid, source: &MetadataSource, external_id: &str) {
+        let stmt = Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "INSERT INTO music.music_album_external_ids (album_id, source, external_id) \
+             VALUES ($1, $2, $3) ON CONFLICT (album_id, source) DO UPDATE SET external_id = $3",
+            [album_id.into(), source.to_string().into(), external_id.into()],
+        );
+        if let Err(e) = db.execute_raw(stmt).await {
+            warn!("[music_scrape] Failed to save external ID: {}", e);
+        }
+    }
+
+    /// Upsert artists from unified ArtistCreditInfo (multi-source).
+    async fn save_album_artists_from_credits(
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
         album_id: Uuid,
-        artist_credits: &[ArtistCredit],
+        credits: &[rust_client_api::types::ArtistCreditInfo],
     ) {
-        if artist_credits.is_empty() {
+        if credits.is_empty() {
             return;
         }
         let now = Utc::now().fixed_offset();
         let mut artist_ids: Vec<Uuid> = Vec::new();
 
-        for credit in artist_credits {
-            // Look up by mb_id (canonical dedup key).
+        for credit in credits {
+            // Look up by external_id + source
             let existing = music_artists::Entity::find()
-                .filter(music_artists::Column::MbId.eq(&credit.mb_id))
+                .filter(music_artists::Column::MbId.eq(&credit.external_id))
                 .one(db)
                 .await
                 .unwrap_or(None);
 
             let artist_id = if let Some(artist) = existing {
-                // Update name if MB returns a corrected spelling.
-                let need_name_update = artist.name != credit.name;
-                let need_profile = artist.profile_path.is_none();
-                if need_name_update || need_profile {
-                    let mut active: music_artists::ActiveModel = artist.clone().into();
-                    if need_name_update {
-                        active.name = Set(credit.name.clone());
-                    }
-                    if need_profile {
-                        if let Some(path) = Self::download_artist_profile(storage, artist.id, &credit.name).await {
-                            let key = format!("library-images/music/{}/profile.jpg", artist.id);
-                            active.profile_path = Set(Some(path));
-                            active.profile_key = Set(Some(key));
-                        }
-                    }
-                    active.updated_at = Set(Some(now));
-                    if let Err(e) = active.update(db).await {
-                        warn!("[music_scrape] failed to update artist {}: {e}", artist.id);
-                    }
-                }
                 artist.id
             } else {
                 let new_id = Uuid::new_v4();
                 let active = music_artists::ActiveModel {
                     id: Set(new_id),
                     name: Set(credit.name.clone()),
-                    mb_id: Set(Some(credit.mb_id.clone())),
+                    mb_id: Set(Some(credit.external_id.clone())),
                     created_at: Set(Some(now)),
                     updated_at: Set(Some(now)),
                     ..Default::default()
                 };
                 match music_artists::Entity::insert(active).exec(db).await {
                     Ok(_) => {
-                        // Fetch profile image for newly created artist.
                         if let Some(path) = Self::download_artist_profile(storage, new_id, &credit.name).await {
                             let key = format!("library-images/music/{new_id}/profile.jpg");
                             let mut active: music_artists::ActiveModel =
@@ -507,19 +470,15 @@ impl MusicScrapeService {
                         new_id
                     }
                     Err(e) => {
-                        // Race: another task inserted with the same mb_id — re-fetch.
                         if let Some(a) = music_artists::Entity::find()
-                            .filter(music_artists::Column::MbId.eq(&credit.mb_id))
+                            .filter(music_artists::Column::MbId.eq(&credit.external_id))
                             .one(db)
                             .await
                             .unwrap_or(None)
                         {
                             a.id
                         } else {
-                            error!(
-                                "[music_scrape] Failed to insert MB artist {} ({}): {}",
-                                credit.name, credit.mb_id, e
-                            );
+                            error!("[music_scrape] Failed to insert artist {} ({}): {}", credit.name, credit.external_id, e);
                             continue;
                         }
                     }
@@ -549,11 +508,6 @@ impl MusicScrapeService {
                 warn!("[music_scrape] failed to link album {album_id} artist {aid}: {e}");
             }
         }
-        info!(
-            "[music_scrape] Updated {} MB artist credits for album {}",
-            artist_ids.len(),
-            album_id
-        );
     }
 
     /// Download cover art: cover URL (primary) → iTunes (fallback).
@@ -758,7 +712,7 @@ impl MusicScrapeService {
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
         album_id: Uuid,
-        mb_tracks: &[MbTrack],
+        mb_tracks: &[rust_client_api::types::TrackInfo],
         primary_genre: Option<&str>,
         artist_name: &str,
         album_title: &str,
@@ -839,38 +793,6 @@ impl MusicScrapeService {
     }
 
     /// Pick best MusicBrainz candidate by MB score + title similarity + track count.
-    fn pick_best_candidate<'a>(
-        candidates: &'a [MusicMatchCandidate],
-        clean_title: &str,
-        db_track_count: i32,
-    ) -> Option<&'a MusicMatchCandidate> {
-        if candidates.is_empty() {
-            return None;
-        }
-        let title_norm = normalize_for_match(clean_title);
-        candidates
-            .iter()
-            .map(|c| {
-                let mut score = c.score.unwrap_or(0); // MusicBrainz relevance (0-100)
-                let c_norm = normalize_for_match(&c.title);
-                if c_norm == title_norm {
-                    score += 200;
-                } else if c_norm.contains(&title_norm) || title_norm.contains(&c_norm) {
-                    score += 100;
-                }
-                if let Some(tc) = c.track_count
-                    && db_track_count > 0
-                    && (tc - db_track_count).abs() <= 1
-                {
-                    score += 50;
-                }
-                (c, score)
-            })
-            .filter(|(_, s)| *s >= 50) // require minimum relevance
-            .max_by_key(|(_, s)| *s)
-            .map(|(c, _)| c)
-    }
-
     /// Batch auto-scrape all unscraped albums in a music library.
     #[allow(dead_code)] // kept from presplit — wired up later
     pub async fn batch_scrape_app(
@@ -898,9 +820,8 @@ impl MusicScrapeService {
             app_id
         );
 
-        // Build a single MusicBrainzClient; rate-limiter is now process-level
-        // static inside the client, so this is equivalent to sharing one instance.
-        let mb = MusicBrainzClient::new();
+        // Build a registry with all available providers.
+        let registry = Self::build_registry();
 
         let mut results = Vec::new();
         let mut success = 0i32;
@@ -910,7 +831,7 @@ impl MusicScrapeService {
         for album in &albums {
             let clean = Self::extract_clean_title(&album.title);
             let artist_name = Self::get_album_artist(db, album.id).await;
-            let r = Self::do_search_and_scrape(db, storage, album.id, &album.title, &clean, &artist_name, &mb).await;
+            let r = Self::do_search_and_scrape(db, storage, album.id, &album.title, &clean, &artist_name, &registry).await;
             match r.status.as_str() {
                 "success" => success += 1,
                 "no_match" => skipped += 1,

@@ -30,6 +30,33 @@ const MUSIC_TYPES = [
   { value: "podcast", label: "播客" },
 ] as const;
 
+const COUNTRIES = [
+  { value: "", label: "自动检测" },
+  { value: "CN", label: "中国" },
+  { value: "TW", label: "台湾" },
+  { value: "HK", label: "香港" },
+  { value: "JP", label: "日本" },
+  { value: "KR", label: "韩国" },
+  { value: "US", label: "美国" },
+  { value: "GB", label: "英国" },
+] as const;
+
+const LANGUAGES = [
+  { value: "", label: "自动检测" },
+  { value: "zh", label: "中文" },
+  { value: "en", label: "英语" },
+  { value: "ja", label: "日语" },
+  { value: "ko", label: "韩语" },
+] as const;
+
+const METADATA_SOURCES = [
+  { value: "netease", label: "网易云音乐", description: "中文音乐覆盖最全" },
+  { value: "qqmusic", label: "QQ 音乐", description: "中文音乐覆盖最全" },
+  { value: "musicbrainz", label: "MusicBrainz", description: "全球音乐数据库" },
+  { value: "lastfm", label: "Last.fm", description: "社区驱动的音乐数据库" },
+  { value: "spotify", label: "Spotify", description: "需要 API Key" },
+] as const;
+
 interface MusicLibraryEditorProps {
   musicId?: string;
   shell: ShellApi;
@@ -71,15 +98,25 @@ export default function MusicLibraryEditor({
   // Pre-fill form
   useEffect(() => {
     if (music) {
+      const settings = (music as Record<string, unknown>).settings as Record<string, unknown> | null;
+      const metadata = settings?.metadata as Record<string, unknown> | null;
       form.setFieldsValue({
         type: music.type,
         name: music.name,
         description: music.description ?? "",
+        country: (metadata?.country as string) ?? "",
+        language: (metadata?.language as string) ?? "",
+        metadataSources: (metadata?.sources as string[]) ?? ["netease", "qqmusic", "musicbrainz"],
+        autoDetect: metadata?.autoDetect !== false ? "true" : "false",
       });
       setAvatar(parseAvatar(music.avatar));
     } else {
       form.resetFields();
-      form.setFieldsValue({ type: "music" });
+      form.setFieldsValue({
+        type: "music",
+        metadataSources: ["netease", "qqmusic", "musicbrainz"],
+        autoDetect: "true",
+      });
       setAvatar({ type: "icon", icon: "lucide:music", color: "#ec4899" });
     }
   }, [music, form]);
@@ -126,6 +163,15 @@ export default function MusicLibraryEditor({
         isDefaultDownload: b.isDefaultDownload ?? i === 0,
       }));
 
+    // Build metadata settings
+    const metadata: Record<string, unknown> = {};
+    if (values.country) metadata.country = values.country;
+    if (values.language) metadata.language = values.language;
+    if (values.metadataSources?.length) metadata.sources = values.metadataSources;
+    metadata.autoDetect = values.autoDetect !== "false";
+
+    const settings = Object.keys(metadata).length > 0 ? { metadata } : null;
+
     if (music) {
       await updateMutation.mutateAsync({
         id: music.id,
@@ -133,6 +179,7 @@ export default function MusicLibraryEditor({
         avatar: avatar as Record<string, unknown> | null,
         description: (values.description as string) || null,
         sources,
+        settings,
       });
     } else {
       await createMutation.mutateAsync({
@@ -141,6 +188,7 @@ export default function MusicLibraryEditor({
         avatar: avatar as Record<string, unknown> | null,
         description: (values.description as string) || null,
         sources,
+        settings,
       });
     }
   }, [form, music, avatar, createMutation, updateMutation]);
@@ -209,6 +257,66 @@ export default function MusicLibraryEditor({
               initialSources={music?.sources}
               onBrowse={onBrowse}
             />
+          </div>
+
+          {/* 元数据设置 */}
+          <div className="rounded-lg border border-border-base p-5">
+            <h4 className="mb-4 text-sm font-semibold text-fg-primary">
+              元数据设置
+            </h4>
+            <p className="mb-4 text-xs text-fg-muted">
+              配置音乐元数据的刮削策略。系统会根据设置选择最佳的数据源来获取专辑信息、封面图片等。
+            </p>
+
+            <Form.Item name="country" label="国家/地区">
+              <Select
+                options={COUNTRIES.map((c) => ({
+                  label: c.label,
+                  value: c.value,
+                }))}
+                placeholder="自动检测"
+              />
+            </Form.Item>
+
+            <Form.Item name="language" label="语言偏好">
+              <Select
+                options={LANGUAGES.map((l) => ({
+                  label: l.label,
+                  value: l.value,
+                }))}
+                placeholder="自动检测"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="metadataSources"
+              label="数据源优先级"
+              tooltip="选择多个数据源，系统会按优先级依次尝试"
+            >
+              <Select
+                mode="multiple"
+                options={METADATA_SOURCES.map((s) => ({
+                  label: (
+                    <div>
+                      <div>{s.label}</div>
+                      <div className="text-xs text-fg-muted">{s.description}</div>
+                    </div>
+                  ),
+                  value: s.value,
+                }))}
+                placeholder="选择数据源"
+              />
+            </Form.Item>
+
+            <Form.Item name="autoDetect" label="自动检测语言" className="!mb-0">
+              <Select
+                options={[
+                  { label: "是 - 根据音乐文件自动判断", value: "true" },
+                  { label: "否 - 使用上面设置的语言偏好", value: "false" },
+                ]}
+                placeholder="是"
+              />
+            </Form.Item>
           </div>
         </ScrollArea>
 

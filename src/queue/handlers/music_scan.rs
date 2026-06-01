@@ -18,7 +18,6 @@ use crate::ctx::AppCtx;
 use crate::db::entities::{music_album_artists, music_albums, music_artists, music_files, music_tracks};
 use crate::bus_clients::app_events;
 use crate::services::scrape::music::MusicScrapeService;
-use rust_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
 
 struct AudioMeta {
     artist: Option<String>,
@@ -101,11 +100,9 @@ pub async fn handle(
     let album = music_albums::Entity::find_by_id(album_id).one(db).await?;
     if let Some(album) = album {
         if album.scraped_at.is_none() {
-            let mb = MusicBrainzClient::new();
             let scrape_result = MusicScrapeService::scrape_album_inline(
                 db,
                 &state.storage,
-                &mb,
                 album_id,
                 effective_artist,
                 album_title,

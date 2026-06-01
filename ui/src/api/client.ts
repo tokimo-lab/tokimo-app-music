@@ -780,6 +780,7 @@ export interface CreateLibraryInput {
   rootPath?: string;
   sourceId?: string;
   sourceType?: string;
+  settings?: Record<string, unknown> | null;
 }
 
 export interface UpdateLibraryInput {
@@ -796,4 +797,5 @@ export interface UpdateLibraryInput {
   rootPath?: string;
   sourceId?: string;
   sourceType?: string;
+  settings?: Record<string, unknown> | null;
 }
