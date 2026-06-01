@@ -9,6 +9,7 @@ import { registerBridge } from "../modal-bridge";
 import { useContainerWidth, useSidebarCollapsed } from "../shared/hooks/hooks";
 import { useWindowActions, useWindowNav } from "../shell/hooks";
 import MusicContent from "./MusicContent";
+import { MusicLayout } from "./MusicLayout";
 import MusicSidebar from "./MusicSidebar";
 
 const LoadingFallback = (
@@ -134,11 +135,13 @@ export default function MusicApp() {
         ) : (
           activeLibraryId &&
           activeLibrary && (
-            <MusicContent
-              key={activeLibraryId}
-              musicId={activeLibraryId}
-              syncing={!!syncProgress[activeLibraryId]?.isActive}
-            />
+            <MusicLayout>
+              <MusicContent
+                key={activeLibraryId}
+                musicId={activeLibraryId}
+                syncing={!!syncProgress[activeLibraryId]?.isActive}
+              />
+            </MusicLayout>
           )
         )}
       </div>
