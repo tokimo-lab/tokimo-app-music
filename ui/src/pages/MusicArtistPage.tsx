@@ -4,9 +4,9 @@ import { Play, User } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { api } from "../api/client";
 import { MusicLayout } from "../components/MusicLayout";
+import type { MusicTrackOutput } from "../lib/types";
 import { SectionTitle } from "../shared/components/SectionTitle";
 import { useBackgroundArt, useMusicPlayer, useWindowNav } from "../shell/hooks";
-import type { MusicTrackOutput } from "../lib/types";
 import { AlbumCard } from "./music-shared";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
