@@ -47,6 +47,7 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
         .route("/{id}/tracks", get(handlers::list_tracks))
         .route("/{id}/artists", get(handlers::list_artists))
         .route("/{id}/genres", get(handlers::list_music_genres))
+        .route("/{id}/backfill-lyrics", post(handlers::backfill_lyrics))
         .route("/assets/{*path}", get(assets::serve))
         .with_state(ctx)
 }

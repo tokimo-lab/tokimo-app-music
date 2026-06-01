@@ -176,3 +176,78 @@ pub async fn list_music_genres(
         .collect();
     Ok(ok(genres))
 }
+
+/// POST /api/apps/music/{id}/backfill-lyrics
+///
+/// Fetches lyrics for all tracks that don't have lyrics yet.
+/// Runs in background, returns immediately with track count.
+pub async fn backfill_lyrics(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let _uid = parse_uuid(&id)?;
+
+    // Find tracks without lyrics
+    let stmt = Statement::from_sql_and_values(
+        DatabaseBackend::Postgres,
+        "SELECT t.id, t.title, t.duration, a.id as album_id, a.title as album_title, \
+         ar.name as artist_name \
+         FROM music_tracks t \
+         JOIN music_albums a ON t.album_id = a.id \
+         LEFT JOIN music_album_artists aa ON aa.album_id = a.id AND aa.sort_order = 0 \
+         LEFT JOIN music_artists ar ON ar.id = aa.artist_id \
+         WHERE t.lyrics_path IS NULL \
+         ORDER BY a.title, t.track_number",
+        [],
+    );
+    let rows = ctx.db.query_all_raw(stmt).await?;
+    let total = rows.len();
+
+    // Spawn background task
+    let storage = ctx.storage.clone();
+    let db = ctx.db.clone();
+    tokio::spawn(async move {
+        let http = reqwest::Client::builder()
+            .user_agent("tokimo/1.0")
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_default();
+
+        let mut updated = 0i32;
+        for row in &rows {
+            let track_id: uuid::Uuid = row.try_get("", "id").unwrap_or_default();
+            let title: String = row.try_get("", "title").unwrap_or_default();
+            let album_id: uuid::Uuid = row.try_get("", "album_id").unwrap_or_default();
+            let album_title: String = row.try_get("", "album_title").unwrap_or_default();
+            let artist_name: String = row.try_get("", "artist_name").unwrap_or_default();
+            let duration: Option<i32> = row.try_get("", "duration").ok();
+
+            if let Some(path) = crate::services::scrape::music::MusicScrapeService::fetch_and_save_lyrics_static(
+                &storage,
+                &http,
+                album_id,
+                track_id,
+                &title,
+                &artist_name,
+                &album_title,
+                duration.map(|d| d as u32),
+            )
+            .await
+            {
+                // Update the track's lyrics_path
+                let update_stmt = Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE music_tracks SET lyrics_path = $1 WHERE id = $2",
+                    [path.into(), track_id.into()],
+                );
+                if db.execute_raw(update_stmt).await.is_ok() {
+                    updated += 1;
+                    tracing::info!("[lyrics_backfill] Lyrics saved for \"{}\"", title);
+                }
+            }
+        }
+        tracing::info!("[lyrics_backfill] Done: {}/{} tracks updated", updated, total);
+    });
+
+    Ok(ok(serde_json::json!({ "total": total, "status": "started" })))
+}

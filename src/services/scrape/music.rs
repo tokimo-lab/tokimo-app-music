@@ -617,7 +617,7 @@ impl MusicScrapeService {
         }
     }
 
-    /// Fetch lyrics for a single track via LrcLib and upload to storage.
+    /// Fetch lyrics from multiple sources (LrcLib → QQ Music → Netease) and upload to storage.
     /// Returns the storage path on success.
     async fn fetch_and_save_lyrics(
         storage: &Arc<dyn StorageProvider>,
@@ -647,27 +647,15 @@ impl MusicScrapeService {
             }
         };
 
-        let lyrics_result = match rust_client_api::metadata_providers::lrclib::fetch_lyrics(
+        // Try multi-source lyrics: LrcLib → QQ Music → Netease
+        let lyrics_result = rust_client_api::metadata_providers::lyrics::fetch_lyrics_multi(
             http,
             &effective_artist,
             &track_clean_title,
             Some(album_title),
             duration,
         )
-        .await
-        {
-            Ok(Some(l)) => Ok(Some(l)),
-            _ => {
-                rust_client_api::metadata_providers::lrclib::fetch_lyrics(
-                    http,
-                    &effective_artist,
-                    &track_clean_title,
-                    None,
-                    duration,
-                )
-                .await
-            }
-        };
+        .await;
 
         match lyrics_result {
             Ok(Some(lyrics)) if !lyrics.instrumental => {
@@ -872,5 +860,19 @@ impl MusicScrapeService {
                 .unwrap_or_else(|_| "Unknown Artist".to_string()),
             _ => "Unknown Artist".to_string(),
         }
+    }
+
+    /// Public static wrapper for `fetch_and_save_lyrics` (used by backfill endpoint).
+    pub async fn fetch_and_save_lyrics_static(
+        storage: &Arc<dyn StorageProvider>,
+        http: &reqwest::Client,
+        album_id: Uuid,
+        track_id: Uuid,
+        title: &str,
+        artist_name: &str,
+        album_title: &str,
+        duration: Option<u32>,
+    ) -> Option<String> {
+        Self::fetch_and_save_lyrics(storage, http, album_id, track_id, title, artist_name, album_title, duration).await
     }
 }
