@@ -77,6 +77,7 @@ pub async fn handle(
     let file = AudioFile {
         source_id,
         path,
+        full_path,
         source_root,
         size: file_size,
         meta,
@@ -224,6 +225,7 @@ impl RoundToInt32 for f64 {
 struct AudioFile {
     source_id: Uuid,
     path: PathBuf,
+    full_path: Option<PathBuf>,
     source_root: Option<PathBuf>,
     size: i64,
     meta: Option<AudioMeta>,
@@ -281,7 +283,10 @@ async fn process_audio_file<C: ConnectionTrait>(
         ensure_album_artist(db, album_id, artist_id).await?;
     }
 
-    let file_path = file.path.to_string_lossy().to_string();
+    // Use full_path for VFS access (SMB needs full path), fallback to relative path
+    let file_path = file.full_path.as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| file.path.to_string_lossy().to_string());
     let filename = file
         .path
         .file_name()

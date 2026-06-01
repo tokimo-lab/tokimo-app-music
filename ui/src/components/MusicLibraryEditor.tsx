@@ -98,7 +98,10 @@ export default function MusicLibraryEditor({
   // Pre-fill form
   useEffect(() => {
     if (music) {
-      const settings = (music as Record<string, unknown>).settings as Record<string, unknown> | null;
+      const settings = (music as Record<string, unknown>).settings as Record<
+        string,
+        unknown
+      > | null;
       const metadata = settings?.metadata as Record<string, unknown> | null;
       form.setFieldsValue({
         type: music.type,
@@ -106,7 +109,11 @@ export default function MusicLibraryEditor({
         description: music.description ?? "",
         country: (metadata?.country as string) ?? "",
         language: (metadata?.language as string) ?? "",
-        metadataSources: (metadata?.sources as string[]) ?? ["netease", "qqmusic", "musicbrainz"],
+        metadataSources: (metadata?.sources as string[]) ?? [
+          "netease",
+          "qqmusic",
+          "musicbrainz",
+        ],
         autoDetect: metadata?.autoDetect !== false ? "true" : "false",
       });
       setAvatar(parseAvatar(music.avatar));
@@ -167,7 +174,8 @@ export default function MusicLibraryEditor({
     const metadata: Record<string, unknown> = {};
     if (values.country) metadata.country = values.country;
     if (values.language) metadata.language = values.language;
-    if (values.metadataSources?.length) metadata.sources = values.metadataSources;
+    if (values.metadataSources?.length)
+      metadata.sources = values.metadataSources;
     metadata.autoDetect = values.autoDetect !== "false";
 
     const settings = Object.keys(metadata).length > 0 ? { metadata } : null;
@@ -299,7 +307,9 @@ export default function MusicLibraryEditor({
                   label: (
                     <div>
                       <div>{s.label}</div>
-                      <div className="text-xs text-fg-muted">{s.description}</div>
+                      <div className="text-xs text-fg-muted">
+                        {s.description}
+                      </div>
                     </div>
                   ),
                   value: s.value,
