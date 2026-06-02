@@ -18,12 +18,12 @@ use crate::db::entities::{music_album_artists, music_albums, music_artists, musi
 use crate::error::AppError;
 use crate::services::scrape::shared::artwork::upload_image_buffer;
 use crate::services::storage::StorageProvider;
-use rust_client_api::metadata_providers::deezer::DeezerClient;
-use rust_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
-use rust_client_api::metadata_providers::netease::NeteaseClient;
-use rust_client_api::metadata_providers::qqmusic::QQMusicClient;
-use rust_client_api::metadata_providers::{MusicMetadataProvider, ProviderRegistry, ProviderSelector};
-use rust_client_api::types::{AlbumDetail, AlbumSearchResult, MetadataSource};
+use tokimo_package_client_api::metadata_providers::deezer::DeezerClient;
+use tokimo_package_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
+use tokimo_package_client_api::metadata_providers::netease::NeteaseClient;
+use tokimo_package_client_api::metadata_providers::qqmusic::QQMusicClient;
+use tokimo_package_client_api::metadata_providers::{MusicMetadataProvider, ProviderRegistry, ProviderSelector};
+use tokimo_package_client_api::types::{AlbumDetail, AlbumSearchResult, MetadataSource};
 
 // ── Public DTOs ──────────────────────────────────────────────────────────────
 
@@ -422,7 +422,7 @@ impl MusicScrapeService {
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
         album_id: Uuid,
-        credits: &[rust_client_api::types::ArtistCreditInfo],
+        credits: &[tokimo_package_client_api::types::ArtistCreditInfo],
     ) {
         if credits.is_empty() {
             return;
@@ -648,7 +648,7 @@ impl MusicScrapeService {
         };
 
         // Try multi-source lyrics: LrcLib → QQ Music → Netease
-        let lyrics_result = rust_client_api::metadata_providers::lyrics::fetch_lyrics_multi(
+        let lyrics_result = tokimo_package_client_api::metadata_providers::lyrics::fetch_lyrics_multi(
             http,
             &effective_artist,
             &track_clean_title,
@@ -700,7 +700,7 @@ impl MusicScrapeService {
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
         album_id: Uuid,
-        mb_tracks: &[rust_client_api::types::TrackInfo],
+        mb_tracks: &[tokimo_package_client_api::types::TrackInfo],
         primary_genre: Option<&str>,
         artist_name: &str,
         album_title: &str,
