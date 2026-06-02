@@ -1,26 +1,8 @@
-use sea_orm::{DatabaseBackend, DatabaseConnection, QueryResult, Statement, Value};
+use sea_orm::{ConnectionTrait, DatabaseBackend, QueryResult, Statement, Value};
 use serde_json::{Value as JsonValue, json};
 use uuid::Uuid;
 
 use crate::error::AppError;
-
-#[async_trait::async_trait]
-pub trait RawStatementQueryExt {
-    async fn query_all(&self, stmt: Statement) -> Result<Vec<QueryResult>, sea_orm::DbErr>;
-    async fn query_one(&self, stmt: Statement) -> Result<Option<QueryResult>, sea_orm::DbErr>;
-}
-
-#[async_trait::async_trait]
-impl RawStatementQueryExt for DatabaseConnection {
-    async fn query_all(&self, stmt: Statement) -> Result<Vec<QueryResult>, sea_orm::DbErr> {
-        sea_orm::ConnectionTrait::query_all_raw(self, stmt).await
-    }
-
-    async fn query_one(&self, stmt: Statement) -> Result<Option<QueryResult>, sea_orm::DbErr> {
-        sea_orm::ConnectionTrait::query_one_raw(self, stmt).await
-    }
-}
-
 
 #[derive(Debug)]
 pub struct ListAlbumsInput {
@@ -50,7 +32,7 @@ pub struct MediaContentRepo;
 
 impl MediaContentRepo {
     pub async fn list_albums(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         input: ListAlbumsInput,
     ) -> Result<(Vec<JsonValue>, i64), AppError> {
         let mut conds = vec!["a.music_id = $1".to_string()];
@@ -114,7 +96,7 @@ impl MediaContentRepo {
         params.push(offset_val.into());
 
         let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &isql, params);
-        let rows = db.query_all(stmt).await?;
+        let rows = db.query_all_raw(stmt).await?;
         let items = rows
             .iter()
             .map(|r| {
@@ -146,7 +128,7 @@ impl MediaContentRepo {
 
     // ── Music: Album Detail ──
 
-    pub async fn get_album_detail(db: &DatabaseConnection, album_id: Uuid) -> Result<Option<JsonValue>, AppError> {
+    pub async fn get_album_detail(db: &impl ConnectionTrait, album_id: Uuid) -> Result<Option<JsonValue>, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "SELECT a.id, a.music_id, a.title, a.sort_title, a.year, \
@@ -158,7 +140,7 @@ impl MediaContentRepo {
              FROM music_albums a WHERE a.id = $1",
             [album_id.into()],
         );
-        let Some(a) = db.query_one(stmt).await? else {
+        let Some(a) = db.query_one_raw(stmt).await? else {
             return Ok(None);
         };
 
@@ -181,7 +163,7 @@ impl MediaContentRepo {
              ORDER BY t.disc_number ASC NULLS FIRST, t.track_number ASC NULLS LAST",
             [album_id.into()],
         );
-        let track_rows = db.query_all(track_stmt).await?;
+        let track_rows = db.query_all_raw(track_stmt).await?;
         let tracks: Vec<JsonValue> = track_rows
             .iter()
             .map(|r| -> Result<JsonValue, AppError> {
@@ -253,7 +235,7 @@ impl MediaContentRepo {
     // ── Music: Tracks ──
 
     pub async fn list_tracks(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         input: ListTracksInput,
     ) -> Result<(Vec<JsonValue>, i64), AppError> {
         let mut conds = vec!["a.music_id = $1".to_string()];
@@ -309,7 +291,7 @@ impl MediaContentRepo {
         params.push(offset_val.into());
 
         let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &isql, params);
-        let rows = db.query_all(stmt).await?;
+        let rows = db.query_all_raw(stmt).await?;
         let items = rows
             .iter()
             .map(|r| -> Result<JsonValue, AppError> {
@@ -346,7 +328,7 @@ impl MediaContentRepo {
     // ── Music: Artists ──
 
     pub async fn list_artists(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         music_id: Uuid,
         page: i64,
         page_size: i64,
@@ -396,7 +378,7 @@ impl MediaContentRepo {
         params.push(offset_val.into());
 
         let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &isql, params);
-        let rows = db.query_all(stmt).await?;
+        let rows = db.query_all_raw(stmt).await?;
         let items = rows
             .iter()
             .map(|r| {
@@ -414,7 +396,7 @@ impl MediaContentRepo {
     // ── Music: Artist Detail ──
 
     pub async fn get_artist_detail(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         person_id: Uuid,
         music_id: Uuid,
     ) -> Result<Option<JsonValue>, AppError> {
@@ -432,7 +414,7 @@ impl MediaContentRepo {
              FROM music_artists ma WHERE ma.id = $1",
             [person_id.into(), music_id.into()],
         );
-        let Some(p) = db.query_one(stmt).await? else {
+        let Some(p) = db.query_one_raw(stmt).await? else {
             return Ok(None);
         };
 
@@ -447,7 +429,7 @@ impl MediaContentRepo {
              ORDER BY a.year DESC NULLS LAST",
             [person_id.into(), music_id.into()],
         );
-        let album_rows = db.query_all(album_stmt).await?;
+        let album_rows = db.query_all_raw(album_stmt).await?;
         let albums: Vec<JsonValue> = album_rows
             .iter()
             .map(|r| {
@@ -480,33 +462,33 @@ impl MediaContentRepo {
 
     // ── Music: Toggle Album Favorite ──
 
-    pub async fn toggle_album_favorite(db: &DatabaseConnection, album_id: Uuid) -> Result<bool, AppError> {
+    pub async fn toggle_album_favorite(db: &impl ConnectionTrait, album_id: Uuid) -> Result<bool, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "UPDATE music_albums SET is_favorite = NOT is_favorite WHERE id = $1 RETURNING is_favorite",
             [album_id.into()],
         );
-        let row = db.query_one(stmt).await?
+        let row = db.query_one_raw(stmt).await?
             .ok_or_else(|| AppError::NotFound(format!("album {album_id} not found")))?;
         get::<bool>(&row, "is_favorite")
     }
 
     // ── Track Lyrics ──
 
-    pub async fn get_track_lyrics(db: &DatabaseConnection, track_id: Uuid) -> Result<Option<String>, AppError> {
+    pub async fn get_track_lyrics(db: &impl ConnectionTrait, track_id: Uuid) -> Result<Option<String>, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "SELECT lyrics_path FROM music_tracks WHERE id = $1",
             [track_id.into()],
         );
-        let row = db.query_one(stmt).await?
+        let row = db.query_one_raw(stmt).await?
             .ok_or_else(|| AppError::NotFound(format!("track {track_id} not found")))?;
         get_opt::<String>(&row, "lyrics_path")
     }
 
     // ── Album Credits ──
 
-    async fn query_album_credits(db: &DatabaseConnection, album_id: Uuid) -> Result<Vec<JsonValue>, AppError> {
+    async fn query_album_credits(db: &impl ConnectionTrait, album_id: Uuid) -> Result<Vec<JsonValue>, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "SELECT aa.id, aa.role, NULL::text as character, aa.sort_order, \
@@ -515,7 +497,7 @@ impl MediaContentRepo {
              WHERE aa.album_id = $1 ORDER BY aa.sort_order ASC",
             [album_id.into()],
         );
-        let rows = db.query_all(stmt).await?;
+        let rows = db.query_all_raw(stmt).await?;
         rows.iter()
             .map(|r| {
                 Ok(json!({
@@ -538,11 +520,10 @@ fn dir(d: &str) -> &'static str {
     if d.eq_ignore_ascii_case("desc") { "DESC" } else { "ASC" }
 }
 
-fn query_count<'a>(db: &'a DatabaseConnection, sql: &'a str, params: Vec<Value>) -> impl std::future::Future<Output = Result<i64, AppError>> + 'a {
-    // Wrap async block to avoid lifetime issues
+fn query_count<'a>(db: &'a impl ConnectionTrait, sql: &'a str, params: Vec<Value>) -> impl std::future::Future<Output = Result<i64, AppError>> + 'a {
     async move {
         let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, params);
-        let row = db.query_one(stmt).await?
+        let row = db.query_one_raw(stmt).await?
             .ok_or_else(|| AppError::Internal("count query returned no rows".into()))?;
         get::<i64>(&row, "total")
     }

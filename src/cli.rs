@@ -61,7 +61,7 @@ pub async fn run_find(
     params.push((limit as i64).into());
 
     let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &sql, params);
-    let rows = db.query_all(stmt).await?;
+    let rows = db.query_all_raw(stmt).await?;
 
     if raw {
         let items: Vec<serde_json::Value> = rows
