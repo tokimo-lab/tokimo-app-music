@@ -332,7 +332,7 @@ export function MusicMiniPlayer() {
 
           {/* Center: single-line lyrics with karaoke progress */}
           {lyricText && (
-            <div className="hidden flex-1 items-center justify-center overflow-hidden lg:flex">
+            <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden">
               <MiniKaraokeText text={lyricText} progressRef={progressRef} />
             </div>
           )}
