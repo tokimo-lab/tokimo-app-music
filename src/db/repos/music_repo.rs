@@ -32,7 +32,7 @@ pub struct MusicStreamTarget {
 pub struct MusicRepo;
 
 impl MusicRepo {
-    pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<musics::Model>, AppError> {
+    pub async fn list_all<C: ConnectionTrait>(db: &C) -> Result<Vec<musics::Model>, AppError> {
         let rows = musics::Entity::find()
             .order_by_asc(musics::Column::SortOrder)
             .order_by_asc(musics::Column::CreatedAt)
@@ -41,12 +41,12 @@ impl MusicRepo {
         Ok(rows)
     }
 
-    pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<musics::Model>, AppError> {
+    pub async fn get_by_id<C: ConnectionTrait>(db: &C, id: Uuid) -> Result<Option<musics::Model>, AppError> {
         Ok(musics::Entity::find_by_id(id).one(db).await?)
     }
 
-    pub async fn create(
-        db: &DatabaseConnection,
+    pub async fn create<C: ConnectionTrait>(
+        db: &C,
         name: String,
         music_type: String,
         settings: Option<serde_json::Value>,
@@ -77,83 +77,87 @@ impl MusicRepo {
             .internal("failed to fetch created music library")
     }
 
-    pub async fn update(
-        db: &DatabaseConnection,
+    pub async fn update<C: ConnectionTrait>(
+        db: &C,
         id: Uuid,
         input: UpdateMusicFields,
     ) -> Result<musics::Model, AppError> {
-        let model = musics::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .not_found(format!("music library {id} not found"))?;
-        let mut active: musics::ActiveModel = model.into();
+        let now = Utc::now().fixed_offset();
+        let mut q = musics::Entity::update_many()
+            .filter(musics::Column::Id.eq(id))
+            .col_expr(musics::Column::UpdatedAt, Expr::value(Some(now)));
         if let Some(name) = input.name {
-            active.name = Set(name);
+            q = q.col_expr(musics::Column::Name, Expr::value(name));
         }
         if let Some(description) = input.description {
-            active.description = Set(Some(description));
+            q = q.col_expr(musics::Column::Description, Expr::value(Some(description)));
         }
         if let Some(avatar) = input.avatar {
-            active.avatar = Set(Some(avatar));
+            q = q.col_expr(musics::Column::Avatar, Expr::value(Some(avatar)));
         }
         if let Some(poster_path) = input.poster_path {
-            active.poster_path = Set(Some(poster_path));
+            q = q.col_expr(musics::Column::PosterPath, Expr::value(Some(poster_path)));
         }
         if let Some(scrape_enabled) = input.scrape_enabled {
-            active.scrape_enabled = Set(scrape_enabled);
+            q = q.col_expr(musics::Column::ScrapeEnabled, Expr::value(scrape_enabled));
         }
         if let Some(settings) = input.settings {
-            active.settings = Set(Some(settings));
+            q = q.col_expr(musics::Column::Settings, Expr::value(Some(settings)));
         }
         if let Some(sources) = input.sources {
-            active.sources = Set(sources);
+            q = q.col_expr(musics::Column::Sources, Expr::value(sources));
         }
-        active.updated_at = Set(Some(Utc::now().fixed_offset()));
-        let updated = active.update(db).await?;
-        Ok(updated)
+        let mut results = q.exec_with_returning(db).await?;
+        results
+            .into_iter()
+            .next()
+            .ok_or_else(|| AppError::NotFound(format!("music library {id} not found")))
     }
 
-    pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<u64, AppError> {
+    pub async fn delete<C: ConnectionTrait>(db: &C, id: Uuid) -> Result<u64, AppError> {
         let result = musics::Entity::delete_by_id(id).exec(db).await?;
         Ok(result.rows_affected)
     }
 
+    /// Reorder music libraries. Uses transaction for atomicity.
     pub async fn reorder(db: &DatabaseConnection, orders: Vec<(Uuid, i32)>) -> Result<(), AppError> {
+        let txn = db.begin().await?;
         for (id, sort_order) in orders {
             musics::Entity::update_many()
                 .filter(musics::Column::Id.eq(id))
                 .col_expr(musics::Column::SortOrder, Expr::value(sort_order))
-                .exec(db)
+                .exec(&txn)
                 .await?;
         }
+        txn.commit().await?;
         Ok(())
     }
 
-    pub async fn get_sync_status(
-        db: &DatabaseConnection,
+    pub async fn get_sync_status<C: ConnectionTrait>(
+        db: &C,
         id: Uuid,
     ) -> Result<Option<(String, Option<DateTimeWithTimeZone>)>, AppError> {
         let model = musics::Entity::find_by_id(id).one(db).await?;
         Ok(model.map(|m| (m.sync_status, m.last_sync_at)))
     }
 
-    pub async fn update_sync_status(
-        db: &DatabaseConnection,
+    pub async fn update_sync_status<C: ConnectionTrait>(
+        db: &C,
         id: Uuid,
         status: &str,
         last_sync_at: Option<DateTimeWithTimeZone>,
     ) -> Result<(), AppError> {
-        let model = musics::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .not_found(format!("music library {id} not found"))?;
-        let mut active: musics::ActiveModel = model.into();
-        active.sync_status = Set(status.to_string());
+        let mut q = musics::Entity::update_many()
+            .filter(musics::Column::Id.eq(id))
+            .col_expr(musics::Column::SyncStatus, Expr::value(status.to_string()))
+            .col_expr(musics::Column::UpdatedAt, Expr::value(Some(Utc::now().fixed_offset())));
         if let Some(ts) = last_sync_at {
-            active.last_sync_at = Set(Some(ts));
+            q = q.col_expr(musics::Column::LastSyncAt, Expr::value(Some(ts)));
         }
-        active.updated_at = Set(Some(Utc::now().fixed_offset()));
-        active.update(db).await?;
+        let result = q.exec(db).await?;
+        if result.rows_affected == 0 {
+            return Err(AppError::NotFound(format!("music library {id} not found")));
+        }
         Ok(())
     }
 
@@ -184,8 +188,8 @@ impl MusicRepo {
     }
 
     /// Load minimal stream info for a music file (path + source_id).
-    pub async fn load_stream_target(
-        db: &DatabaseConnection,
+    pub async fn load_stream_target<C: ConnectionTrait>(
+        db: &C,
         file_id: &str,
     ) -> Result<Option<MusicStreamTarget>, AppError> {
         let fid: Uuid = file_id

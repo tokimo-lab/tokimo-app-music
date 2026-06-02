@@ -418,6 +418,8 @@ impl MusicScrapeService {
     }
 
     /// Upsert artists from unified ArtistCreditInfo (multi-source).
+    /// DB operations (upsert artists + rebuild links) are wrapped in a transaction.
+    /// Profile image downloads happen outside the transaction.
     async fn save_album_artists_from_credits(
         db: &DatabaseConnection,
         storage: &Arc<dyn StorageProvider>,
@@ -428,84 +430,105 @@ impl MusicScrapeService {
             return;
         }
         let now = Utc::now().fixed_offset();
-        let mut artist_ids: Vec<Uuid> = Vec::new();
 
-        for credit in credits {
-            // Look up by external_id + source
-            let existing = music_artists::Entity::find()
-                .filter(music_artists::Column::MbId.eq(&credit.external_id))
-                .one(db)
-                .await
-                .unwrap_or(None);
-
-            let artist_id = if let Some(artist) = existing {
-                artist.id
-            } else {
-                let new_id = Uuid::new_v4();
-                let active = music_artists::ActiveModel {
-                    id: Set(new_id),
-                    name: Set(credit.name.clone()),
-                    mb_id: Set(Some(credit.external_id.clone())),
-                    created_at: Set(Some(now)),
-                    updated_at: Set(Some(now)),
-                    ..Default::default()
-                };
-                match music_artists::Entity::insert(active).exec(db).await {
-                    Ok(_) => {
-                        if let Some(path) = Self::download_artist_profile(storage, new_id, &credit.name).await {
-                            let key = format!("library-images/music/{new_id}/profile.jpg");
-                            let mut active: music_artists::ActiveModel =
-                                music_artists::Entity::find_by_id(new_id)
-                                    .one(db)
-                                    .await
-                                    .ok()
-                                    .flatten()
-                                    .unwrap()
-                                    .into();
-                            active.profile_path = Set(Some(path));
-                            active.profile_key = Set(Some(key));
-                            active.updated_at = Set(Some(now));
-                            let _ = active.update(db).await;
-                        }
-                        new_id
-                    }
-                    Err(e) => {
-                        if let Some(a) = music_artists::Entity::find()
-                            .filter(music_artists::Column::MbId.eq(&credit.external_id))
-                            .one(db)
-                            .await
-                            .unwrap_or(None)
-                        {
-                            a.id
-                        } else {
-                            error!("[music_scrape] Failed to insert artist {} ({}): {}", credit.name, credit.external_id, e);
-                            continue;
-                        }
-                    }
+        // Phase 1: Upsert artists + rebuild album_artists in a transaction
+        let (artist_ids, new_artist_names) = {
+            let txn = match db.begin().await {
+                Ok(t) => t,
+                Err(e) => {
+                    error!("[music_scrape] failed to begin txn: {e}");
+                    return;
                 }
             };
-            artist_ids.push(artist_id);
-        }
 
-        if artist_ids.is_empty() {
-            return;
-        }
+            let mut artist_ids: Vec<Uuid> = Vec::new();
+            let mut new_artist_names: Vec<(Uuid, String)> = Vec::new();
 
-        // Rebuild music_album_artists
-        let _ = music_album_artists::Entity::delete_many()
-            .filter(music_album_artists::Column::AlbumId.eq(album_id))
-            .exec(db)
-            .await;
-        for (i, aid) in artist_ids.iter().enumerate() {
-            let link = music_album_artists::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                artist_id: Set(*aid),
-                album_id: Set(album_id),
-                role: Set("artist".to_string()),
-                sort_order: Set(i as i32),
-            };
-            if let Err(e) = music_album_artists::Entity::insert(link).exec(db).await {
-                warn!("[music_scrape] failed to link album {album_id} artist {aid}: {e}");
+            for credit in credits {
+                let existing = music_artists::Entity::find()
+                    .filter(music_artists::Column::MbId.eq(&credit.external_id))
+                    .one(&txn)
+                    .await
+                    .unwrap_or(None);
+
+                let artist_id = if let Some(artist) = existing {
+                    artist.id
+                } else {
+                    let new_id = Uuid::new_v4();
+                    let active = music_artists::ActiveModel {
+                        id: Set(new_id),
+                        name: Set(credit.name.clone()),
+                        mb_id: Set(Some(credit.external_id.clone())),
+                        created_at: Set(Some(now)),
+                        updated_at: Set(Some(now)),
+                        ..Default::default()
+                    };
+                    match music_artists::Entity::insert(active).exec(&txn).await {
+                        Ok(_) => {
+                            new_artist_names.push((new_id, credit.name.clone()));
+                            new_id
+                        }
+                        Err(e) => {
+                            // Race: another scrape inserted the same artist concurrently
+                            if let Some(a) = music_artists::Entity::find()
+                                .filter(music_artists::Column::MbId.eq(&credit.external_id))
+                                .one(&txn)
+                                .await
+                                .unwrap_or(None)
+                            {
+                                a.id
+                            } else {
+                                error!("[music_scrape] Failed to insert artist {} ({}): {}", credit.name, credit.external_id, e);
+                                continue;
+                            }
+                        }
+                    }
+                };
+                artist_ids.push(artist_id);
+            }
+
+            if artist_ids.is_empty() {
+                let _ = txn.rollback().await;
+                return;
+            }
+
+            // Rebuild music_album_artists atomically
+            let _ = music_album_artists::Entity::delete_many()
+                .filter(music_album_artists::Column::AlbumId.eq(album_id))
+                .exec(&txn)
+                .await;
+            for (i, aid) in artist_ids.iter().enumerate() {
+                let link = music_album_artists::ActiveModel {
+                    id: Set(Uuid::new_v4()),
+                    artist_id: Set(*aid),
+                    album_id: Set(album_id),
+                    role: Set("artist".to_string()),
+                    sort_order: Set(i as i32),
+                };
+                if let Err(e) = music_album_artists::Entity::insert(link).exec(&txn).await {
+                    warn!("[music_scrape] failed to link album {album_id} artist {aid}: {e}");
+                }
+            }
+
+            if let Err(e) = txn.commit().await {
+                error!("[music_scrape] failed to commit txn: {e}");
+                return;
+            }
+
+            (artist_ids, new_artist_names)
+        };
+
+        // Phase 2: Download profile images outside the transaction
+        for (artist_id, artist_name) in new_artist_names {
+            if let Some(path) = Self::download_artist_profile(storage, artist_id, &artist_name).await {
+                let key = format!("library-images/music/{artist_id}/profile.jpg");
+                let _ = music_artists::Entity::update_many()
+                    .filter(music_artists::Column::Id.eq(artist_id))
+                    .col_expr(music_artists::Column::ProfilePath, Expr::value(Some(path)))
+                    .col_expr(music_artists::Column::ProfileKey, Expr::value(Some(key)))
+                    .col_expr(music_artists::Column::UpdatedAt, Expr::value(Some(now)))
+                    .exec(db)
+                    .await;
             }
         }
     }
