@@ -22,20 +22,33 @@ export function useContainerWidth(): [
 }
 
 export function useSidebarCollapsed(
-  _scopeId: string,
+  scopeId: string,
   autoCollapse: boolean,
 ): { collapsed: boolean; onToggleCollapse: () => void } {
-  const [collapsed, setCollapsed] = useState(autoCollapse);
+  const storageKey = `music-app:sidebar-collapsed:${scopeId}`;
+
+  const [manuallyCollapsed, setManuallyCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(storageKey) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
-    if (autoCollapse) {
-      setCollapsed(true);
+    try {
+      window.localStorage.setItem(storageKey, manuallyCollapsed ? "1" : "0");
+    } catch {
+      // ignore quota / privacy errors
     }
-  }, [autoCollapse]);
+  }, [manuallyCollapsed, storageKey]);
+
+  const collapsed = autoCollapse || manuallyCollapsed;
 
   return {
     collapsed,
-    onToggleCollapse: () => setCollapsed((c) => !c),
+    onToggleCollapse: () => setManuallyCollapsed(!collapsed),
   };
 }
 
