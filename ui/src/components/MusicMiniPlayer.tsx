@@ -263,7 +263,7 @@ export function MusicMiniPlayer() {
   );
   // Show synced lyrics line if available, otherwise show first line of plain lyrics
   const syncedLine = currentIdx >= 0 ? lines[currentIdx]?.text : null;
-  const plainLine = plainText?.split('\n').find((l) => l.trim()) ?? null;
+  const plainLine = plainText?.split("\n").find((l) => l.trim()) ?? null;
   const lyricText = syncedLine ?? plainLine;
 
   const cycleRepeat = useCallback(() => {
