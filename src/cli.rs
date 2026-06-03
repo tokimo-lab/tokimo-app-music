@@ -3,7 +3,7 @@
 //! Subcommands: `find`, `artist`.
 
 use anyhow::Context;
-use sea_orm::{DatabaseBackend, Statement};
+use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use uuid::Uuid;
 
 // ── Shared init ──────────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
     let mut artist_params: Vec<sea_orm::Value> = vec![format!("%{name}%").into()];
     let mut n = 2usize;
 
-    if let Some(ref lib) = library.filter(|s| !s.trim().is_empty()) {
+    if let Some(lib) = library.as_deref().filter(|s| !s.trim().is_empty()) {
         let lib_id: Uuid = lib
             .parse()
             .map_err(|_| anyhow::anyhow!("invalid library ID: '{lib}'"))?;
@@ -151,7 +151,7 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
          LIMIT ${lim}"
     );
     let artist_stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &artist_sql, artist_params);
-    let artist_rows = db.query_all(artist_stmt).await?;
+    let artist_rows = db.query_all_raw(artist_stmt).await?;
 
     if artist_rows.is_empty() {
         println!("No artists found for '{name}'.");
@@ -167,10 +167,10 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
 
         // Get albums for this artist
         let mut album_conds = vec!["maa.artist_id = $1".to_string()];
-        let mut album_params: Vec<sea_orm::Value> = vec![artist_id.into()];
+        let mut album_params: Vec<sea_orm::Value> = vec![artist_id.clone().into()];
         let mut an = 2usize;
 
-        if let Some(ref lib) = library.filter(|s| !s.trim().is_empty()) {
+        if let Some(lib) = library.as_deref().filter(|s| !s.trim().is_empty()) {
             let lib_id: Uuid = lib.parse().unwrap();
             album_conds.push(format!("a.music_id = ${an}"));
             album_params.push(lib_id.into());
@@ -190,7 +190,7 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
              LIMIT ${album_lim}"
         );
         let album_stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &album_sql, album_params);
-        let album_rows = db.query_all(album_stmt).await?;
+        let album_rows = db.query_all_raw(album_stmt).await?;
 
         let mut albums: Vec<serde_json::Value> = Vec::new();
 
@@ -203,8 +203,8 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
                              FROM music_tracks t WHERE t.album_id = $1 \
                              ORDER BY t.disc_number ASC NULLS FIRST, t.track_number ASC NULLS LAST";
             let track_stmt =
-                Statement::from_sql_and_values(DatabaseBackend::Postgres, track_sql, [album_id.into()]);
-            let track_rows = db.query_all(track_stmt).await?;
+                Statement::from_sql_and_values(DatabaseBackend::Postgres, track_sql, [album_id.clone().into()]);
+            let track_rows = db.query_all_raw(track_stmt).await?;
 
             let tracks: Vec<serde_json::Value> = track_rows
                 .iter()
@@ -221,7 +221,7 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
                 .collect();
 
             albums.push(serde_json::json!({
-                "id": album_id.to_string(),
+                "id": album_id.clone(),
                 "title": album_title,
                 "year": get_opt_i32(al, "year"),
                 "albumType": get_opt_str(al, "album_type"),
@@ -236,7 +236,7 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
             .unwrap_or_default();
 
         results.push(serde_json::json!({
-            "id": artist_id.to_string(),
+            "id": artist_id.clone(),
             "name": artist_name,
             "genres": genres,
             "albums": albums,
