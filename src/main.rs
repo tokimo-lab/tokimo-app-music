@@ -51,7 +51,7 @@ enum Command {
         #[arg(short, long, help = "限定音乐库 ID")]
         library: Option<String>,
         /// 返回结果数量上限
-        #[arg(short, long, default_value_t = 20, help = "返回结果数量上限")]
+        #[arg(short = 'n', long, default_value_t = 20, help = "返回结果数量上限")]
         limit: u32,
         /// 输出原始 JSON 而非表格
         #[arg(long, help = "输出原始 JSON")]
