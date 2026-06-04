@@ -25,15 +25,16 @@ pub async fn handle(
         .ok_or("Missing albumId in params")?;
     let album_id = Uuid::parse_str(album_id)?;
 
-    // Idempotency: skip if already scraped (handles duplicate jobs from re-sync).
+    // Idempotency: skip if already scraped AND has cover art.
+    // If cover is missing, allow re-scrape so cover art can be fetched.
     let album = music_albums::Entity::find_by_id(album_id).one(db).await?;
     let Some(album) = album else {
         info!("[music_scrape] Album {album_id} not found, skipping");
         return Ok(Some(json!({ "skipped": true, "reason": "not_found" })));
     };
 
-    if album.scraped_at.is_some() {
-        info!("[music_scrape] Album \"{}\" already scraped, skipping", album.title);
+    if album.scraped_at.is_some() && album.cover_path.is_some() {
+        info!("[music_scrape] Album \"{}\" already scraped with cover, skipping", album.title);
         return Ok(Some(json!({ "skipped": true, "reason": "already_scraped" })));
     }
 

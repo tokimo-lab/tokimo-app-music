@@ -6,11 +6,13 @@ import {
   Disc3,
   Heart,
   ListPlus,
+  MoreHorizontal,
   Pause,
   Play,
+  RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { MusicLayout } from "../components/MusicLayout";
 import type { CreditOutput, MusicTrackOutput } from "../lib/types";
@@ -47,6 +49,47 @@ function FavoriteButton({
   );
 }
 
+// ── Scrape Button ─────────────────────────────────────────────────────────────
+function ScrapeButton({
+  albumId,
+  scraped,
+}: {
+  albumId: string;
+  scraped: boolean;
+}) {
+  const qc = useQueryClient();
+  const scrape = api.music.scrapeAlbum.useMutation({
+    onSuccess: () => {
+      setTimeout(
+        () => void api.music.getAlbumDetail.invalidate(qc, { id: albumId }),
+        3000,
+      );
+    },
+  });
+  return (
+    <button
+      type="button"
+      title="重新刮削"
+      className={`inline-flex cursor-pointer items-center gap-1 text-xs transition-colors ${
+        scraped
+          ? "text-emerald-500 hover:text-emerald-400"
+          : "text-orange-400 hover:text-orange-300"
+      }`}
+      onClick={() => scrape.mutate(albumId)}
+      disabled={scrape.isPending}
+    >
+      {scrape.isPending ? (
+        <Spin className="h-3 w-3" />
+      ) : scraped ? (
+        <Sparkles className="h-3 w-3" />
+      ) : (
+        <RefreshCw className="h-3 w-3" />
+      )}
+      {scrape.isPending ? "刮削中..." : scraped ? "已刮削" : "未刮削"}
+    </button>
+  );
+}
+
 // ── Track Row ─────────────────────────────────────────────────────────────────
 function TrackRow({
   track,
@@ -72,6 +115,25 @@ function TrackRow({
     },
     [addToQueue, track],
   );
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const qc = useQueryClient();
+  const scrapeLyrics = api.music.scrapeTrackLyrics.useMutation({
+    onSuccess: () => setMenuOpen(false),
+  });
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: <button> cannot be nested inside <button>
@@ -143,6 +205,37 @@ function TrackRow({
       >
         <ListPlus className="h-4 w-4 text-[var(--text-muted)]" />
       </button>
+
+      {/* More menu */}
+      <div ref={menuRef} className="relative">
+        <button
+          type="button"
+          title="更多操作"
+          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-[var(--fill-tertiary)] group-hover:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((v) => !v);
+          }}
+        >
+          <MoreHorizontal className="h-4 w-4 text-[var(--text-muted)]" />
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-8 z-50 min-w-[140px] rounded-lg border border-border-base bg-[var(--bg-elevated)] py-1 shadow-lg">
+            <button
+              type="button"
+              className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--fill-tertiary)]"
+              onClick={(e) => {
+                e.stopPropagation();
+                scrapeLyrics.mutate(track.id);
+              }}
+              disabled={scrapeLyrics.isPending}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {scrapeLyrics.isPending ? "刮削中..." : "重新刮削歌词"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -339,20 +432,8 @@ export default function MusicAlbumDetailPage() {
                     <span>{formatTotalDuration(album.totalDuration)}</span>
                   </>
                 )}
-                {album.scrapedAt ? (
-                  <>
-                    <span className="text-[var(--text-muted)]">·</span>
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
-                      <Sparkles className="h-3 w-3" />
-                      已刮削
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-[var(--text-muted)]">·</span>
-                    <span className="text-xs text-orange-400">未刮削</span>
-                  </>
-                )}
+                <span className="text-[var(--text-muted)]">·</span>
+                <ScrapeButton albumId={album.id} scraped={!!album.scrapedAt} />
               </div>
 
               {/* Genre tags */}

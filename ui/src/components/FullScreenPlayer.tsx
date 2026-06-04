@@ -998,7 +998,10 @@ export function FullScreenPlayer({
           <div className="pointer-events-auto relative z-10 flex flex-1 items-center gap-8 overflow-hidden px-8 lg:px-16">
             {/* Left: visual display + track info (hidden when narrow) */}
             {!isNarrow && (
-              <div className="flex w-full flex-col items-center gap-8 lg:w-2/5 lg:flex-shrink-0">
+              <div
+                className="flex flex-col items-center gap-8 flex-shrink-0"
+                style={{ width: "40%" }}
+              >
                 {/* Double-click to enter immersive */}
                 {/* biome-ignore lint/a11y/noStaticElementInteractions: double-click to enter immersive */}
                 <div onDoubleClick={handleDoubleClickVisual} className="w-full">
@@ -1021,13 +1024,8 @@ export function FullScreenPlayer({
               </div>
             )}
 
-            {/* Right: lyrics (always visible when narrow, otherwise hidden below lg) */}
-            <div
-              className={cn(
-                "h-full flex-1",
-                isNarrow ? "block" : "hidden lg:block",
-              )}
-            >
+            {/* Right: lyrics */}
+            <div className="h-full flex-1 min-w-0">
               <FullScreenLyrics
                 trackId={currentTrack?.id}
                 getCurrentTime={getCurrentTime}

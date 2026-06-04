@@ -665,6 +665,45 @@ export const api = {
           ...options,
         }),
     },
+    scrapeAlbum: {
+      useMutation: (
+        options?: UseMutationOptions<{ status: string }, Error, string>,
+      ) =>
+        useMutation<{ status: string }, Error, string>({
+          mutationFn: (id) =>
+            apiFetch<{ status: string }>(
+              `${API_BASE}/album/${id}/scrape`,
+              { method: "POST" },
+            ),
+          ...options,
+        }),
+    },
+    scrapeArtist: {
+      useMutation: (
+        options?: UseMutationOptions<{ status: string }, Error, string>,
+      ) =>
+        useMutation<{ status: string }, Error, string>({
+          mutationFn: (id) =>
+            apiFetch<{ status: string }>(
+              `${API_BASE}/artist/${id}/scrape`,
+              { method: "POST" },
+            ),
+          ...options,
+        }),
+    },
+    scrapeTrackLyrics: {
+      useMutation: (
+        options?: UseMutationOptions<{ status: string }, Error, string>,
+      ) =>
+        useMutation<{ status: string }, Error, string>({
+          mutationFn: (id) =>
+            apiFetch<{ status: string }>(
+              `${API_BASE}/track/${id}/scrape-lyrics`,
+              { method: "POST" },
+            ),
+          ...options,
+        }),
+    },
     sync: {
       useMutation: (
         options?: UseMutationOptions<

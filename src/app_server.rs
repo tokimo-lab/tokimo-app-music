@@ -32,9 +32,12 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
         .route("/reorder", post(handlers::reorder_musics))
         .route("/sync-statuses", get(handlers::get_all_music_sync_statuses))
         .route("/album/{id}", get(handlers::get_album_detail))
+        .route("/album/{id}/scrape", post(handlers::scrape_album))
         .route("/artist/{person_id}", get(handlers::get_artist_detail))
+        .route("/artist/{person_id}/scrape", post(handlers::scrape_artist))
         .route("/album/{id}/toggle-favorite", post(handlers::toggle_album_favorite))
         .route("/track/{id}/lyrics", get(handlers::get_track_lyrics))
+        .route("/track/{id}/scrape-lyrics", post(handlers::scrape_track_lyrics))
         .route(
             "/{id}",
             get(handlers::get_music)

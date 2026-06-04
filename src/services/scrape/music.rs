@@ -899,4 +899,13 @@ impl MusicScrapeService {
     ) -> Option<String> {
         Self::fetch_and_save_lyrics(storage, http, album_id, track_id, title, artist_name, album_title, duration).await
     }
+
+    /// Public static wrapper for `download_artist_profile` (used by re-scrape endpoint).
+    pub async fn download_artist_profile_static(
+        storage: &Arc<dyn StorageProvider>,
+        artist_id: Uuid,
+        artist_name: &str,
+    ) -> Option<String> {
+        Self::download_artist_profile(storage, artist_id, artist_name).await
+    }
 }

@@ -1,6 +1,6 @@
 import { posterThumbUrl } from "@tokimo/sdk";
 import { ArrowLeftOutlined, Button, Empty, Spin } from "@tokimo/ui";
-import { Play, User } from "lucide-react";
+import { Play, RefreshCw, User } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { api } from "../api/client";
 import { MusicLayout } from "../components/MusicLayout";
@@ -8,6 +8,25 @@ import type { MusicTrackOutput } from "../lib/types";
 import { SectionTitle } from "../shared/components/SectionTitle";
 import { useBackgroundArt, useMusicPlayer, useWindowNav } from "../shell/hooks";
 import { AlbumCard } from "./music-shared";
+
+// ── Artist Scrape Button ──────────────────────────────────────────────────────
+function ArtistScrapeButton({ artistId }: { artistId: string }) {
+  const scrape = api.music.scrapeArtist.useMutation();
+  return (
+    <button
+      type="button"
+      title="重新刮削艺术家信息"
+      className="inline-flex cursor-pointer items-center gap-1 text-xs text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+      onClick={() => scrape.mutate(artistId)}
+      disabled={scrape.isPending}
+    >
+      <RefreshCw
+        className={`h-3 w-3 ${scrape.isPending ? "animate-spin" : ""}`}
+      />
+      {scrape.isPending ? "刮削中..." : "重新刮削"}
+    </button>
+  );
+}
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MusicArtistPage() {
@@ -120,6 +139,8 @@ export default function MusicArtistPage() {
                 <span>{artist.albumCount} 张专辑</span>
                 <span className="text-[var(--text-muted)]">·</span>
                 <span>{artist.trackCount} 首曲目</span>
+                <span className="text-[var(--text-muted)]">·</span>
+                <ArtistScrapeButton artistId={artist.id} />
               </div>
 
               {(artist.birthday || artist.birthplace) && (

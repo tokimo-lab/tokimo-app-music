@@ -4,6 +4,7 @@ use axum::{
 };
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::ctx::AppCtx;
 use crate::db::pagination::Page;
@@ -215,9 +216,9 @@ pub async fn backfill_lyrics(
 
         let mut updated = 0i32;
         for row in &rows {
-            let track_id: uuid::Uuid = row.try_get("", "id").unwrap_or_default();
+            let track_id: Uuid = row.try_get("", "id").unwrap_or_default();
             let title: String = row.try_get("", "title").unwrap_or_default();
-            let album_id: uuid::Uuid = row.try_get("", "album_id").unwrap_or_default();
+            let album_id: Uuid = row.try_get("", "album_id").unwrap_or_default();
             let album_title: String = row.try_get("", "album_title").unwrap_or_default();
             let artist_name: String = row.try_get("", "artist_name").unwrap_or_default();
             let duration: Option<i32> = row.try_get("", "duration").ok();
@@ -250,4 +251,164 @@ pub async fn backfill_lyrics(
     });
 
     Ok(ok(serde_json::json!({ "total": total, "status": "started" })))
+}
+
+/// POST /api/apps/music/album/{id}/scrape
+///
+/// Re-scrape album metadata (cover art, genres, lyrics for all tracks).
+/// Runs in background, returns immediately.
+pub async fn scrape_album(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let album_id = parse_uuid(&id)?;
+
+    // Clear scraped_at and cover_path so the scrape service will re-run
+    let clear_stmt = Statement::from_sql_and_values(
+        DatabaseBackend::Postgres,
+        "UPDATE music.music_albums SET scraped_at = NULL, cover_path = NULL WHERE id = $1",
+        [album_id.into()],
+    );
+    ctx.db.execute_raw(clear_stmt).await?;
+
+    let db = ctx.db.clone();
+    let storage = ctx.storage.clone();
+    tokio::spawn(async move {
+        let result = crate::services::scrape::music::MusicScrapeService::auto_scrape_album(
+            &db, &storage, album_id,
+        )
+        .await;
+        tracing::info!(
+            "[rescrape] Album {}: status={}, cover={}",
+            album_id, result.status, result.cover_downloaded
+        );
+    });
+
+    Ok(ok(serde_json::json!({ "albumId": id, "status": "started" })))
+}
+
+/// POST /api/apps/music/artist/{id}/scrape
+///
+/// Re-scrape artist profile image from Deezer.
+/// Runs in background, returns immediately.
+pub async fn scrape_artist(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let artist_id = parse_uuid(&id)?;
+
+    // Look up artist name
+    let row = ctx
+        .db
+        .query_one_raw(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT name FROM music.music_artists WHERE id = $1",
+            [artist_id.into()],
+        ))
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("artist {artist_id} not found")))?;
+    let artist_name: String = row.try_get("", "name").unwrap_or_default();
+
+    // Clear profile_path
+    ctx.db
+        .execute_raw(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "UPDATE music.music_artists SET profile_path = NULL WHERE id = $1",
+            [artist_id.into()],
+        ))
+        .await?;
+
+    let db = ctx.db.clone();
+    let storage = ctx.storage.clone();
+    tokio::spawn(async move {
+        let path = crate::services::scrape::music::MusicScrapeService::download_artist_profile_static(
+            &storage, artist_id, &artist_name,
+        )
+        .await;
+        if let Some(p) = path {
+            let update = Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "UPDATE music.music_artists SET profile_path = $1 WHERE id = $2",
+                [p.into(), artist_id.into()],
+            );
+            let _ = db.execute_raw(update).await;
+            tracing::info!("[rescrape] Artist profile saved for \"{}\"", artist_name);
+        } else {
+            tracing::warn!("[rescrape] No artist profile found for \"{}\"", artist_name);
+        }
+    });
+
+    Ok(ok(serde_json::json!({ "artistId": id, "status": "started" })))
+}
+
+/// POST /api/apps/music/track/{id}/scrape-lyrics
+///
+/// Re-fetch lyrics for a single track.
+/// Runs in background, returns immediately.
+pub async fn scrape_track_lyrics(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let track_id = parse_uuid(&id)?;
+
+    // Look up track info
+    let row = ctx
+        .db
+        .query_one_raw(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT t.title, t.duration, a.id as album_id, a.title as album_title, \
+             ar.name as artist_name \
+             FROM music.music_tracks t \
+             JOIN music.music_albums a ON t.album_id = a.id \
+             LEFT JOIN music.music_album_artists aa ON aa.album_id = a.id AND aa.sort_order = 0 \
+             LEFT JOIN music.music_artists ar ON ar.id = aa.artist_id \
+             WHERE t.id = $1",
+            [track_id.into()],
+        ))
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("track {track_id} not found")))?;
+
+    let title: String = row.try_get("", "title").unwrap_or_default();
+    let album_id: Uuid = row.try_get("", "album_id").unwrap_or_default();
+    let album_title: String = row.try_get("", "album_title").unwrap_or_default();
+    let artist_name: String = row.try_get("", "artist_name").unwrap_or_default();
+    let duration: Option<i32> = row.try_get("", "duration").ok();
+
+    // Clear lyrics_path
+    ctx.db
+        .execute_raw(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "UPDATE music.music_tracks SET lyrics_path = NULL WHERE id = $1",
+            [track_id.into()],
+        ))
+        .await?;
+
+    let db = ctx.db.clone();
+    let storage = ctx.storage.clone();
+    tokio::spawn(async move {
+        let http = reqwest::Client::builder()
+            .user_agent("tokimo/1.0")
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_default();
+
+        if let Some(path) = crate::services::scrape::music::MusicScrapeService::fetch_and_save_lyrics_static(
+            &storage, &http, album_id, track_id, &title, &artist_name, &album_title,
+            duration.map(|d| d as u32),
+        )
+        .await
+        {
+            let update = Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "UPDATE music.music_tracks SET lyrics_path = $1 WHERE id = $2",
+                [path.into(), track_id.into()],
+            );
+            let _ = db.execute_raw(update).await;
+            tracing::info!("[rescrape] Lyrics saved for \"{}\"", title);
+        } else {
+            tracing::warn!("[rescrape] No lyrics found for \"{}\"", title);
+        }
+    });
+
+    Ok(ok(serde_json::json!({ "trackId": id, "status": "started" })))
 }
