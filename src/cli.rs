@@ -167,7 +167,8 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
 
         // Get albums for this artist
         let mut album_conds = vec!["maa.artist_id = $1".to_string()];
-        let mut album_params: Vec<sea_orm::Value> = vec![artist_id.clone().into()];
+        let artist_uuid: Uuid = artist_id.parse().unwrap_or_default();
+        let mut album_params: Vec<sea_orm::Value> = vec![artist_uuid.into()];
         let mut an = 2usize;
 
         if let Some(lib) = library.as_deref().filter(|s| !s.trim().is_empty()) {
@@ -202,8 +203,9 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
             let track_sql = "SELECT t.id, t.title, t.track_number, t.disc_number, t.duration, t.genre \
                              FROM music_tracks t WHERE t.album_id = $1 \
                              ORDER BY t.disc_number ASC NULLS FIRST, t.track_number ASC NULLS LAST";
+            let album_uuid: Uuid = album_id.parse().unwrap_or_default();
             let track_stmt =
-                Statement::from_sql_and_values(DatabaseBackend::Postgres, track_sql, [album_id.clone().into()]);
+                Statement::from_sql_and_values(DatabaseBackend::Postgres, track_sql, [album_uuid.into()]);
             let track_rows = db.query_all_raw(track_stmt).await?;
 
             let tracks: Vec<serde_json::Value> = track_rows
