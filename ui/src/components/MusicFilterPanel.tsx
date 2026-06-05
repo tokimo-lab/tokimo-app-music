@@ -68,7 +68,7 @@ function FilterPill({
       className={cn(
         "cursor-pointer whitespace-nowrap rounded-md px-3 py-1 text-[13px] font-medium transition-colors",
         active
-          ? "bg-[var(--accent)] text-white"
+          ? "bg-[var(--color-accent)] text-white"
           : "text-fg-secondary hover:text-fg-primary",
       )}
     >

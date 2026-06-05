@@ -63,17 +63,17 @@ function TrackRow({
     <button
       type="button"
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
-        isActive ? "bg-[var(--accent)]/10" : "hover:bg-[var(--fill-tertiary)]"
+        isActive ? "bg-[var(--color-accent)]/10" : "hover:bg-[var(--color-fill-tertiary)]"
       }`}
       onClick={isActive ? togglePlay : onPlay}
     >
-      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--text-muted)]">
+      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--color-fg-muted)]">
         {isActive ? (
           isPlaying ? (
-            <Pause className="mx-auto h-4 w-4 text-[var(--accent)]" />
+            <Pause className="mx-auto h-4 w-4 text-[var(--color-accent)]" />
           ) : (
             <Play
-              className="mx-auto h-4 w-4 text-[var(--accent)]"
+              className="mx-auto h-4 w-4 text-[var(--color-accent)]"
               fill="currentColor"
             />
           )
@@ -89,18 +89,18 @@ function TrackRow({
       </span>
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-sm font-medium ${isActive ? "text-[var(--accent)]" : "text-[var(--text-primary)]"}`}
+          className={`truncate text-sm font-medium ${isActive ? "text-[var(--color-accent)]" : "text-[var(--color-fg-primary)]"}`}
         >
           {track.title}
         </p>
       </div>
-      <span className="hidden w-[140px] flex-shrink-0 truncate text-xs text-[var(--text-muted)] sm:block">
+      <span className="hidden w-[140px] flex-shrink-0 truncate text-xs text-[var(--color-fg-muted)] sm:block">
         {track.artistName || "未知"}
       </span>
-      <span className="hidden w-[180px] flex-shrink-0 truncate text-xs text-[var(--text-muted)] md:block">
+      <span className="hidden w-[180px] flex-shrink-0 truncate text-xs text-[var(--color-fg-muted)] md:block">
         {track.albumTitle || ""}
       </span>
-      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--text-muted)]">
+      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--color-fg-muted)]">
         {formatDuration(track.duration)}
       </span>
     </button>
@@ -162,8 +162,8 @@ function TracksTable({
 }) {
   if (!tracks.length) return <Empty description="暂无曲目" />;
   return (
-    <div className="rounded-lg border border-border-base bg-[var(--bg-glass)]">
-      <div className="flex items-center gap-3 border-b border-border-base px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
+    <div className="rounded-lg border border-border-base bg-[var(--color-surface-overlay)]">
+      <div className="flex items-center gap-3 border-b border-border-base px-3 py-2 text-xs font-medium text-[var(--color-fg-muted)]">
         <span className="w-8 flex-shrink-0 text-center">#</span>
         <span className="min-w-0 flex-1">标题</span>
         <span className="hidden w-[140px] flex-shrink-0 sm:block">艺术家</span>
@@ -172,7 +172,7 @@ function TracksTable({
           <Clock className="ml-auto h-3.5 w-3.5" />
         </span>
       </div>
-      <div className="divide-y divide-[var(--border-base)]">
+      <div className="divide-y divide-[var(--color-border-base)]">
         {tracks.map((track, i) => (
           <TrackRow
             key={track.id}
@@ -347,7 +347,7 @@ export default function MusicContent({
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4">
       {/* Tab bar / Search bar — sticky */}
-      <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-0 bg-[var(--bg-primary)] px-4 pt-4 pb-3">
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-0 bg-surface-base px-4 pt-4 pb-3">
         {searching ? (
           /* ── Search mode: replace tab bar with search input ── */
           <div className="flex justify-center">
@@ -362,7 +362,7 @@ export default function MusicContent({
               <input
                 ref={searchInputRef}
                 type="text"
-                className="flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-[var(--text-secondary)]"
+                className="flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-[var(--color-fg-secondary)]"
                 placeholder={searchPlaceholder}
                 value={searchValue}
                 onChange={(e) => {

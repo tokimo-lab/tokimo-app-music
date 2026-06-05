@@ -16,7 +16,7 @@ function ArtistScrapeButton({ artistId }: { artistId: string }) {
     <button
       type="button"
       title="重新刮削艺术家信息"
-      className="inline-flex cursor-pointer items-center gap-1 text-xs text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+      className="inline-flex cursor-pointer items-center gap-1 text-xs text-[var(--color-fg-muted)] transition-colors hover:text-[var(--color-fg-secondary)]"
       onClick={() => scrape.mutate(artistId)}
       disabled={scrape.isPending}
     >
@@ -73,7 +73,7 @@ export default function MusicArtistPage() {
   if (!artist) {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
-        <p className="text-[var(--text-muted)]">未找到该艺术家</p>
+        <p className="text-[var(--color-fg-muted)]">未找到该艺术家</p>
         <Button onClick={() => goBack()}>返回</Button>
       </div>
     );
@@ -108,43 +108,43 @@ export default function MusicArtistPage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-[var(--bg-skeleton)]">
-                  <User className="h-20 w-20 text-[var(--text-muted)]" />
+                <div className="flex h-full w-full items-center justify-center bg-[var(--color-fill-skeleton)]">
+                  <User className="h-20 w-20 text-[var(--color-fg-muted)]" />
                 </div>
               )}
             </div>
 
             {/* Info */}
             <div className="min-w-0 flex-1 text-center md:text-left">
-              <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
+              <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-fg-muted)]">
                 艺术家
               </p>
-              <h1 className="mt-1 text-3xl font-bold text-[var(--text-primary)]">
+              <h1 className="mt-1 text-3xl font-bold text-[var(--color-fg-primary)]">
                 {artist.name}
               </h1>
 
               {artist.originalName && artist.originalName !== artist.name && (
-                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                <p className="mt-1 text-sm text-[var(--color-fg-muted)]">
                   {artist.originalName}
                 </p>
               )}
 
               {artist.aliases && artist.aliases.length > 0 && (
-                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                <p className="mt-1 text-sm text-[var(--color-fg-muted)]">
                   别名：{artist.aliases.join("、")}
                 </p>
               )}
 
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--text-secondary)] md:justify-start">
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--color-fg-secondary)] md:justify-start">
                 <span>{artist.albumCount} 张专辑</span>
-                <span className="text-[var(--text-muted)]">·</span>
+                <span className="text-[var(--color-fg-muted)]">·</span>
                 <span>{artist.trackCount} 首曲目</span>
-                <span className="text-[var(--text-muted)]">·</span>
+                <span className="text-[var(--color-fg-muted)]">·</span>
                 <ArtistScrapeButton artistId={artist.id} />
               </div>
 
               {(artist.birthday || artist.birthplace) && (
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm text-[var(--text-secondary)] md:justify-start">
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm text-[var(--color-fg-secondary)] md:justify-start">
                   {artist.birthday && <span>🎂 {artist.birthday}</span>}
                   {artist.birthplace && <span>📍 {artist.birthplace}</span>}
                 </div>
@@ -159,7 +159,7 @@ export default function MusicArtistPage() {
           {artist.biography && (
             <div className="mb-8">
               <SectionTitle>简介</SectionTitle>
-              <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+              <p className="text-sm leading-relaxed text-[var(--color-fg-secondary)]">
                 {artist.biography}
               </p>
             </div>

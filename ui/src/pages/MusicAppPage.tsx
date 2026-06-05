@@ -56,17 +56,17 @@ function TrackRow({
     <button
       type="button"
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
-        isActive ? "bg-[var(--accent)]/10" : "hover:bg-[var(--fill-tertiary)]"
+        isActive ? "bg-[var(--color-accent)]/10" : "hover:bg-[var(--color-fill-tertiary)]"
       }`}
       onClick={isActive ? togglePlay : onPlay}
     >
-      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--text-muted)]">
+      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--color-fg-muted)]">
         {isActive ? (
           isPlaying ? (
-            <Pause className="mx-auto h-4 w-4 text-[var(--accent)]" />
+            <Pause className="mx-auto h-4 w-4 text-[var(--color-accent)]" />
           ) : (
             <Play
-              className="mx-auto h-4 w-4 text-[var(--accent)]"
+              className="mx-auto h-4 w-4 text-[var(--color-accent)]"
               fill="currentColor"
             />
           )
@@ -82,18 +82,18 @@ function TrackRow({
       </span>
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-sm font-medium ${isActive ? "text-[var(--accent)]" : "text-[var(--text-primary)]"}`}
+          className={`truncate text-sm font-medium ${isActive ? "text-[var(--color-accent)]" : "text-[var(--color-fg-primary)]"}`}
         >
           {track.title}
         </p>
       </div>
-      <span className="hidden w-[140px] flex-shrink-0 truncate text-xs text-[var(--text-muted)] sm:block">
+      <span className="hidden w-[140px] flex-shrink-0 truncate text-xs text-[var(--color-fg-muted)] sm:block">
         {track.artistName || "未知"}
       </span>
-      <span className="hidden w-[180px] flex-shrink-0 truncate text-xs text-[var(--text-muted)] md:block">
+      <span className="hidden w-[180px] flex-shrink-0 truncate text-xs text-[var(--color-fg-muted)] md:block">
         {track.albumTitle || ""}
       </span>
-      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--text-muted)]">
+      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--color-fg-muted)]">
         {formatDuration(track.duration)}
       </span>
     </button>
@@ -244,7 +244,7 @@ export default function MusicAppPage() {
               >
                 上一页
               </Button>
-              <span className="text-sm text-[var(--text-muted)]">
+              <span className="text-sm text-[var(--color-fg-muted)]">
                 {page} / {totalPages}
               </span>
               <Button
@@ -314,9 +314,9 @@ function TracksTable({
 }) {
   if (!tracks.length) return <Empty description="暂无曲目" />;
   return (
-    <div className="rounded-lg border border-border-base bg-[var(--bg-glass)]">
+    <div className="rounded-lg border border-border-base bg-[var(--color-surface-overlay)]">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border-base px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
+      <div className="flex items-center gap-3 border-b border-border-base px-3 py-2 text-xs font-medium text-[var(--color-fg-muted)]">
         <span className="w-8 flex-shrink-0 text-center">#</span>
         <span className="min-w-0 flex-1">标题</span>
         <span className="hidden w-[140px] flex-shrink-0 sm:block">艺术家</span>
@@ -326,7 +326,7 @@ function TracksTable({
         </span>
       </div>
       {/* Rows */}
-      <div className="divide-y divide-[var(--border-base)]">
+      <div className="divide-y divide-[var(--color-border-base)]">
         {tracks.map((track, i) => (
           <TrackRow
             key={track.id}

@@ -88,7 +88,7 @@ function KaraokeText({
   return (
     <span className="relative inline-block">
       <span className="text-neutral-300 dark:text-neutral-500">{text}</span>
-      <span ref={clipRef} className="absolute inset-0 text-[var(--accent)]">
+      <span ref={clipRef} className="absolute inset-0 text-[var(--color-accent)]">
         {text}
       </span>
     </span>
@@ -297,7 +297,7 @@ function LiveSeekBar({
       >
         <div
           ref={fillRef}
-          className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)]"
+          className="absolute inset-y-0 left-0 rounded-full bg-[var(--color-accent)]"
           style={{ width: "0%" }}
         />
         <div
@@ -453,12 +453,12 @@ export function FullScreenPlayer({
     });
   }, [playerPref]);
 
-  // Read CSS --accent hex for canvas drawing
+  // Read CSS --color-accent hex for canvas drawing
   const accentHex = useMemo(() => {
     if (typeof document === "undefined") return "#10b981";
     return (
       getComputedStyle(document.documentElement)
-        .getPropertyValue("--accent")
+        .getPropertyValue("--color-accent")
         .trim() || "#10b981"
     );
   }, []);
@@ -940,7 +940,7 @@ export function FullScreenPlayer({
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-full",
                   shuffleEnabled
-                    ? "text-[var(--accent)]"
+                    ? "text-[var(--color-accent)]"
                     : "text-white/40 hover:text-white/70",
                 )}
               >
@@ -961,7 +961,7 @@ export function FullScreenPlayer({
                   "flex h-14 w-14 items-center justify-center rounded-full",
                   isLoading
                     ? "bg-white/20"
-                    : "bg-[var(--accent)] hover:opacity-90",
+                    : "bg-[var(--color-accent)] hover:opacity-90",
                 )}
               >
                 {isPlaying ? (
@@ -983,7 +983,7 @@ export function FullScreenPlayer({
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-full",
                   repeatMode !== "off"
-                    ? "text-[var(--accent)]"
+                    ? "text-[var(--color-accent)]"
                     : "text-white/40 hover:text-white/70",
                 )}
               >
@@ -1068,7 +1068,7 @@ export function FullScreenPlayer({
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-full",
                   shuffleEnabled
-                    ? "text-[var(--accent)]"
+                    ? "text-[var(--color-accent)]"
                     : "text-white/40 hover:text-white/70",
                 )}
               >
@@ -1091,7 +1091,7 @@ export function FullScreenPlayer({
                   "flex h-14 w-14 items-center justify-center rounded-full",
                   isLoading
                     ? "bg-white/20"
-                    : "bg-[var(--accent)] hover:opacity-90",
+                    : "bg-[var(--color-accent)] hover:opacity-90",
                 )}
               >
                 {isPlaying ? (
@@ -1115,7 +1115,7 @@ export function FullScreenPlayer({
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-full",
                   repeatMode !== "off"
-                    ? "text-[var(--accent)]"
+                    ? "text-[var(--color-accent)]"
                     : "text-white/40 hover:text-white/70",
                 )}
               >

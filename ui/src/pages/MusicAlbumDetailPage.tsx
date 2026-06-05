@@ -40,7 +40,7 @@ function FavoriteButton({
       className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-transform hover:scale-110 ${
         isFavorite
           ? "text-red-500"
-          : "text-[var(--text-muted)] hover:text-red-400"
+          : "text-[var(--color-fg-muted)] hover:text-red-400"
       }`}
       onClick={() => toggle.mutate(albumId!)}
     >
@@ -141,7 +141,7 @@ function TrackRow({
       role="button"
       tabIndex={0}
       className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
-        isActive ? "bg-[var(--accent)]/10" : "hover:bg-[var(--fill-tertiary)]"
+        isActive ? "bg-[var(--color-accent)]/10" : "hover:bg-[var(--color-fill-tertiary)]"
       }`}
       onClick={isActive ? togglePlay : handlePlay}
       onKeyDown={(e) => {
@@ -152,13 +152,13 @@ function TrackRow({
       }}
     >
       {/* Track number */}
-      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--text-muted)]">
+      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--color-fg-muted)]">
         {isActive ? (
           isPlaying ? (
-            <Pause className="mx-auto h-4 w-4 text-[var(--accent)]" />
+            <Pause className="mx-auto h-4 w-4 text-[var(--color-accent)]" />
           ) : (
             <Play
-              className="mx-auto h-4 w-4 text-[var(--accent)]"
+              className="mx-auto h-4 w-4 text-[var(--color-accent)]"
               fill="currentColor"
             />
           )
@@ -179,20 +179,20 @@ function TrackRow({
       <div className="min-w-0 flex-1">
         <p
           className={`truncate text-sm font-medium ${
-            isActive ? "text-[var(--accent)]" : "text-[var(--text-primary)]"
+            isActive ? "text-[var(--color-accent)]" : "text-[var(--color-fg-primary)]"
           }`}
         >
           {track.title}
         </p>
         {track.artistName && (
-          <p className="truncate text-xs text-[var(--text-muted)]">
+          <p className="truncate text-xs text-[var(--color-fg-muted)]">
             {track.artistName}
           </p>
         )}
       </div>
 
       {/* Duration */}
-      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--text-muted)]">
+      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--color-fg-muted)]">
         {formatDuration(track.duration)}
       </span>
 
@@ -200,10 +200,10 @@ function TrackRow({
       <button
         type="button"
         title="添加到队列"
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-[var(--fill-tertiary)] group-hover:opacity-100"
+        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-[var(--color-fill-tertiary)] group-hover:opacity-100"
         onClick={handleAddToQueue}
       >
-        <ListPlus className="h-4 w-4 text-[var(--text-muted)]" />
+        <ListPlus className="h-4 w-4 text-[var(--color-fg-muted)]" />
       </button>
 
       {/* More menu */}
@@ -211,19 +211,19 @@ function TrackRow({
         <button
           type="button"
           title="更多操作"
-          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-[var(--fill-tertiary)] group-hover:opacity-100"
+          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-[var(--color-fill-tertiary)] group-hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             setMenuOpen((v) => !v);
           }}
         >
-          <MoreHorizontal className="h-4 w-4 text-[var(--text-muted)]" />
+          <MoreHorizontal className="h-4 w-4 text-[var(--color-fg-muted)]" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-8 z-50 min-w-[140px] rounded-lg border border-border-base bg-[var(--bg-elevated)] py-1 shadow-lg">
+          <div className="absolute right-0 top-8 z-50 min-w-[140px] rounded-lg border border-border-base bg-[var(--color-surface-raised)] py-1 shadow-lg">
             <button
               type="button"
-              className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--fill-tertiary)]"
+              className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--color-fg-secondary)] hover:bg-[var(--color-fill-tertiary)]"
               onClick={(e) => {
                 e.stopPropagation();
                 scrapeLyrics.mutate(track.id);
@@ -296,7 +296,7 @@ export default function MusicAlbumDetailPage() {
   if (!album) {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
-        <p className="text-[var(--text-muted)]">未找到该专辑</p>
+        <p className="text-[var(--color-fg-muted)]">未找到该专辑</p>
         <Button onClick={() => goBack()}>返回</Button>
       </div>
     );
@@ -357,8 +357,8 @@ export default function MusicAlbumDetailPage() {
                   className="aspect-square w-full object-cover"
                 />
               ) : (
-                <div className="flex aspect-square w-full items-center justify-center bg-[var(--bg-skeleton)]">
-                  <Disc3 className="h-20 w-20 text-[var(--text-muted)]" />
+                <div className="flex aspect-square w-full items-center justify-center bg-[var(--color-fill-skeleton)]">
+                  <Disc3 className="h-20 w-20 text-[var(--color-fg-muted)]" />
                 </div>
               )}
               {/* Play overlay */}
@@ -368,7 +368,7 @@ export default function MusicAlbumDetailPage() {
                 className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-xl bg-black/30 opacity-0 transition-opacity hover:opacity-100"
                 onClick={handlePlayAll}
               >
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] shadow-lg">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-accent)] shadow-lg">
                   <Play className="h-7 w-7 text-white" fill="white" />
                 </span>
               </button>
@@ -377,7 +377,7 @@ export default function MusicAlbumDetailPage() {
             {/* Info */}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
+                <h1 className="text-3xl font-bold leading-tight text-[var(--color-fg-primary)]">
                   {album.title}
                 </h1>
                 <FavoriteButton
@@ -390,7 +390,7 @@ export default function MusicAlbumDetailPage() {
               {artistName && (
                 <button
                   type="button"
-                  className="mt-1 cursor-pointer text-sm text-[var(--accent)] hover:underline"
+                  className="mt-1 cursor-pointer text-sm text-[var(--color-accent)] hover:underline"
                   onClick={() => {
                     const artist = credits.find(
                       (c) =>
@@ -412,27 +412,27 @@ export default function MusicAlbumDetailPage() {
               )}
 
               {/* Meta line */}
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--color-fg-secondary)]">
                 {album.year && <span>{album.year}</span>}
                 {album.albumType && (
                   <>
-                    <span className="text-[var(--text-muted)]">·</span>
+                    <span className="text-[var(--color-fg-muted)]">·</span>
                     <span>{album.albumType}</span>
                   </>
                 )}
                 {album.trackCount > 0 && (
                   <>
-                    <span className="text-[var(--text-muted)]">·</span>
+                    <span className="text-[var(--color-fg-muted)]">·</span>
                     <span>{album.trackCount} 首曲目</span>
                   </>
                 )}
                 {album.totalDuration && (
                   <>
-                    <span className="text-[var(--text-muted)]">·</span>
+                    <span className="text-[var(--color-fg-muted)]">·</span>
                     <span>{formatTotalDuration(album.totalDuration)}</span>
                   </>
                 )}
-                <span className="text-[var(--text-muted)]">·</span>
+                <span className="text-[var(--color-fg-muted)]">·</span>
                 <ScrapeButton albumId={album.id} scraped={!!album.scrapedAt} />
               </div>
 
@@ -451,7 +451,7 @@ export default function MusicAlbumDetailPage() {
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  className="flex cursor-pointer items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-2.5 font-semibold text-white hover:opacity-90"
+                  className="flex cursor-pointer items-center gap-2 rounded-lg bg-[var(--color-accent)] px-5 py-2.5 font-semibold text-white hover:opacity-90"
                   onClick={handlePlayAll}
                 >
                   <Play className="h-5 w-5" fill="white" />
@@ -459,7 +459,7 @@ export default function MusicAlbumDetailPage() {
                 </button>
                 <button
                   type="button"
-                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-border-base bg-[var(--bg-glass)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-glass-hover)]"
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-border-base bg-[var(--color-surface-overlay)] px-4 py-2.5 text-sm font-medium text-[var(--color-fg-secondary)] hover:bg-[var(--color-surface-overlay-hover)]"
                   onClick={handleAddAllToQueue}
                 >
                   <ListPlus className="h-4 w-4" />
@@ -475,16 +475,16 @@ export default function MusicAlbumDetailPage() {
           {album.overview && (
             <div className="mb-6">
               <SectionTitle>简介</SectionTitle>
-              <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+              <p className="text-sm leading-relaxed text-[var(--color-fg-secondary)]">
                 {album.overview}
               </p>
             </div>
           )}
 
           <SectionTitle>曲目列表</SectionTitle>
-          <div className="rounded-lg border border-border-base bg-[var(--bg-glass)]">
+          <div className="rounded-lg border border-border-base bg-[var(--color-surface-overlay)]">
             {/* Table header */}
-            <div className="flex items-center gap-3 border-b border-border-base px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
+            <div className="flex items-center gap-3 border-b border-border-base px-3 py-2 text-xs font-medium text-[var(--color-fg-muted)]">
               <span className="w-8 flex-shrink-0 text-center">#</span>
               <span className="min-w-0 flex-1">标题</span>
               <span className="w-[50px] flex-shrink-0 text-right">
@@ -505,11 +505,11 @@ export default function MusicAlbumDetailPage() {
               return (
                 <div key={discNum}>
                   {hasMultiDisc && (
-                    <div className="border-b border-border-base bg-[var(--fill-tertiary)] px-4 py-1.5 text-xs font-semibold text-[var(--text-secondary)]">
+                    <div className="border-b border-border-base bg-[var(--color-fill-tertiary)] px-4 py-1.5 text-xs font-semibold text-[var(--color-fg-secondary)]">
                       光碟 {discNum}
                     </div>
                   )}
-                  <div className="divide-y divide-[var(--border-base)]">
+                  <div className="divide-y divide-[var(--color-border-base)]">
                     {discTracks.map((track, i) => (
                       <TrackRow
                         key={track.id}

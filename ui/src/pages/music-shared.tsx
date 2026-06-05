@@ -31,10 +31,10 @@ export const AlbumCard = memo(function AlbumCard({
   return (
     <button
       type="button"
-      className="group w-full cursor-pointer overflow-hidden rounded-lg border border-border-base bg-[var(--bg-glass)] text-left transition-shadow hover:shadow-md"
+      className="group w-full cursor-pointer overflow-hidden rounded-lg border border-border-base bg-[var(--color-surface-overlay)] text-left transition-shadow hover:shadow-md"
       onClick={onClick}
     >
-      <div className="relative aspect-square overflow-hidden bg-[var(--bg-skeleton)]">
+      <div className="relative aspect-square overflow-hidden bg-[var(--color-fill-skeleton)]">
         {album.coverPath ? (
           <img
             src={posterThumbUrl(album.coverPath, 200) ?? undefined}
@@ -43,13 +43,13 @@ export const AlbumCard = memo(function AlbumCard({
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-[var(--text-muted)]">
+          <div className="flex h-full items-center justify-center text-[var(--color-fg-muted)]">
             <Disc3 className="h-12 w-12" />
           </div>
         )}
         {/* Play overlay */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent)] shadow-lg">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent)] shadow-lg">
             <Play className="h-6 w-6 text-white" fill="white" />
           </span>
         </div>
@@ -72,13 +72,13 @@ export const AlbumCard = memo(function AlbumCard({
       </div>
       <div className="flex h-[52px] flex-col justify-center px-2.5 py-1.5">
         <p
-          className="truncate text-sm font-medium text-[var(--text-primary)]"
+          className="truncate text-sm font-medium text-[var(--color-fg-primary)]"
           title={album.title}
         >
           {album.title}
         </p>
         <p
-          className="truncate text-xs text-[var(--text-muted)]"
+          className="truncate text-xs text-[var(--color-fg-muted)]"
           title={album.artistName ?? undefined}
         >
           {album.artistName || "未知艺术家"}
@@ -100,10 +100,10 @@ export const ArtistCard = memo(function ArtistCard({
   return (
     <button
       type="button"
-      className="group flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-border-base bg-[var(--bg-glass)] p-4 text-center transition-shadow hover:shadow-md"
+      className="group flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-border-base bg-[var(--color-surface-overlay)] p-4 text-center transition-shadow hover:shadow-md"
       onClick={onClick}
     >
-      <div className="relative aspect-square w-full overflow-hidden rounded-full bg-[var(--bg-skeleton)]">
+      <div className="relative aspect-square w-full overflow-hidden rounded-full bg-[var(--color-fill-skeleton)]">
         {artist.profilePath ? (
           <img
             src={posterThumbUrl(artist.profilePath, 200) ?? undefined}
@@ -112,19 +112,19 @@ export const ArtistCard = memo(function ArtistCard({
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-[var(--text-muted)]">
+          <div className="flex h-full items-center justify-center text-[var(--color-fg-muted)]">
             <User className="h-10 w-10" />
           </div>
         )}
       </div>
       <div className="w-full">
         <p
-          className="truncate text-sm font-medium text-[var(--text-primary)]"
+          className="truncate text-sm font-medium text-[var(--color-fg-primary)]"
           title={artist.name}
         >
           {artist.name}
         </p>
-        <p className="text-xs text-[var(--text-muted)]">
+        <p className="text-xs text-[var(--color-fg-muted)]">
           {artist.albumCount} 张专辑
           {artist.trackCount > 0 && ` · ${artist.trackCount} 首歌`}
         </p>

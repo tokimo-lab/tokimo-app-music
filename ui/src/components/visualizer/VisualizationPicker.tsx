@@ -141,14 +141,14 @@ export function VisualizationPicker({
                   "flex flex-col items-center gap-1.5 rounded-xl p-3 transition-colors",
                   "backdrop-blur-sm",
                   isSelected
-                    ? "bg-white/20 ring-2 ring-[var(--accent)]"
+                    ? "bg-white/20 ring-2 ring-[var(--color-accent)]"
                     : "bg-white/10 hover:bg-white/15",
                 )}
               >
                 <Icon
                   className={cn(
                     "h-6 w-6",
-                    isSelected ? "text-[var(--accent)]" : "text-white/60",
+                    isSelected ? "text-[var(--color-accent)]" : "text-white/60",
                   )}
                 />
                 <span
@@ -172,14 +172,14 @@ export function VisualizationPicker({
             className={cn(
               "flex w-full items-center gap-3 rounded-xl p-3 transition-colors",
               coverBgEnabled
-                ? "bg-white/20 ring-2 ring-[var(--accent)]"
+                ? "bg-white/20 ring-2 ring-[var(--color-accent)]"
                 : "bg-white/10 hover:bg-white/15",
             )}
           >
             <ImageIcon
               className={cn(
                 "h-5 w-5",
-                coverBgEnabled ? "text-[var(--accent)]" : "text-white/60",
+                coverBgEnabled ? "text-[var(--color-accent)]" : "text-white/60",
               )}
             />
             <div className="flex flex-col items-start">
@@ -205,7 +205,7 @@ export function VisualizationPicker({
               className={cn(
                 "mt-2 flex w-full items-center gap-3 rounded-xl p-3 transition-colors",
                 alchemyAmbientEnabled
-                  ? "bg-white/20 ring-2 ring-[var(--accent)]"
+                  ? "bg-white/20 ring-2 ring-[var(--color-accent)]"
                   : "bg-white/10 hover:bg-white/15",
               )}
             >
@@ -213,7 +213,7 @@ export function VisualizationPicker({
                 className={cn(
                   "h-5 w-5",
                   alchemyAmbientEnabled
-                    ? "text-[var(--accent)]"
+                    ? "text-[var(--color-accent)]"
                     : "text-white/60",
                 )}
               />

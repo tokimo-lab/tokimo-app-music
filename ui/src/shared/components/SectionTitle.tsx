@@ -2,7 +2,7 @@ import { User } from "lucide-react";
 
 export function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="mb-4 text-xl font-bold text-[var(--text-primary)]">
+    <h2 className="mb-4 text-xl font-bold text-[var(--color-fg-primary)]">
       {children}
     </h2>
   );
@@ -19,7 +19,7 @@ export function PersonCard({
 }) {
   return (
     <div className="w-28 shrink-0 text-center">
-      <div className="mx-auto mb-2 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-skeleton)]">
+      <div className="mx-auto mb-2 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[var(--color-fill-skeleton)]">
         {profilePath ? (
           <img
             src={profilePath}
@@ -27,14 +27,14 @@ export function PersonCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <User className="h-8 w-8 text-[var(--text-muted)]" />
+          <User className="h-8 w-8 text-[var(--color-fg-muted)]" />
         )}
       </div>
-      <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+      <p className="truncate text-sm font-medium text-[var(--color-fg-primary)]">
         {name}
       </p>
       {sub && (
-        <p className="truncate text-xs text-[var(--text-muted)]">{sub}</p>
+        <p className="truncate text-xs text-[var(--color-fg-muted)]">{sub}</p>
       )}
     </div>
   );

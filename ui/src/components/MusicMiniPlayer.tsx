@@ -60,16 +60,16 @@ function MiniKaraokeText({
   }, [progressRef]);
 
   return (
-    <span className="relative inline-block max-w-full truncate text-sm text-[var(--text-muted)]">
+    <span className="relative inline-block max-w-full truncate text-sm text-[var(--color-fg-muted)]">
       <span aria-hidden className="invisible">
         {text}
       </span>
-      <span className="absolute inset-0 truncate text-[var(--text-muted)]">
+      <span className="absolute inset-0 truncate text-[var(--color-fg-muted)]">
         {text}
       </span>
       <span
         ref={clipRef}
-        className="absolute inset-0 truncate text-[var(--accent)]"
+        className="absolute inset-0 truncate text-[var(--color-accent)]"
       >
         {text}
       </span>
@@ -126,7 +126,7 @@ function LiveProgressBar({
       aria-valuenow={0}
       aria-valuemin={0}
       aria-valuemax={100}
-      className="group/progress relative h-1 w-full cursor-pointer bg-[var(--fill-tertiary)] transition-[height] hover:h-1.5"
+      className="group/progress relative h-1 w-full cursor-pointer bg-[var(--color-fill-tertiary)] transition-[height] hover:h-1.5"
       onClick={handleClick}
       onKeyDown={(e) => {
         const d = getDuration();
@@ -139,7 +139,7 @@ function LiveProgressBar({
     >
       <div
         ref={fillRef}
-        className="absolute inset-y-0 left-0 bg-[var(--accent)]"
+        className="absolute inset-y-0 left-0 bg-[var(--color-accent)]"
         style={{ width: "0%" }}
       />
     </div>
@@ -170,7 +170,7 @@ function LiveTimeDisplay({
   }, [getCurrentTime, getDuration]);
 
   return (
-    <div className="hidden items-center gap-1 text-xs tabular-nums text-[var(--text-muted)] md:flex">
+    <div className="hidden items-center gap-1 text-xs tabular-nums text-[var(--color-fg-muted)] md:flex">
       <span ref={elapsedRef}>0:00</span>
       <span>/</span>
       <span ref={totalRef}>0:00</span>
@@ -206,7 +206,7 @@ function VolumeControl({
         <button
           type="button"
           onClick={toggleMute}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:text-[var(--color-fg-primary)]"
         >
           {volume > 0 ? (
             <Volume2 className="h-4 w-4" />
@@ -216,7 +216,7 @@ function VolumeControl({
         </button>
       </Tooltip>
 
-      <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded-lg bg-[var(--bg-elevated)] p-2 opacity-0 shadow-lg transition-opacity group-hover/vol:pointer-events-auto group-hover/vol:opacity-100">
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded-lg bg-[var(--color-surface-raised)] p-2 opacity-0 shadow-lg transition-opacity group-hover/vol:pointer-events-auto group-hover/vol:opacity-100">
         <input
           type="range"
           min={0}
@@ -224,7 +224,7 @@ function VolumeControl({
           step={0.01}
           value={volume}
           onChange={(e) => onVolumeChange(Number.parseFloat(e.target.value))}
-          className="h-24 w-1 cursor-pointer accent-[var(--accent)] [writing-mode:vertical-lr] [direction:rtl]"
+          className="h-24 w-1 cursor-pointer accent-[var(--color-accent)] [writing-mode:vertical-lr] [direction:rtl]"
         />
       </div>
     </div>
@@ -281,7 +281,7 @@ export function MusicMiniPlayer() {
   return (
     <>
       <div
-        className="flex shrink-0 flex-col border-t border-border-base bg-[var(--bg-glass)] backdrop-blur-md select-none"
+        className="flex shrink-0 flex-col border-t border-border-base bg-[var(--color-surface-overlay)] backdrop-blur-md select-none"
         style={{ height: `${MUSIC_MINI_PLAYER_HEIGHT_PX}px` }}
       >
         {/* Top progress bar */}
@@ -298,7 +298,7 @@ export function MusicMiniPlayer() {
             <button
               type="button"
               onClick={() => setFullScreen(true)}
-              className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-[var(--fill-tertiary)] transition-transform hover:scale-105"
+              className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-[var(--color-fill-tertiary)] transition-transform hover:scale-105"
               title="全屏播放器"
             >
               {coverUrl ? (
@@ -314,17 +314,17 @@ export function MusicMiniPlayer() {
               ) : (
                 <Disc3
                   className={cn(
-                    "h-6 w-6 text-[var(--text-muted)]",
+                    "h-6 w-6 text-[var(--color-fg-muted)]",
                     isPlaying && "animate-[spin_3s_linear_infinite]",
                   )}
                 />
               )}
             </button>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+              <p className="truncate text-sm font-medium text-[var(--color-fg-primary)]">
                 {currentTrack.title}
               </p>
-              <p className="truncate text-xs text-[var(--text-muted)]">
+              <p className="truncate text-xs text-[var(--color-fg-muted)]">
                 {currentTrack.artistName ?? "未知艺术家"}
               </p>
             </div>
@@ -343,7 +343,7 @@ export function MusicMiniPlayer() {
               <button
                 type="button"
                 onClick={previous}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-fg-secondary)] hover:text-[var(--color-fg-primary)]"
               >
                 <SkipBack className="h-4 w-4" />
               </button>
@@ -361,8 +361,8 @@ export function MusicMiniPlayer() {
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-full text-white",
                   isLoading
-                    ? "bg-[var(--text-muted)]"
-                    : "bg-[var(--accent)] hover:opacity-90",
+                    ? "bg-[var(--color-fg-muted)]"
+                    : "bg-[var(--color-accent)] hover:opacity-90",
                 )}
               >
                 {isPlaying ? (
@@ -377,7 +377,7 @@ export function MusicMiniPlayer() {
               <button
                 type="button"
                 onClick={next}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-fg-secondary)] hover:text-[var(--color-fg-primary)]"
               >
                 <SkipForward className="h-4 w-4" />
               </button>
@@ -405,8 +405,8 @@ export function MusicMiniPlayer() {
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full",
                   shuffleEnabled
-                    ? "text-[var(--accent)]"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
+                    ? "text-[var(--color-accent)]"
+                    : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg-secondary)]",
                 )}
               >
                 <Shuffle className="h-4 w-4" />
@@ -430,8 +430,8 @@ export function MusicMiniPlayer() {
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full",
                   repeatMode !== "off"
-                    ? "text-[var(--accent)]"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
+                    ? "text-[var(--color-accent)]"
+                    : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg-secondary)]",
                 )}
               >
                 <RepeatIcon className="h-4 w-4" />
@@ -445,8 +445,8 @@ export function MusicMiniPlayer() {
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full",
                   queueOpen
-                    ? "text-[var(--accent)]"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
+                    ? "text-[var(--color-accent)]"
+                    : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg-secondary)]",
                 )}
               >
                 <ListMusic className="h-4 w-4" />
@@ -459,7 +459,7 @@ export function MusicMiniPlayer() {
             <button
               type="button"
               onClick={clearQueue}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-red-500/10 hover:text-red-500"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:bg-red-500/10 hover:text-red-500"
             >
               <X className="h-4 w-4" />
             </button>
