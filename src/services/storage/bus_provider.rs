@@ -30,7 +30,12 @@ impl BusStorageProvider {
 
 #[async_trait]
 impl StorageProvider for BusStorageProvider {
-    async fn upload(&self, _key: &str, body: Bytes, options: Option<UploadOptions>) -> Result<String, String> {
+    async fn upload(
+        &self,
+        _key: &str,
+        body: Bytes,
+        options: Option<UploadOptions>,
+    ) -> Result<String, String> {
         let client = self.client()?;
 
         let req = serde_json::json!({
@@ -64,9 +69,7 @@ impl StorageProvider for BusStorageProvider {
 
         let result: serde_json::Value =
             serde_json::from_slice(&resp).map_err(|e| format!("decode: {e}"))?;
-        let data_b64 = result["dataBase64"]
-            .as_str()
-            .ok_or("missing dataBase64")?;
+        let data_b64 = result["dataBase64"].as_str().ok_or("missing dataBase64")?;
         let data = base64::engine::general_purpose::STANDARD
             .decode(data_b64)
             .map_err(|e| format!("base64 decode: {e}"))?;

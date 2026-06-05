@@ -8,9 +8,9 @@ use axum::{http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::db::ApiDateTimeExt;
 use crate::db::entities::vfs;
 use crate::db::repos::MusicRepo;
-use crate::db::ApiDateTimeExt;
 use crate::error::AppError;
 
 pub use browse::*;
@@ -46,7 +46,10 @@ pub fn ok_empty() -> Json<ApiResponse<()>> {
 }
 
 #[allow(dead_code)] // kept from presplit — wired up later
-pub fn err_resp<T: Serialize>(status: StatusCode, msg: String) -> (StatusCode, Json<ApiResponse<T>>) {
+pub fn err_resp<T: Serialize>(
+    status: StatusCode,
+    msg: String,
+) -> (StatusCode, Json<ApiResponse<T>>) {
     (
         status,
         Json(ApiResponse {

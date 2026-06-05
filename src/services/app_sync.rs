@@ -5,7 +5,7 @@ use std::{
 };
 
 use chrono::Utc;
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, TransactionTrait};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
 use serde::Serialize;
 use serde_json::json;
 use tokimo_bus_client::BusClient;
@@ -87,11 +87,23 @@ impl AppSyncService {
         let result = run_sync(db, sources, &bus_client, music_id, user_id).await;
         match result {
             Ok(result) => {
-                MusicRepo::update_sync_status(db, music_id, "completed", Some(Utc::now().fixed_offset())).await?;
+                MusicRepo::update_sync_status(
+                    db,
+                    music_id,
+                    "completed",
+                    Some(Utc::now().fixed_offset()),
+                )
+                .await?;
                 Ok(result)
             }
             Err(error) => {
-                let _ = MusicRepo::update_sync_status(db, music_id, "failed", Some(Utc::now().fixed_offset())).await;
+                let _ = MusicRepo::update_sync_status(
+                    db,
+                    music_id,
+                    "failed",
+                    Some(Utc::now().fixed_offset()),
+                )
+                .await;
                 Err(error)
             }
         }
@@ -112,7 +124,10 @@ async fn run_sync(
     info!(music_id = %music_id, source_count = source_roots.len(), "music sync: parsed sources");
     if source_roots.is_empty() {
         warn!(music_id = %music_id, "music sync: no sources configured, returning 0 jobs");
-        return Ok(SyncResult { total_files: 0, total_jobs: 0 });
+        return Ok(SyncResult {
+            total_files: 0,
+            total_jobs: 0,
+        });
     }
 
     let Some(client) = bus_client.get() else {
@@ -155,7 +170,10 @@ async fn run_sync(
         total_jobs += 1;
     }
 
-    Ok(SyncResult { total_files, total_jobs })
+    Ok(SyncResult {
+        total_files,
+        total_jobs,
+    })
 }
 
 struct AudioFile {
@@ -166,7 +184,11 @@ struct AudioFile {
     size: i64,
 }
 
-async fn collect_audio_files(vfs: &Vfs, source_id: Uuid, root_path: &str) -> Result<Vec<AudioFile>, AppError> {
+async fn collect_audio_files(
+    vfs: &Vfs,
+    source_id: Uuid,
+    root_path: &str,
+) -> Result<Vec<AudioFile>, AppError> {
     let mut files = Vec::new();
     let mut queue = VecDeque::from([PathBuf::from(root_path)]);
     let root = PathBuf::from(root_path);
@@ -209,6 +231,11 @@ async fn collect_audio_files(vfs: &Vfs, source_id: Uuid, root_path: &str) -> Res
 fn is_audio_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| matches!(ext.to_ascii_lowercase().as_str(), "mp3" | "flac" | "m4a" | "aac" | "ogg" | "opus" | "wav" | "aiff" | "alac"))
+        .map(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "mp3" | "flac" | "m4a" | "aac" | "ogg" | "opus" | "wav" | "aiff" | "alac"
+            )
+        })
         .unwrap_or(false)
 }

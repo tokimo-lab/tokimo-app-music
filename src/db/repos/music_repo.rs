@@ -41,7 +41,10 @@ impl MusicRepo {
         Ok(rows)
     }
 
-    pub async fn get_by_id<C: ConnectionTrait>(db: &C, id: Uuid) -> Result<Option<musics::Model>, AppError> {
+    pub async fn get_by_id<C: ConnectionTrait>(
+        db: &C,
+        id: Uuid,
+    ) -> Result<Option<musics::Model>, AppError> {
         Ok(musics::Entity::find_by_id(id).one(db).await?)
     }
 
@@ -120,7 +123,10 @@ impl MusicRepo {
     }
 
     /// Reorder music libraries. Uses transaction for atomicity.
-    pub async fn reorder(db: &DatabaseConnection, orders: Vec<(Uuid, i32)>) -> Result<(), AppError> {
+    pub async fn reorder(
+        db: &DatabaseConnection,
+        orders: Vec<(Uuid, i32)>,
+    ) -> Result<(), AppError> {
         let txn = db.begin().await?;
         for (id, sort_order) in orders {
             musics::Entity::update_many()
@@ -150,7 +156,10 @@ impl MusicRepo {
         let mut q = musics::Entity::update_many()
             .filter(musics::Column::Id.eq(id))
             .col_expr(musics::Column::SyncStatus, Expr::value(status.to_string()))
-            .col_expr(musics::Column::UpdatedAt, Expr::value(Some(Utc::now().fixed_offset())));
+            .col_expr(
+                musics::Column::UpdatedAt,
+                Expr::value(Some(Utc::now().fixed_offset())),
+            );
         if let Some(ts) = last_sync_at {
             q = q.col_expr(musics::Column::LastSyncAt, Expr::value(Some(ts)));
         }

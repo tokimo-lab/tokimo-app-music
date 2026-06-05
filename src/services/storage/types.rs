@@ -21,7 +21,12 @@ pub struct StorageObject {
 #[async_trait::async_trait]
 pub trait StorageProvider: Send + Sync {
     /// 上传文件。返回服务端生成的 storage key。
-    async fn upload(&self, key: &str, body: Bytes, options: Option<UploadOptions>) -> Result<String, String>;
+    async fn upload(
+        &self,
+        key: &str,
+        body: Bytes,
+        options: Option<UploadOptions>,
+    ) -> Result<String, String>;
 
     /// 以字节流形式下载文件，返回 (bytes, `content_type`)。
     async fn download(&self, key: &str) -> Result<Bytes, String>;

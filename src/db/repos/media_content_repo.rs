@@ -128,7 +128,10 @@ impl MediaContentRepo {
 
     // ── Music: Album Detail ──
 
-    pub async fn get_album_detail(db: &impl ConnectionTrait, album_id: Uuid) -> Result<Option<JsonValue>, AppError> {
+    pub async fn get_album_detail(
+        db: &impl ConnectionTrait,
+        album_id: Uuid,
+    ) -> Result<Option<JsonValue>, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "SELECT a.id, a.music_id, a.title, a.sort_title, a.year, \
@@ -168,13 +171,15 @@ impl MediaContentRepo {
             .iter()
             .map(|r| -> Result<JsonValue, AppError> {
                 let fid = get_opt::<Uuid>(r, "file_id")?;
-                let file = fid.map(|id| json!({
-                    "id": id.to_string(),
-                    "path": get_opt::<String>(r, "file_path").unwrap_or_default(),
-                    "filename": get_opt::<String>(r, "file_name").unwrap_or_default(),
-                    "size": get_opt::<i64>(r, "file_size").unwrap_or_default(),
-                    "mimeType": get_opt::<String>(r, "file_mime").unwrap_or_default(),
-                }));
+                let file = fid.map(|id| {
+                    json!({
+                        "id": id.to_string(),
+                        "path": get_opt::<String>(r, "file_path").unwrap_or_default(),
+                        "filename": get_opt::<String>(r, "file_name").unwrap_or_default(),
+                        "size": get_opt::<i64>(r, "file_size").unwrap_or_default(),
+                        "mimeType": get_opt::<String>(r, "file_mime").unwrap_or_default(),
+                    })
+                });
                 Ok(json!({
                     "id": get::<Uuid>(r, "id").map(|v| v.to_string()).unwrap_or_default(),
                     "albumId": &album_id_str,
@@ -205,7 +210,11 @@ impl MediaContentRepo {
             .as_ref()
             .and_then(|m| m.get("genres"))
             .and_then(|g| g.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
 
         Ok(Some(json!({
@@ -296,13 +305,15 @@ impl MediaContentRepo {
             .iter()
             .map(|r| -> Result<JsonValue, AppError> {
                 let fid = get_opt::<Uuid>(r, "file_id")?;
-                let file = fid.map(|id| json!({
-                    "id": id.to_string(),
-                    "path": get_opt::<String>(r, "file_path").unwrap_or_default(),
-                    "filename": get_opt::<String>(r, "file_name").unwrap_or_default(),
-                    "size": get_opt::<i64>(r, "file_size").unwrap_or_default(),
-                    "mimeType": get_opt::<String>(r, "file_mime").unwrap_or_default(),
-                }));
+                let file = fid.map(|id| {
+                    json!({
+                        "id": id.to_string(),
+                        "path": get_opt::<String>(r, "file_path").unwrap_or_default(),
+                        "filename": get_opt::<String>(r, "file_name").unwrap_or_default(),
+                        "size": get_opt::<i64>(r, "file_size").unwrap_or_default(),
+                        "mimeType": get_opt::<String>(r, "file_mime").unwrap_or_default(),
+                    })
+                });
                 Ok(json!({
                     "id": get::<Uuid>(r, "id")?.to_string(),
                     "title": get::<String>(r, "title")?,
@@ -462,33 +473,46 @@ impl MediaContentRepo {
 
     // ── Music: Toggle Album Favorite ──
 
-    pub async fn toggle_album_favorite(db: &impl ConnectionTrait, album_id: Uuid) -> Result<bool, AppError> {
+    pub async fn toggle_album_favorite(
+        db: &impl ConnectionTrait,
+        album_id: Uuid,
+    ) -> Result<bool, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "UPDATE music_albums SET is_favorite = NOT is_favorite WHERE id = $1 RETURNING is_favorite",
             [album_id.into()],
         );
-        let row = db.query_one_raw(stmt).await?
+        let row = db
+            .query_one_raw(stmt)
+            .await?
             .ok_or_else(|| AppError::NotFound(format!("album {album_id} not found")))?;
         get::<bool>(&row, "is_favorite")
     }
 
     // ── Track Lyrics ──
 
-    pub async fn get_track_lyrics(db: &impl ConnectionTrait, track_id: Uuid) -> Result<Option<String>, AppError> {
+    pub async fn get_track_lyrics(
+        db: &impl ConnectionTrait,
+        track_id: Uuid,
+    ) -> Result<Option<String>, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "SELECT lyrics_path FROM music_tracks WHERE id = $1",
             [track_id.into()],
         );
-        let row = db.query_one_raw(stmt).await?
+        let row = db
+            .query_one_raw(stmt)
+            .await?
             .ok_or_else(|| AppError::NotFound(format!("track {track_id} not found")))?;
         get_opt::<String>(&row, "lyrics_path")
     }
 
     // ── Album Credits ──
 
-    async fn query_album_credits(db: &impl ConnectionTrait, album_id: Uuid) -> Result<Vec<JsonValue>, AppError> {
+    async fn query_album_credits(
+        db: &impl ConnectionTrait,
+        album_id: Uuid,
+    ) -> Result<Vec<JsonValue>, AppError> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "SELECT aa.id, aa.role, NULL::text as character, aa.sort_order, \
@@ -517,12 +541,22 @@ impl MediaContentRepo {
 }
 
 fn dir(d: &str) -> &'static str {
-    if d.eq_ignore_ascii_case("desc") { "DESC" } else { "ASC" }
+    if d.eq_ignore_ascii_case("desc") {
+        "DESC"
+    } else {
+        "ASC"
+    }
 }
 
-async fn query_count<'a>(db: &'a impl ConnectionTrait, sql: &'a str, params: Vec<Value>) -> Result<i64, AppError> {
+async fn query_count<'a>(
+    db: &'a impl ConnectionTrait,
+    sql: &'a str,
+    params: Vec<Value>,
+) -> Result<i64, AppError> {
     let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, params);
-    let row = db.query_one_raw(stmt).await?
+    let row = db
+        .query_one_raw(stmt)
+        .await?
         .ok_or_else(|| AppError::Internal("count query returned no rows".into()))?;
     get::<i64>(&row, "total")
 }

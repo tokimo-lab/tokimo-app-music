@@ -5,23 +5,25 @@ use axum::{
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::bus_clients::jobs::{JobFilter, cancel_by_filter, service_caller};
 use crate::ctx::AppCtx;
-use crate::handlers::MusicOutput;
-use crate::bus_clients::jobs::{cancel_by_filter, service_caller, JobFilter};
 use crate::db::repos::MusicRepo;
 use crate::db::repos::music_repo::UpdateMusicFields;
 use crate::error::AppError;
 use crate::error::OptionExt;
+use crate::handlers::MusicOutput;
 use crate::handlers::{ApiResponse, ok, ok_empty};
 use crate::services::source::normalize_source_path;
 
 use super::{
-    CreateMusicInput, MusicReorderInput, UpdateMusicInput, parse_uuid, sources_to_json, to_music_output,
-    to_music_outputs,
+    CreateMusicInput, MusicReorderInput, UpdateMusicInput, parse_uuid, sources_to_json,
+    to_music_output, to_music_outputs,
 };
 
 /// GET /api/apps/music
-pub async fn list_musics(State(ctx): State<Arc<AppCtx>>) -> Result<Json<ApiResponse<Vec<MusicOutput>>>, AppError> {
+pub async fn list_musics(
+    State(ctx): State<Arc<AppCtx>>,
+) -> Result<Json<ApiResponse<Vec<MusicOutput>>>, AppError> {
     let rows = MusicRepo::list_all(&ctx.db).await?;
     let outputs = to_music_outputs(&ctx.db, rows).await?;
     Ok(ok(outputs))
@@ -59,7 +61,10 @@ pub async fn create_music(
         sources: None,
     };
 
-    if update_fields.avatar.is_some() || update_fields.description.is_some() || update_fields.scrape_enabled.is_some() {
+    if update_fields.avatar.is_some()
+        || update_fields.description.is_some()
+        || update_fields.scrape_enabled.is_some()
+    {
         needs_update = true;
     }
 
@@ -136,12 +141,15 @@ pub async fn delete_music(
     let uid = parse_uuid(&id)?;
     if let Some(client) = ctx.client.get() {
         let filter = JobFilter {
-            params_match: Some(std::collections::HashMap::from([
-                ("appId".to_string(), uid.to_string()),
-            ])),
+            params_match: Some(std::collections::HashMap::from([(
+                "appId".to_string(),
+                uid.to_string(),
+            )])),
             ..Default::default()
         };
-        let cancelled = cancel_by_filter(client, service_caller(), filter).await.unwrap_or(0);
+        let cancelled = cancel_by_filter(client, service_caller(), filter)
+            .await
+            .unwrap_or(0);
         if cancelled > 0 {
             tracing::info!("Cancelled {cancelled} jobs for deleted music library {uid}");
         }
@@ -158,7 +166,12 @@ pub async fn reorder_musics(
     let orders: Vec<(Uuid, i32)> = body
         .orders
         .into_iter()
-        .filter_map(|item| item.id.parse::<Uuid>().ok().map(|uid| (uid, item.sort_order)))
+        .filter_map(|item| {
+            item.id
+                .parse::<Uuid>()
+                .ok()
+                .map(|uid| (uid, item.sort_order))
+        })
         .collect();
     MusicRepo::reorder(&ctx.db, orders).await?;
     Ok(ok_empty())

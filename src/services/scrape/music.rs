@@ -5,8 +5,8 @@
 //! Lyrics: LrcLib (free, no API key).
 //! Cover art: from metadata source (primary) → iTunes (fallback).
 
-use urlencoding::encode;
 use std::sync::Arc;
+use urlencoding::encode;
 
 use chrono::Utc;
 use sea_orm::sea_query::Expr;
@@ -81,15 +81,16 @@ async fn itunes_get_cover_url(http: &reqwest::Client, artist: &str, album: &str)
     // Find the best match by album name similarity
     let album_lower = album.to_lowercase();
     let result = data.results.into_iter().find(|r| {
-        r.collection_name
-            .as_deref()
-            .is_some_and(|n| n.to_lowercase().contains(&album_lower) || album_lower.contains(&n.to_lowercase()))
+        r.collection_name.as_deref().is_some_and(|n| {
+            n.to_lowercase().contains(&album_lower) || album_lower.contains(&n.to_lowercase())
+        })
     })?;
 
     // Replace _100 with _3000 for high-res artwork
-    result
-        .artwork_url100
-        .map(|u| u.replace("100x100bb", "3000x3000bb").replace("/100x100", "/3000x3000"))
+    result.artwork_url100.map(|u| {
+        u.replace("100x100bb", "3000x3000bb")
+            .replace("/100x100", "/3000x3000")
+    })
 }
 
 // ── Core Scrape Service ───────────────────────────────────────────────────────
@@ -120,9 +121,9 @@ impl MusicScrapeService {
         // Try " - " separator pattern (date before, album after)
         if let Some(pos) = title.find(" - ") {
             let before = &title[..pos];
-            let is_date_prefix = before
-                .chars()
-                .all(|c| c.is_ascii_digit() || c == '年' || c == '月' || c == '日' || c == '-' || c == ' ');
+            let is_date_prefix = before.chars().all(|c| {
+                c.is_ascii_digit() || c == '年' || c == '月' || c == '日' || c == '-' || c == ' '
+            });
             if is_date_prefix {
                 return title[pos + 3..].trim().to_string();
             }
@@ -131,9 +132,9 @@ impl MusicScrapeService {
         // Try "日-" separator pattern (e.g. "2001年09月14日-范特西")
         if let Some(pos) = title.find("日-") {
             let before = &title[..pos + '日'.len_utf8()];
-            let is_date_prefix = before
-                .chars()
-                .all(|c| c.is_ascii_digit() || c == '年' || c == '月' || c == '日' || c == '-' || c == ' ');
+            let is_date_prefix = before.chars().all(|c| {
+                c.is_ascii_digit() || c == '年' || c == '月' || c == '日' || c == '-' || c == ' '
+            });
             if is_date_prefix {
                 return title[pos + '日'.len_utf8() + 1..].trim().to_string();
             }
@@ -167,13 +168,21 @@ impl MusicScrapeService {
             Err(e) => return Self::make_error(album_id, "", "", &e.to_string()),
         };
         let clean_title = Self::extract_clean_title(&album.title);
-        info!("[music_scrape] Auto-scraping \"{}\" via MusicBrainz", clean_title);
+        info!(
+            "[music_scrape] Auto-scraping \"{}\" via MusicBrainz",
+            clean_title
+        );
         Self::search_and_scrape(db, storage, album_id, &album.title, &clean_title).await
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    fn make_error(album_id: Uuid, title: &str, clean_title: &str, error: &str) -> AlbumScrapeResult {
+    fn make_error(
+        album_id: Uuid,
+        title: &str,
+        clean_title: &str,
+        error: &str,
+    ) -> AlbumScrapeResult {
         AlbumScrapeResult {
             album_id: album_id.to_string(),
             title: title.to_string(),
@@ -203,7 +212,16 @@ impl MusicScrapeService {
             clean_title, artist_name
         );
         let registry = Self::build_registry();
-        Self::do_search_and_scrape(db, storage, album_id, album_title, &clean_title, artist_name, &registry).await
+        Self::do_search_and_scrape(
+            db,
+            storage,
+            album_id,
+            album_title,
+            &clean_title,
+            artist_name,
+            &registry,
+        )
+        .await
     }
 
     async fn search_and_scrape(
@@ -216,7 +234,16 @@ impl MusicScrapeService {
         let artist_name = Self::get_album_artist(db, album_id).await;
         let registry = Self::build_registry();
 
-        Self::do_search_and_scrape(db, storage, album_id, raw_title, clean_title, &artist_name, &registry).await
+        Self::do_search_and_scrape(
+            db,
+            storage,
+            album_id,
+            raw_title,
+            clean_title,
+            &artist_name,
+            &registry,
+        )
+        .await
     }
 
     /// Build a provider registry with all available sources.
@@ -271,8 +298,13 @@ impl MusicScrapeService {
 
         // Use selector to pick best match
         let selector = ProviderSelector::auto_detect(artist_name, clean_title);
-        let Some(candidate) = selector.select_best(&candidates, artist_name, clean_title, Some(track_count)) else {
-            warn!("[music_scrape] No match for \"{}\" across all providers", clean_title);
+        let Some(candidate) =
+            selector.select_best(&candidates, artist_name, clean_title, Some(track_count))
+        else {
+            warn!(
+                "[music_scrape] No match for \"{}\" across all providers",
+                clean_title
+            );
             return AlbumScrapeResult {
                 album_id: album_id.to_string(),
                 title: raw_title.to_string(),
@@ -292,15 +324,30 @@ impl MusicScrapeService {
         );
 
         // Get full album detail from the matched provider
-        let detail = match registry.get_album_detail(&candidate.source, &candidate.external_id).await {
+        let detail = match registry
+            .get_album_detail(&candidate.source, &candidate.external_id)
+            .await
+        {
             Ok(d) => d,
             Err(e) => {
-                error!("[music_scrape] Failed to get album detail from {}: {}", candidate.source, e);
+                error!(
+                    "[music_scrape] Failed to get album detail from {}: {}",
+                    candidate.source, e
+                );
                 return Self::make_error(album_id, raw_title, clean_title, &e.to_string());
             }
         };
 
-        Self::do_scrape_from_detail(db, storage, album_id, raw_title, clean_title, artist_name, &detail).await
+        Self::do_scrape_from_detail(
+            db,
+            storage,
+            album_id,
+            raw_title,
+            clean_title,
+            artist_name,
+            &detail,
+        )
+        .await
     }
 
     /// Fetch album detail from metadata provider and persist to DB.
@@ -322,8 +369,14 @@ impl MusicScrapeService {
         let now = Utc::now().fixed_offset();
 
         // Download cover from metadata source
-        let cover_path =
-            Self::download_cover(storage, album_id, artist_name, clean_title, detail.cover_url.as_deref()).await;
+        let cover_path = Self::download_cover(
+            storage,
+            album_id,
+            artist_name,
+            clean_title,
+            detail.cover_url.as_deref(),
+        )
+        .await;
         let cover_downloaded = cover_path.is_some();
 
         // Persist album metadata
@@ -333,10 +386,9 @@ impl MusicScrapeService {
         if let Some(ref rd) = detail.release_date {
             if let Ok(date) = chrono::NaiveDate::parse_from_str(rd, "%Y-%m-%d") {
                 active.release_date = Set(Some(date));
-            } else if let Some(date) = rd
-                .get(..4)
-                .and_then(|y| chrono::NaiveDate::parse_from_str(&format!("{y}-01-01"), "%Y-%m-%d").ok())
-            {
+            } else if let Some(date) = rd.get(..4).and_then(|y| {
+                chrono::NaiveDate::parse_from_str(&format!("{y}-01-01"), "%Y-%m-%d").ok()
+            }) {
                 active.release_date = Set(Some(date));
             }
         }
@@ -384,7 +436,8 @@ impl MusicScrapeService {
         };
 
         if !detail.artist_credits.is_empty() {
-            Self::save_album_artists_from_credits(db, storage, album_id, &detail.artist_credits).await;
+            Self::save_album_artists_from_credits(db, storage, album_id, &detail.artist_credits)
+                .await;
         }
 
         info!(
@@ -406,12 +459,21 @@ impl MusicScrapeService {
     }
 
     /// Save external ID mapping for an album.
-    async fn save_external_id(db: &DatabaseConnection, album_id: Uuid, source: &MetadataSource, external_id: &str) {
+    async fn save_external_id(
+        db: &DatabaseConnection,
+        album_id: Uuid,
+        source: &MetadataSource,
+        external_id: &str,
+    ) {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             "INSERT INTO music.music_album_external_ids (album_id, source, external_id) \
              VALUES ($1, $2, $3) ON CONFLICT (album_id, source) DO UPDATE SET external_id = $3",
-            [album_id.into(), source.to_string().into(), external_id.into()],
+            [
+                album_id.into(),
+                source.to_string().into(),
+                external_id.into(),
+            ],
         );
         if let Err(e) = db.execute_raw(stmt).await {
             warn!("[music_scrape] Failed to save external ID: {}", e);
@@ -479,7 +541,10 @@ impl MusicScrapeService {
                             {
                                 a.id
                             } else {
-                                error!("[music_scrape] Failed to insert artist {} ({}): {}", credit.name, credit.external_id, e);
+                                error!(
+                                    "[music_scrape] Failed to insert artist {} ({}): {}",
+                                    credit.name, credit.external_id, e
+                                );
                                 continue;
                             }
                         }
@@ -521,7 +586,9 @@ impl MusicScrapeService {
 
         // Phase 2: Download profile images outside the transaction
         for (artist_id, artist_name) in new_artist_names {
-            if let Some(path) = Self::download_artist_profile(storage, artist_id, &artist_name).await {
+            if let Some(path) =
+                Self::download_artist_profile(storage, artist_id, &artist_name).await
+            {
                 let key = format!("library-images/music/{artist_id}/profile.jpg");
                 let _ = music_artists::Entity::update_many()
                     .filter(music_artists::Column::Id.eq(artist_id))
@@ -560,7 +627,9 @@ impl MusicScrapeService {
                                     info!("[music_scrape] Cover saved from {}: {}", $source, path);
                                     return Some(path);
                                 }
-                                Err(e) => warn!("[music_scrape] {} cover upload failed: {}", $source, e),
+                                Err(e) => {
+                                    warn!("[music_scrape] {} cover upload failed: {}", $source, e)
+                                }
                             }
                         }
                     }
@@ -601,7 +670,10 @@ impl MusicScrapeService {
                 return None;
             }
             Err(e) => {
-                warn!("[music_scrape] Deezer photo fetch failed for \"{}\": {}", artist_name, e);
+                warn!(
+                    "[music_scrape] Deezer photo fetch failed for \"{}\": {}",
+                    artist_name, e
+                );
                 return None;
             }
         };
@@ -618,10 +690,16 @@ impl MusicScrapeService {
                     let key = format!("library-images/music/{artist_id}/profile.jpg");
                     match upload_image_buffer(storage, &bytes, &key).await {
                         Ok(path) => {
-                            info!("[music_scrape] Artist profile saved for \"{}\": {}", artist_name, path);
+                            info!(
+                                "[music_scrape] Artist profile saved for \"{}\": {}",
+                                artist_name, path
+                            );
                             return Some(path);
                         }
-                        Err(e) => warn!("[music_scrape] Artist profile upload failed for \"{}\": {}", artist_name, e),
+                        Err(e) => warn!(
+                            "[music_scrape] Artist profile upload failed for \"{}\": {}",
+                            artist_name, e
+                        ),
                     }
                 }
                 None
@@ -635,7 +713,10 @@ impl MusicScrapeService {
                 None
             }
             Err(e) => {
-                warn!("[music_scrape] Deezer photo download failed for \"{}\": {}", artist_name, e);
+                warn!(
+                    "[music_scrape] Deezer photo download failed for \"{}\": {}",
+                    artist_name, e
+                );
                 None
             }
         }
@@ -672,14 +753,15 @@ impl MusicScrapeService {
         };
 
         // Try multi-source lyrics: LrcLib → QQ Music → Netease
-        let lyrics_result = tokimo_package_client_api::metadata_providers::lyrics::fetch_lyrics_multi(
-            http,
-            &effective_artist,
-            &track_clean_title,
-            Some(album_title),
-            duration,
-        )
-        .await;
+        let lyrics_result =
+            tokimo_package_client_api::metadata_providers::lyrics::fetch_lyrics_multi(
+                http,
+                &effective_artist,
+                &track_clean_title,
+                Some(album_title),
+                duration,
+            )
+            .await;
 
         match lyrics_result {
             Ok(Some(lyrics)) if !lyrics.instrumental => {
@@ -690,7 +772,11 @@ impl MusicScrapeService {
                     .unwrap_or("")
                     .to_string();
                 if !content.is_empty() {
-                    let ext = if lyrics.synced_lyrics.is_some() { "lrc" } else { "txt" };
+                    let ext = if lyrics.synced_lyrics.is_some() {
+                        "lrc"
+                    } else {
+                        "txt"
+                    };
                     let key = format!("lyrics/music/{album_id}/{track_id}.{ext}");
                     match storage
                         .upload(
@@ -843,7 +929,16 @@ impl MusicScrapeService {
         for album in &albums {
             let clean = Self::extract_clean_title(&album.title);
             let artist_name = Self::get_album_artist(db, album.id).await;
-            let r = Self::do_search_and_scrape(db, storage, album.id, &album.title, &clean, &artist_name, &registry).await;
+            let r = Self::do_search_and_scrape(
+                db,
+                storage,
+                album.id,
+                &album.title,
+                &clean,
+                &artist_name,
+                &registry,
+            )
+            .await;
             match r.status.as_str() {
                 "success" => success += 1,
                 "no_match" => skipped += 1,
@@ -897,7 +992,17 @@ impl MusicScrapeService {
         album_title: &str,
         duration: Option<u32>,
     ) -> Option<String> {
-        Self::fetch_and_save_lyrics(storage, http, album_id, track_id, title, artist_name, album_title, duration).await
+        Self::fetch_and_save_lyrics(
+            storage,
+            http,
+            album_id,
+            track_id,
+            title,
+            artist_name,
+            album_title,
+            duration,
+        )
+        .await
     }
 
     /// Public static wrapper for `download_artist_profile` (used by re-scrape endpoint).

@@ -6,13 +6,13 @@ use std::sync::Arc;
 use tracing::{error, info};
 use uuid::Uuid;
 
+use crate::bus_clients::jobs::{JobFilter, cancel_by_filter, service_caller};
 use crate::ctx::AppCtx;
 use crate::db::ApiDateTimeExt;
-use crate::handlers::MusicSyncStatusOutput;
-use crate::bus_clients::jobs::{cancel_by_filter, service_caller, JobFilter};
 use crate::db::repos::MusicRepo;
 use crate::error::AppError;
 use crate::error::OptionExt;
+use crate::handlers::MusicSyncStatusOutput;
 use crate::handlers::user::AuthUser;
 use crate::handlers::{ApiResponse, ok};
 use crate::services::app_sync::AppSyncService;
@@ -42,7 +42,9 @@ pub async fn sync_music(
     let clear_data = body.and_then(|b| b.clear_data).unwrap_or(false);
 
     if music.sync_status == "syncing" && !clear_data {
-        return Err(AppError::Conflict("Music library is already syncing".into()));
+        return Err(AppError::Conflict(
+            "Music library is already syncing".into(),
+        ));
     }
 
     // Clear data synchronously so frontend sees empty state immediately
@@ -50,12 +52,15 @@ pub async fn sync_music(
         // Cancel any running jobs for this library first
         if let Some(client) = ctx.client.get() {
             let filter = JobFilter {
-                params_match: Some(std::collections::HashMap::from([
-                    ("musicId".to_string(), uid.to_string()),
-                ])),
+                params_match: Some(std::collections::HashMap::from([(
+                    "musicId".to_string(),
+                    uid.to_string(),
+                )])),
                 ..Default::default()
             };
-            let cancelled = cancel_by_filter(client, service_caller(), filter).await.unwrap_or(0);
+            let cancelled = cancel_by_filter(client, service_caller(), filter)
+                .await
+                .unwrap_or(0);
             if cancelled > 0 {
                 info!("Cancelled {cancelled} jobs before clearing music library {uid}");
             }
@@ -83,9 +88,14 @@ pub async fn sync_music(
     let bus_client = ctx.client.clone();
 
     tokio::spawn(async move {
-        match AppSyncService::execute_music_sync(&db, &sources, bus_client, uid, caller_user_id).await {
+        match AppSyncService::execute_music_sync(&db, &sources, bus_client, uid, caller_user_id)
+            .await
+        {
             Ok(result) => {
-                info!("music sync completed, {} jobs dispatched", result.total_jobs);
+                info!(
+                    "music sync completed, {} jobs dispatched",
+                    result.total_jobs
+                );
             }
             Err(e) => {
                 error!("music sync failed: {e}");

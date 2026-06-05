@@ -7,16 +7,18 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::Utc;
-use sea_orm::*;
 use sea_orm::ActiveValue::Set;
+use sea_orm::*;
 use serde_json::{Value as JsonValue, json};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::ctx::AppCtx;
-use crate::db::entities::{music_album_artists, music_albums, music_artists, music_files, music_tracks};
 use crate::bus_clients::app_events;
+use crate::ctx::AppCtx;
+use crate::db::entities::{
+    music_album_artists, music_albums, music_artists, music_files, music_tracks,
+};
 use crate::services::scrape::music::MusicScrapeService;
 
 struct AudioMeta {
@@ -53,10 +55,7 @@ pub async fn handle(
         .get("musicId")
         .and_then(|v| v.as_str())
         .ok_or("missing musicId")?;
-    let file_size = params
-        .get("fileSize")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let file_size = params.get("fileSize").and_then(|v| v.as_i64()).unwrap_or(0);
     let source_root = params
         .get("sourceRoot")
         .and_then(|v| v.as_str())
@@ -89,30 +88,39 @@ pub async fn handle(
 
     // Scrape metadata inline (MusicBrainz + cover art) before notifying frontend.
     // This ensures the UI never shows "unknown artist" or missing covers.
-    let album_title = file.meta.as_ref().and_then(|m| m.album.as_deref()).unwrap_or("Unknown Album");
+    let album_title = file
+        .meta
+        .as_ref()
+        .and_then(|m| m.album.as_deref())
+        .unwrap_or("Unknown Album");
 
     // Use artist from file metadata or filename parsing
     let fallback = parse_track(&file.path, file.source_root.as_deref());
-    let effective_artist = file.meta.as_ref().and_then(|m| m.artist.as_deref())
+    let effective_artist = file
+        .meta
+        .as_ref()
+        .and_then(|m| m.artist.as_deref())
         .or(fallback.artist.as_deref())
         .unwrap_or("Unknown Artist");
 
     // Only scrape if album hasn't been scraped yet
     let album = music_albums::Entity::find_by_id(album_id).one(db).await?;
     if let Some(album) = album
-        && album.scraped_at.is_none() {
-            let scrape_result = MusicScrapeService::scrape_album_inline(
-                db,
-                &state.storage,
-                album_id,
-                effective_artist,
-                album_title,
-            ).await;
-            info!(
-                "[music_scan] Scrape result for \"{}\": status={}, cover={}, year={:?}",
-                album_title, scrape_result.status, scrape_result.cover_downloaded, scrape_result.year
-            );
-        }
+        && album.scraped_at.is_none()
+    {
+        let scrape_result = MusicScrapeService::scrape_album_inline(
+            db,
+            &state.storage,
+            album_id,
+            effective_artist,
+            album_title,
+        )
+        .await;
+        info!(
+            "[music_scan] Scrape result for \"{}\": status={}, cover={}, year={:?}",
+            album_title, scrape_result.status, scrape_result.cover_downloaded, scrape_result.year
+        );
+    }
 
     // Notify frontend after scraping is complete
     if let (Some(uid), Some(client)) = (user_id, state.client.get()) {
@@ -156,10 +164,9 @@ async fn probe_metadata(
         Some(256 * 1024), // 256KB buffer is enough for ID3 tags
     );
 
-    let result = tokio::task::spawn_blocking(move || {
-        tokimo_package_ffmpeg::probe_direct(direct_input)
-    })
-    .await;
+    let result =
+        tokio::task::spawn_blocking(move || tokimo_package_ffmpeg::probe_direct(direct_input))
+            .await;
 
     let probe = match result {
         Ok(Ok(probe)) => probe,
@@ -189,7 +196,12 @@ async fn probe_metadata(
         artist: tag_get(tags, "artist").or_else(|| tag_get(tags, "album_artist")),
         album: tag_get(tags, "album"),
         title: tag_get(tags, "title"),
-        duration: probe.format.duration_secs().round().to_i32().filter(|&d| d > 0),
+        duration: probe
+            .format
+            .duration_secs()
+            .round()
+            .to_i32()
+            .filter(|&d| d > 0),
         bitrate: tag_get(tags, "bitrate")
             .and_then(|s| s.parse().ok())
             .or_else(|| probe.format.bit_rate.parse().ok()),
@@ -244,13 +256,22 @@ async fn process_audio_file<C: ConnectionTrait>(
     let fallback = parse_track(&file.path, file.source_root.as_deref());
 
     // Merge: ffprobe tags take priority, filename parsing as fallback
-    let artist = file.meta.as_ref().and_then(|m| m.artist.as_deref())
+    let artist = file
+        .meta
+        .as_ref()
+        .and_then(|m| m.artist.as_deref())
         .or(fallback.artist.as_deref())
         .map(|s| s.to_string());
-    let album = file.meta.as_ref().and_then(|m| m.album.as_deref())
+    let album = file
+        .meta
+        .as_ref()
+        .and_then(|m| m.album.as_deref())
         .unwrap_or(&fallback.album)
         .to_string();
-    let title = file.meta.as_ref().and_then(|m| m.title.as_deref())
+    let title = file
+        .meta
+        .as_ref()
+        .and_then(|m| m.title.as_deref())
         .unwrap_or(&fallback.title)
         .to_string();
 
@@ -283,7 +304,9 @@ async fn process_audio_file<C: ConnectionTrait>(
     }
 
     // Use full_path for VFS access (SMB needs full path), fallback to relative path
-    let file_path = file.full_path.as_ref()
+    let file_path = file
+        .full_path
+        .as_ref()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| file.path.to_string_lossy().to_string());
     let filename = file
@@ -298,7 +321,11 @@ async fn process_audio_file<C: ConnectionTrait>(
         .one(db)
         .await?;
 
-    let parsed = ParsedTrack { title, artist, album };
+    let parsed = ParsedTrack {
+        title,
+        artist,
+        album,
+    };
 
     let track_id = match existing_file.as_ref().and_then(|f| f.track_id) {
         Some(track_id) => {
@@ -308,7 +335,11 @@ async fn process_audio_file<C: ConnectionTrait>(
                 active.title = Set(parsed.title.clone());
                 active.genre = Set(None);
                 active.duration = Set(file.meta.as_ref().and_then(|m| m.duration));
-                active.codec = Set(file.meta.as_ref().and_then(|m| m.codec.clone()).or_else(|| codec_for_path(&file.path)));
+                active.codec = Set(file
+                    .meta
+                    .as_ref()
+                    .and_then(|m| m.codec.clone())
+                    .or_else(|| codec_for_path(&file.path)));
                 active.update(db).await?;
                 track_id
             } else {
@@ -370,7 +401,9 @@ async fn insert_track<C: ConnectionTrait>(
         genre: Set(None),
         bitrate: Set(meta.and_then(|m| m.bitrate)),
         sample_rate: Set(meta.and_then(|m| m.sample_rate)),
-        codec: Set(meta.and_then(|m| m.codec.clone()).or_else(|| codec_for_path(path))),
+        codec: Set(meta
+            .and_then(|m| m.codec.clone())
+            .or_else(|| codec_for_path(path))),
         mb_track_id: Set(None),
         lyrics_path: Set(None),
     })
@@ -527,20 +560,23 @@ fn parse_track(path: &Path, source_root: Option<&Path>) -> ParsedTrack {
     // Fallback: try "Artist-Title.mp3" filename pattern first (higher priority)
     if artist.is_none()
         && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
-            && let Some((a, _t)) = stem.split_once('-') {
-                let trimmed = a.trim();
-                if !trimmed.is_empty() {
-                    artist = Some(trimmed.to_string());
-                }
-            }
+        && let Some((a, _t)) = stem.split_once('-')
+    {
+        let trimmed = a.trim();
+        if !trimmed.is_empty() {
+            artist = Some(trimmed.to_string());
+        }
+    }
 
     // Fallback: for flat structures, extract artist from source_root last directory.
     // source_root is like "/media/music-mp3/#MP3/Beyond/" — the last meaningful
     // directory is typically the artist.
-    if artist.is_none() && components.len() < 3
-        && let Some(root) = source_root {
-            artist = last_meaningful_dir(root);
-        }
+    if artist.is_none()
+        && components.len() < 3
+        && let Some(root) = source_root
+    {
+        artist = last_meaningful_dir(root);
+    }
 
     // Don't use generic source_root parent dirs as album — only use path components.
     if album.is_none() {
@@ -593,7 +629,9 @@ fn last_meaningful_dir(path: &Path) -> Option<String> {
 fn clean_track_title(value: &str) -> String {
     let trimmed = value.trim();
     let without_number = trimmed
-        .trim_start_matches(|ch: char| ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '_' || ch == ' ')
+        .trim_start_matches(|ch: char| {
+            ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '_' || ch == ' '
+        })
         .trim();
     if without_number.is_empty() {
         trimmed.to_string()

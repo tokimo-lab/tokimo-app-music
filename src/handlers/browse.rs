@@ -40,7 +40,12 @@ pub async fn list_albums(
         },
     )
     .await?;
-    Ok(ok(Page::from_parts(items, total, page as u64, page_size as u64)))
+    Ok(ok(Page::from_parts(
+        items,
+        total,
+        page as u64,
+        page_size as u64,
+    )))
 }
 
 /// GET /api/apps/music/{id}/tracks
@@ -65,7 +70,12 @@ pub async fn list_tracks(
         },
     )
     .await?;
-    Ok(ok(Page::from_parts(items, total, page as u64, page_size as u64)))
+    Ok(ok(Page::from_parts(
+        items,
+        total,
+        page as u64,
+        page_size as u64,
+    )))
 }
 
 /// GET /api/apps/music/{id}/artists
@@ -87,7 +97,12 @@ pub async fn list_artists(
         q.search.as_deref(),
     )
     .await?;
-    Ok(ok(Page::from_parts(items, total, page as u64, page_size as u64)))
+    Ok(ok(Page::from_parts(
+        items,
+        total,
+        page as u64,
+        page_size as u64,
+    )))
 }
 
 /// GET /api/apps/music/album/{id}
@@ -223,17 +238,18 @@ pub async fn backfill_lyrics(
             let artist_name: String = row.try_get("", "artist_name").unwrap_or_default();
             let duration: Option<i32> = row.try_get("", "duration").ok();
 
-            if let Some(path) = crate::services::scrape::music::MusicScrapeService::fetch_and_save_lyrics_static(
-                &storage,
-                &http,
-                album_id,
-                track_id,
-                &title,
-                &artist_name,
-                &album_title,
-                duration.map(|d| d as u32),
-            )
-            .await
+            if let Some(path) =
+                crate::services::scrape::music::MusicScrapeService::fetch_and_save_lyrics_static(
+                    &storage,
+                    &http,
+                    album_id,
+                    track_id,
+                    &title,
+                    &artist_name,
+                    &album_title,
+                    duration.map(|d| d as u32),
+                )
+                .await
             {
                 // Update the track's lyrics_path
                 let update_stmt = Statement::from_sql_and_values(
@@ -247,10 +263,16 @@ pub async fn backfill_lyrics(
                 }
             }
         }
-        tracing::info!("[lyrics_backfill] Done: {}/{} tracks updated", updated, total);
+        tracing::info!(
+            "[lyrics_backfill] Done: {}/{} tracks updated",
+            updated,
+            total
+        );
     });
 
-    Ok(ok(serde_json::json!({ "total": total, "status": "started" })))
+    Ok(ok(
+        serde_json::json!({ "total": total, "status": "started" }),
+    ))
 }
 
 /// POST /api/apps/music/album/{id}/scrape
@@ -280,11 +302,15 @@ pub async fn scrape_album(
         .await;
         tracing::info!(
             "[rescrape] Album {}: status={}, cover={}",
-            album_id, result.status, result.cover_downloaded
+            album_id,
+            result.status,
+            result.cover_downloaded
         );
     });
 
-    Ok(ok(serde_json::json!({ "albumId": id, "status": "started" })))
+    Ok(ok(
+        serde_json::json!({ "albumId": id, "status": "started" }),
+    ))
 }
 
 /// POST /api/apps/music/artist/{id}/scrape
@@ -321,10 +347,13 @@ pub async fn scrape_artist(
     let db = ctx.db.clone();
     let storage = ctx.storage.clone();
     tokio::spawn(async move {
-        let path = crate::services::scrape::music::MusicScrapeService::download_artist_profile_static(
-            &storage, artist_id, &artist_name,
-        )
-        .await;
+        let path =
+            crate::services::scrape::music::MusicScrapeService::download_artist_profile_static(
+                &storage,
+                artist_id,
+                &artist_name,
+            )
+            .await;
         if let Some(p) = path {
             let update = Statement::from_sql_and_values(
                 DatabaseBackend::Postgres,
@@ -338,7 +367,9 @@ pub async fn scrape_artist(
         }
     });
 
-    Ok(ok(serde_json::json!({ "artistId": id, "status": "started" })))
+    Ok(ok(
+        serde_json::json!({ "artistId": id, "status": "started" }),
+    ))
 }
 
 /// POST /api/apps/music/track/{id}/scrape-lyrics
@@ -392,11 +423,18 @@ pub async fn scrape_track_lyrics(
             .build()
             .unwrap_or_default();
 
-        if let Some(path) = crate::services::scrape::music::MusicScrapeService::fetch_and_save_lyrics_static(
-            &storage, &http, album_id, track_id, &title, &artist_name, &album_title,
-            duration.map(|d| d as u32),
-        )
-        .await
+        if let Some(path) =
+            crate::services::scrape::music::MusicScrapeService::fetch_and_save_lyrics_static(
+                &storage,
+                &http,
+                album_id,
+                track_id,
+                &title,
+                &artist_name,
+                &album_title,
+                duration.map(|d| d as u32),
+            )
+            .await
         {
             let update = Statement::from_sql_and_values(
                 DatabaseBackend::Postgres,
@@ -410,5 +448,7 @@ pub async fn scrape_track_lyrics(
         }
     });
 
-    Ok(ok(serde_json::json!({ "trackId": id, "status": "started" })))
+    Ok(ok(
+        serde_json::json!({ "trackId": id, "status": "started" }),
+    ))
 }

@@ -40,7 +40,10 @@ where
             .filter(|v| !v.is_empty())
             .unwrap_or_default()
             .to_owned();
-        Ok(AuthUser(SessionAuth { user_id, session_id }))
+        Ok(AuthUser(SessionAuth {
+            user_id,
+            session_id,
+        }))
     }
 }
 
@@ -50,5 +53,10 @@ fn _extract_header(headers: &HeaderMap, name: &str) -> Result<String, (StatusCod
         .and_then(|v| v.to_str().ok())
         .filter(|v| !v.is_empty())
         .map(str::to_string)
-        .ok_or_else(|| (StatusCode::UNAUTHORIZED, Json(json!({"error": "not authenticated"}))))
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"error": "not authenticated"})),
+            )
+        })
 }

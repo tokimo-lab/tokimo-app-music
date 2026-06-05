@@ -4,11 +4,11 @@ use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::bus_clients::app_events;
 use crate::ctx::AppCtx;
 use crate::db::entities::music_albums;
-use tokio_util::sync::CancellationToken;
-use crate::bus_clients::app_events;
 use crate::services::scrape::music::MusicScrapeService;
+use tokio_util::sync::CancellationToken;
 
 pub async fn handle(
     db: &DatabaseConnection,
@@ -18,7 +18,9 @@ pub async fn handle(
     user_id: Option<Uuid>,
     cancel: &CancellationToken,
 ) -> Result<Option<JsonValue>, Box<dyn std::error::Error + Send + Sync>> {
-    if cancel.is_cancelled() { return Ok(Some(json!({ "cancelled": true }))); }
+    if cancel.is_cancelled() {
+        return Ok(Some(json!({ "cancelled": true })));
+    }
     let album_id = params
         .get("albumId")
         .and_then(|v| v.as_str())
@@ -34,13 +36,20 @@ pub async fn handle(
     };
 
     if album.scraped_at.is_some() && album.cover_path.is_some() {
-        info!("[music_scrape] Album \"{}\" already scraped with cover, skipping", album.title);
-        return Ok(Some(json!({ "skipped": true, "reason": "already_scraped" })));
+        info!(
+            "[music_scrape] Album \"{}\" already scraped with cover, skipping",
+            album.title
+        );
+        return Ok(Some(
+            json!({ "skipped": true, "reason": "already_scraped" }),
+        ));
     }
 
     let music_id = params.get("musicId").and_then(|v| v.as_str()).unwrap_or("");
 
-    if cancel.is_cancelled() { return Ok(Some(json!({ "cancelled": true }))); }
+    if cancel.is_cancelled() {
+        return Ok(Some(json!({ "cancelled": true })));
+    }
     let result = MusicScrapeService::auto_scrape_album(db, &state.storage, album_id).await;
 
     // Notify frontend to refresh

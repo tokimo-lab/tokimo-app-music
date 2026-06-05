@@ -10,7 +10,9 @@ use uuid::Uuid;
 
 /// Connect to the database. CLI mode doesn't need user auth (local music library).
 async fn init_db() -> anyhow::Result<sea_orm::DatabaseConnection> {
-    crate::db::init_pool().await.context("connect database failed")
+    crate::db::init_pool()
+        .await
+        .context("connect database failed")
 }
 
 // ── find ─────────────────────────────────────────────────────────────────────
@@ -150,7 +152,8 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
          ORDER BY ma.name \
          LIMIT ${lim}"
     );
-    let artist_stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &artist_sql, artist_params);
+    let artist_stmt =
+        Statement::from_sql_and_values(DatabaseBackend::Postgres, &artist_sql, artist_params);
     let artist_rows = db.query_all_raw(artist_stmt).await?;
 
     if artist_rows.is_empty() {
@@ -190,7 +193,8 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
              ORDER BY a.year DESC NULLS LAST \
              LIMIT ${album_lim}"
         );
-        let album_stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, &album_sql, album_params);
+        let album_stmt =
+            Statement::from_sql_and_values(DatabaseBackend::Postgres, &album_sql, album_params);
         let album_rows = db.query_all_raw(album_stmt).await?;
 
         let mut albums: Vec<serde_json::Value> = Vec::new();
@@ -204,8 +208,11 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
                              FROM music_tracks t WHERE t.album_id = $1 \
                              ORDER BY t.disc_number ASC NULLS FIRST, t.track_number ASC NULLS LAST";
             let album_uuid: Uuid = album_id.parse().unwrap_or_default();
-            let track_stmt =
-                Statement::from_sql_and_values(DatabaseBackend::Postgres, track_sql, [album_uuid.into()]);
+            let track_stmt = Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                track_sql,
+                [album_uuid.into()],
+            );
             let track_rows = db.query_all_raw(track_stmt).await?;
 
             let tracks: Vec<serde_json::Value> = track_rows
@@ -272,7 +279,10 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
 
         for album in albums {
             let album_title = album["title"].as_str().unwrap_or("-");
-            let year = album["year"].as_i64().map(|y| y.to_string()).unwrap_or_else(|| "-".into());
+            let year = album["year"]
+                .as_i64()
+                .map(|y| y.to_string())
+                .unwrap_or_else(|| "-".into());
             let tracks = album["tracks"].as_array().unwrap();
 
             println!();
@@ -292,7 +302,10 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
                     .unwrap_or_else(|| "-".into());
                 let genre = track["genre"].as_str().unwrap_or("-");
 
-                println!("     {:<4}  {:<40}  {:<8}  {}", track_num, track_title, duration, genre);
+                println!(
+                    "     {:<4}  {:<40}  {:<8}  {}",
+                    track_num, track_title, duration, genre
+                );
             }
         }
     }

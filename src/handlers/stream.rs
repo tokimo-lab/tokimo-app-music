@@ -4,12 +4,7 @@ use axum::{
 };
 use std::sync::Arc;
 
-use crate::{
-    ctx::AppCtx,
-    db::repos::MusicRepo,
-    error::AppError,
-    handlers::user::AuthUser,
-};
+use crate::{ctx::AppCtx, db::repos::MusicRepo, error::AppError, handlers::user::AuthUser};
 
 fn mime_from_path(path: &str) -> &'static str {
     let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
@@ -37,7 +32,9 @@ pub async fn stream_music_file(
     let target = match MusicRepo::load_stream_target(&ctx.db, &file_id).await {
         Ok(Some(t)) => t,
         Ok(None) => return AppError::NotFound("Music file not found".into()).into_response(),
-        Err(e) => return AppError::Internal(format!("music file lookup failed: {e}")).into_response(),
+        Err(e) => {
+            return AppError::Internal(format!("music file lookup failed: {e}")).into_response();
+        }
     };
 
     let Some(source_id) = target.source_id.as_deref() else {
@@ -50,7 +47,9 @@ pub async fn stream_music_file(
     };
 
     let mime = mime_from_path(&target.path);
-    match crate::services::stream::stream_vfs_file(&vfs, &target.path, mime, request.headers()).await {
+    match crate::services::stream::stream_vfs_file(&vfs, &target.path, mime, request.headers())
+        .await
+    {
         Ok(r) => r,
         Err(e) => e.into_response(),
     }

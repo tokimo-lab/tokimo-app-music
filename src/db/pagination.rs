@@ -11,6 +11,11 @@ pub struct Page<T: Serialize> {
 
 impl<T: Serialize> Page<T> {
     pub fn from_parts(items: Vec<T>, total: i64, page: u64, page_size: u64) -> Self {
-        Self { items, total, page, page_size }
+        Self {
+            items,
+            total,
+            page,
+            page_size,
+        }
     }
 }

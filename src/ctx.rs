@@ -10,7 +10,7 @@ use crate::services::storage::StorageProvider;
 
 pub struct AppCtx {
     pub db: DatabaseConnection,
-        pub client: Arc<OnceLock<Arc<BusClient>>>,
+    pub client: Arc<OnceLock<Arc<BusClient>>>,
     pub sources: Arc<SourceRegistry>,
     pub storage: Arc<dyn StorageProvider>,
 }

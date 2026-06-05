@@ -103,11 +103,7 @@ async fn main() -> anyhow::Result<()> {
                     limit,
                     raw,
                 } => cli::run_find(query, artist, library, limit, raw).await,
-                Command::Artist {
-                    name,
-                    library,
-                    raw,
-                } => cli::run_artist(name, library, raw).await,
+                Command::Artist { name, library, raw } => cli::run_artist(name, library, raw).await,
             };
             if let Err(error) = result {
                 eprintln!("Error: {error:#}");

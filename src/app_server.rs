@@ -4,7 +4,10 @@
 
 use std::sync::Arc;
 
-use axum::{Router, routing::{get, post}};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use tokimo_bus_protocol::{BusListener, DataPlaneSocket};
 use tracing::{error, info};
 
@@ -35,9 +38,15 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
         .route("/album/{id}/scrape", post(handlers::scrape_album))
         .route("/artist/{person_id}", get(handlers::get_artist_detail))
         .route("/artist/{person_id}/scrape", post(handlers::scrape_artist))
-        .route("/album/{id}/toggle-favorite", post(handlers::toggle_album_favorite))
+        .route(
+            "/album/{id}/toggle-favorite",
+            post(handlers::toggle_album_favorite),
+        )
         .route("/track/{id}/lyrics", get(handlers::get_track_lyrics))
-        .route("/track/{id}/scrape-lyrics", post(handlers::scrape_track_lyrics))
+        .route(
+            "/track/{id}/scrape-lyrics",
+            post(handlers::scrape_track_lyrics),
+        )
         .route(
             "/{id}",
             get(handlers::get_music)

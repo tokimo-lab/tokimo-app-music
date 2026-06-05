@@ -23,6 +23,8 @@ pub async fn upload_image_buffer(
             }),
         )
         .await
-        .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(format!("Storage upload failed: {e}")))?;
+        .map_err(|e| {
+            Box::<dyn std::error::Error + Send + Sync>::from(format!("Storage upload failed: {e}"))
+        })?;
     Ok(format!("/storage/{returned_key}"))
 }
