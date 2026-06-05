@@ -23,8 +23,8 @@ use tokimo_package_client_api::metadata_providers::deezer::DeezerClient;
 use tokimo_package_client_api::metadata_providers::musicbrainz::MusicBrainzClient;
 use tokimo_package_client_api::metadata_providers::netease::NeteaseClient;
 use tokimo_package_client_api::metadata_providers::qqmusic::QQMusicClient;
-use tokimo_package_client_api::metadata_providers::{MusicMetadataProvider, ProviderRegistry, ProviderSelector};
-use tokimo_package_client_api::types::{AlbumDetail, AlbumSearchResult, MetadataSource};
+use tokimo_package_client_api::metadata_providers::{ProviderRegistry, ProviderSelector};
+use tokimo_package_client_api::types::{AlbumDetail, MetadataSource};
 
 // ── Public DTOs ──────────────────────────────────────────────────────────────
 
@@ -433,7 +433,7 @@ impl MusicScrapeService {
         let now = Utc::now().fixed_offset();
 
         // Phase 1: Upsert artists + rebuild album_artists in a transaction
-        let (artist_ids, new_artist_names) = {
+        let (_artist_ids, new_artist_names) = {
             let txn = match db.begin().await {
                 Ok(t) => t,
                 Err(e) => {

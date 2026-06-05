@@ -45,6 +45,7 @@ impl ApiDateTimeExt for Option<DateTimeWithTimeZone> {
 }
 
 pub trait OptionalApiDateTimeExt {
+    #[allow(dead_code)] // kept from presplit — wired up later
     fn to_api_datetime(&self) -> Option<String>;
     #[allow(dead_code)] // kept from presplit — wired up later
     fn to_api_datetime_or_default(&self) -> String;

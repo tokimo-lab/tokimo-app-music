@@ -99,8 +99,8 @@ pub async fn handle(
 
     // Only scrape if album hasn't been scraped yet
     let album = music_albums::Entity::find_by_id(album_id).one(db).await?;
-    if let Some(album) = album {
-        if album.scraped_at.is_none() {
+    if let Some(album) = album
+        && album.scraped_at.is_none() {
             let scrape_result = MusicScrapeService::scrape_album_inline(
                 db,
                 &state.storage,
@@ -113,7 +113,6 @@ pub async fn handle(
                 album_title, scrape_result.status, scrape_result.cover_downloaded, scrape_result.year
             );
         }
-    }
 
     // Notify frontend after scraping is complete
     if let (Some(uid), Some(client)) = (user_id, state.client.get()) {
@@ -526,25 +525,22 @@ fn parse_track(path: &Path, source_root: Option<&Path>) -> ParsedTrack {
         .filter(|artist| !artist.is_empty());
 
     // Fallback: try "Artist-Title.mp3" filename pattern first (higher priority)
-    if artist.is_none() {
-        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-            if let Some((a, _t)) = stem.split_once('-') {
+    if artist.is_none()
+        && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+            && let Some((a, _t)) = stem.split_once('-') {
                 let trimmed = a.trim();
                 if !trimmed.is_empty() {
                     artist = Some(trimmed.to_string());
                 }
             }
-        }
-    }
 
     // Fallback: for flat structures, extract artist from source_root last directory.
     // source_root is like "/media/music-mp3/#MP3/Beyond/" — the last meaningful
     // directory is typically the artist.
-    if artist.is_none() && components.len() < 3 {
-        if let Some(root) = source_root {
+    if artist.is_none() && components.len() < 3
+        && let Some(root) = source_root {
             artist = last_meaningful_dir(root);
         }
-    }
 
     // Don't use generic source_root parent dirs as album — only use path components.
     if album.is_none() {
@@ -590,7 +586,7 @@ fn last_meaningful_dir(path: &Path) -> Option<String> {
             }
             _ => None,
         })
-        .last()
+        .next_back()
         .filter(|s| !s.is_empty())
 }
 

@@ -520,13 +520,11 @@ fn dir(d: &str) -> &'static str {
     if d.eq_ignore_ascii_case("desc") { "DESC" } else { "ASC" }
 }
 
-fn query_count<'a>(db: &'a impl ConnectionTrait, sql: &'a str, params: Vec<Value>) -> impl std::future::Future<Output = Result<i64, AppError>> + 'a {
-    async move {
-        let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, params);
-        let row = db.query_one_raw(stmt).await?
-            .ok_or_else(|| AppError::Internal("count query returned no rows".into()))?;
-        get::<i64>(&row, "total")
-    }
+async fn query_count<'a>(db: &'a impl ConnectionTrait, sql: &'a str, params: Vec<Value>) -> Result<i64, AppError> {
+    let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, params);
+    let row = db.query_one_raw(stmt).await?
+        .ok_or_else(|| AppError::Internal("count query returned no rows".into()))?;
+    get::<i64>(&row, "total")
 }
 
 fn get<T>(row: &QueryResult, col: &str) -> Result<T, AppError>

@@ -91,8 +91,8 @@ pub async fn run_find(
 
     println!("♫ Found {} track(s) for \"{query}\":\n", rows.len());
     println!(
-        "  {:<36}  {:<30}  {:<25}  {:<30}  {:<8}  {}",
-        "ID", "Title", "Artist", "Album", "Duration", "Genre"
+        "  {:<36}  {:<30}  {:<25}  {:<30}  {:<8}  Genre",
+        "ID", "Title", "Artist", "Album", "Duration"
     );
     println!("  {}", "-".repeat(145));
 
@@ -277,7 +277,7 @@ pub async fn run_artist(name: String, library: Option<String>, raw: bool) -> any
 
             println!();
             println!("  📁 {album_title} ({year}) — {} track(s)", tracks.len());
-            println!("     {:<4}  {:<40}  {:<8}  {}", "#", "Title", "Duration", "Genre");
+            println!("     {:<4}  {:<40}  {:<8}  Genre", "#", "Title", "Duration");
             println!("     {}", "-".repeat(70));
 
             for track in tracks {

@@ -107,7 +107,7 @@ impl MusicRepo {
         if let Some(sources) = input.sources {
             q = q.col_expr(musics::Column::Sources, Expr::value(sources));
         }
-        let mut results = q.exec_with_returning(db).await?;
+        let results = q.exec_with_returning(db).await?;
         results
             .into_iter()
             .next()
