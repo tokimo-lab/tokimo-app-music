@@ -27,8 +27,8 @@ use tracing::{error, info};
 #[derive(Parser, Debug)]
 #[command(
     name = "tokimo-app-music",
-    about = "Music — Tokimo 本地音乐库 CLI",
-    long_about = "Tokimo Music CLI — 在本地音乐库中搜索歌曲、浏览艺术家曲库。\n\n直接连接数据库（通过 DATABASE_URL），不需要主 server 运行。",
+    about = "Music — Tokimo Local Music Library CLI",
+    long_about = "Tokimo Music CLI — search songs in the local music library, browse artist catalog.\n\nConnects directly to the database (via DATABASE_URL); no main server needed.",
     term_width = 100
 )]
 struct Cli {
@@ -40,32 +40,32 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// 按名称查找歌曲（模糊匹配 title，可选按艺术家过滤）
+    /// Find songs by name (fuzzy match title, optionally filter by artist)
     Find {
-        /// 歌曲名称关键词（支持模糊匹配，如 "love" 匹配 "Love Story"）
+        /// Song name keyword (fuzzy match, e.g. "love" matches "Love Story")
         query: String,
-        /// 按艺术家名称过滤（模糊匹配）
-        #[arg(short, long, help = "按艺术家名称过滤")]
+        /// Filter by artist name (fuzzy match)
+        #[arg(short, long, help = "Filter by artist name")]
         artist: Option<String>,
-        /// 限定音乐库 ID（不传则搜索所有库）
-        #[arg(short, long, help = "限定音乐库 ID")]
+        /// Limit to music library ID (searches all if not provided)
+        #[arg(short, long, help = "Limit to music library ID")]
         library: Option<String>,
-        /// 返回结果数量上限
-        #[arg(short = 'n', long, default_value_t = 20, help = "返回结果数量上限")]
+        /// Max number of results
+        #[arg(short = 'n', long, default_value_t = 20, help = "Max number of results")]
         limit: u32,
-        /// 输出原始 JSON 而非表格
-        #[arg(long, help = "输出原始 JSON")]
+        /// Output raw JSON instead of table
+        #[arg(long, help = "Output raw JSON")]
         raw: bool,
     },
-    /// 查找艺术家并展示其完整曲库（专辑 + 曲目列表）
+    /// Find artist and show full catalog (album + track list)
     Artist {
-        /// 艺术家名称（模糊匹配，如 "beatles" 匹配 "The Beatles"）
+        /// Artist name (fuzzy match, e.g. "beatles" matches "The Beatles")
         name: String,
-        /// 限定音乐库 ID（不传则搜索所有库）
-        #[arg(short, long, help = "限定音乐库 ID")]
+        /// Limit to music library ID (searches all if not provided)
+        #[arg(short, long, help = "Limit to music library ID")]
         library: Option<String>,
-        /// 输出原始 JSON 而非格式化列表
-        #[arg(long, help = "输出原始 JSON")]
+        /// Output raw JSON instead of formatted list
+        #[arg(long, help = "Output raw JSON")]
         raw: bool,
     },
 }
