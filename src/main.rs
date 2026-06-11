@@ -51,7 +51,12 @@ enum Command {
         #[arg(short, long, help = "Limit to music library ID")]
         library: Option<String>,
         /// Max number of results
-        #[arg(short = 'n', long, default_value_t = 20, help = "Max number of results")]
+        #[arg(
+            short = 'n',
+            long,
+            default_value_t = 20,
+            help = "Max number of results"
+        )]
         limit: u32,
         /// Output raw JSON instead of table
         #[arg(long, help = "Output raw JSON")]
