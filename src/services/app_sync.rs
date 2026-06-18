@@ -115,7 +115,7 @@ async fn run_sync(
     sources: &Arc<SourceRegistry>,
     bus_client: &Arc<OnceLock<Arc<BusClient>>>,
     music_id: Uuid,
-    user_id: Uuid,
+    _user_id: Uuid,
 ) -> Result<SyncResult, AppError> {
     let music = MusicRepo::get_by_id(db, music_id)
         .await?
@@ -166,7 +166,7 @@ async fn run_sync(
                 "fileSize": file.size,
             }),
         );
-        jobs_client::create(client, jobs_client::music_caller(Some(user_id)), request).await?;
+        jobs_client::create(client, client.auto_caller("music"), request).await?;
         total_jobs += 1;
     }
 

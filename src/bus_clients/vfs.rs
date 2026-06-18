@@ -21,24 +21,14 @@ pub struct DriverConfig {
     pub config: JsonValue,
 }
 
-pub fn music_caller() -> CallerCtx {
-    CallerCtx {
-        user_id: None,
-        request_id: Uuid::new_v4().to_string(),
-        workspace: None,
-        caller_app_id: Some("music".to_string()),
-    }
-}
-
 pub async fn get_driver_config(
     client: &BusClient,
-    caller: CallerCtx,
     source_id: Uuid,
 ) -> Result<DriverConfig, AppError> {
     let response = invoke_json(
         client,
         "get_driver_config",
-        caller,
+        client.auto_caller("music"),
         &GetDriverConfigRequest { source_id },
     )
     .await?;

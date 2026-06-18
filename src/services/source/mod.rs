@@ -36,7 +36,7 @@ impl SourceRegistry {
             .get()
             .ok_or_else(|| AppError::Internal("bus client is not ready".to_string()))?;
         let config =
-            vfs_client::get_driver_config(client, vfs_client::music_caller(), source_uuid).await?;
+            vfs_client::get_driver_config(client, source_uuid).await?;
 
         let registry = DriverRegistry::new();
         let driver = registry
