@@ -5,8 +5,7 @@
 use std::sync::Arc;
 
 use axum::{
-    Router,
-    middleware,
+    Router, middleware,
     routing::{get, post},
 };
 use tokimo_bus_protocol::{BusListener, DataPlaneSocket};
@@ -62,6 +61,8 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
         .route("/{id}/genres", get(handlers::list_music_genres))
         .route("/{id}/backfill-lyrics", post(handlers::backfill_lyrics))
         .route("/assets/{*path}", get(assets::serve))
-        .layer(middleware::from_fn(tokimo_bus_protocol::task_local::auth_middleware))
+        .layer(middleware::from_fn(
+            tokimo_bus_protocol::task_local::auth_middleware,
+        ))
         .with_state(ctx)
 }
