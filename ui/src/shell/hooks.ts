@@ -50,7 +50,7 @@ export function useMessage() {
 }
 
 function parseRouteParams(route: string): WindowRouteParams {
-  const parts = route.split("/").filter(Boolean);
+  const parts = route.split(/[?#]/, 1)[0].split("/").filter(Boolean);
   if (parts[0] === "library" && parts[1]) {
     // /library/{id} or /library/{id}/albums/{albumId} or /library/{id}/artists/{artistId}
     if (parts[2] === "albums" && parts[3])

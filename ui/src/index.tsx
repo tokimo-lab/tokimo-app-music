@@ -26,6 +26,14 @@ export default defineApp({
     defaultSize: { width: 1200, height: 800 },
     category: "system",
   },
+  standalone: {
+    createWindow: (route) => ({ type: "music", route }),
+    getRoute: (window) => {
+      if (window.type !== "music") return null;
+      if (window.route && window.route !== "/") return window.route;
+      return window.appId ? `/library/${window.appId}` : "/";
+    },
+  },
   mount(container, ctx): Dispose {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: 1 } },
