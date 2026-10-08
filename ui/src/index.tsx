@@ -3,6 +3,8 @@ import type { Dispose } from "@tokimo/sdk";
 import { defineApp, RuntimeProvider } from "@tokimo/sdk";
 import {
   ConfigProvider,
+  cssVar,
+  TOKEN,
   ToastProvider,
   enUS as uiEnUS,
   zhCN as uiZhCN,
@@ -27,6 +29,8 @@ export default defineApp({
     category: "system",
   },
   standalone: {
+    layout: "document",
+    background: cssVar(TOKEN.surfaceBase),
     createWindow: (route) => ({ type: "music", route }),
     getRoute: (window) => {
       if (window.type !== "music") return null;

@@ -1,4 +1,4 @@
-import { posterThumbUrl } from "@tokimo/sdk";
+import { posterThumbUrl, useStandaloneDocumentScroll } from "@tokimo/sdk";
 import { cn } from "@tokimo/ui";
 import {
   ChartNoAxesColumn,
@@ -365,6 +365,7 @@ export function FullScreenPlayer({
   open: boolean;
   onClose: () => void;
 }) {
+  const documentScroll = useStandaloneDocumentScroll();
   const {
     currentTrack,
     isPlaying,
@@ -671,6 +672,15 @@ export function FullScreenPlayer({
     return () => ro.disconnect();
   }, [phase]);
 
+  useEffect(() => {
+    if (!documentScroll || phase === "closed") return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [documentScroll, phase]);
+
   if (phase === "closed" || !currentTrack) return null;
 
   const coverUrl = getCoverUrl(currentTrack.coverPath);
@@ -817,7 +827,8 @@ export function FullScreenPlayer({
       ref={panelRef}
       onTransitionEnd={handleTransitionEnd}
       className={cn(
-        "app-safe-area-screen pointer-events-none absolute inset-0 z-[100] flex flex-col overflow-hidden bg-black/95 text-white backdrop-blur-2xl transition-transform duration-400 ease-out",
+        "app-safe-area-screen pointer-events-none inset-0 z-[100] flex flex-col overflow-hidden bg-black/95 text-white backdrop-blur-2xl transition-transform duration-400 ease-out",
+        documentScroll ? "fixed" : "absolute",
         phase === "open" ? "translate-y-0" : "translate-y-full",
       )}
     >

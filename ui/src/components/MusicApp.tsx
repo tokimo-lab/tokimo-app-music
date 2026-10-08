@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { useStandaloneDocumentScroll } from "@tokimo/sdk";
 import { AppSetupGuide, Spin } from "@tokimo/ui";
 import { Disc3, FileMusic, ListMusic, Plus } from "lucide-react";
 import { Suspense, useCallback, useEffect } from "react";
@@ -19,6 +20,7 @@ const LoadingFallback = (
 );
 
 export default function MusicApp() {
+  const documentScroll = useStandaloneDocumentScroll();
   const { LazyViewComponent, params, replace, updateTitle } = useWindowNav();
   const { data: libraries, isLoading } = api.music.list.useQuery();
   const [containerRef, containerWidth] = useContainerWidth();
@@ -108,7 +110,10 @@ export default function MusicApp() {
   }
 
   return (
-    <div ref={containerRef} className="relative flex h-full">
+    <div
+      ref={containerRef}
+      className={`relative flex ${documentScroll ? "min-h-dvh flex-col" : "h-full"}`}
+    >
       <MusicSidebar
         libraries={libraries}
         activeId={activeLibraryId}
@@ -126,7 +131,7 @@ export default function MusicApp() {
         onToggleCollapse={onToggleCollapse}
       />
       <div
-        className={`relative min-w-0 flex-1 overflow-auto bg-[var(--color-surface-content)]${isDetailPage ? " app-safe-area [--app-safe-area-padding:0.75rem] lg:[--app-safe-area-padding:1rem]" : " app-safe-area-top app-safe-area-x"}`}
+        className={`relative min-w-0 flex-1 ${documentScroll ? "overflow-visible bg-surface-base" : "overflow-auto bg-[var(--color-surface-content)]"}${isDetailPage ? " app-safe-area [--app-safe-area-padding:0.75rem] lg:[--app-safe-area-padding:1rem]" : " app-safe-area-top app-safe-area-x"}`}
       >
         {isDetailPage && LazyViewComponent ? (
           <Suspense fallback={LoadingFallback}>

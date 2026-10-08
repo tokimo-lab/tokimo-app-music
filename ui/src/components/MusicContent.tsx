@@ -1,3 +1,4 @@
+import { useStandaloneDocumentScroll } from "@tokimo/sdk";
 import { Empty, PillTabBar, Spin, Tag } from "@tokimo/ui";
 import { motion } from "framer-motion";
 import {
@@ -196,6 +197,7 @@ export default function MusicContent({
   syncing?: boolean;
 }) {
   const { navigate } = useWindowNav();
+  const documentScroll = useStandaloneDocumentScroll();
   const { playTrack, playTracks } = useMusicPlayer();
 
   const [tab, setTabRaw] = useState<TabKey>("albums");
@@ -345,9 +347,13 @@ export default function MusicContent({
         : "搜索曲目";
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
+    <div
+      className={`flex flex-col p-4 ${documentScroll ? "overflow-visible" : "h-full overflow-y-auto"}`}
+    >
       {/* Tab bar / Search bar — sticky */}
-      <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-0 bg-surface-base px-4 pt-4 pb-3">
+      <div
+        className={`z-10 -mx-4 -mt-4 mb-0 bg-surface-base px-4 pt-4 pb-3 ${documentScroll ? "relative" : "sticky top-0"}`}
+      >
         {searching ? (
           /* ── Search mode: replace tab bar with search input ── */
           <div className="flex justify-center">
@@ -392,6 +398,7 @@ export default function MusicContent({
         ) : (
           /* ── Normal mode: tab bar with search button ── */
           <PillTabBar
+            sticky={!documentScroll}
             tabs={tabs}
             activeTab={tab}
             onTabChange={(t) => {
