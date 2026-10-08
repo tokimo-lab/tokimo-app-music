@@ -817,7 +817,7 @@ export function FullScreenPlayer({
       ref={panelRef}
       onTransitionEnd={handleTransitionEnd}
       className={cn(
-        "pointer-events-none absolute inset-0 z-[100] flex flex-col overflow-hidden bg-black/95 text-white backdrop-blur-2xl transition-transform duration-400 ease-out",
+        "app-safe-area-screen pointer-events-none absolute inset-0 z-[100] flex flex-col overflow-hidden bg-black/95 text-white backdrop-blur-2xl transition-transform duration-400 ease-out",
         phase === "open" ? "translate-y-0" : "translate-y-full",
       )}
     >
@@ -851,7 +851,7 @@ export function FullScreenPlayer({
       />
       <div
         className={cn(
-          "relative z-20 flex items-center justify-between px-6 py-4 transition-opacity duration-500",
+          "app-safe-area-top app-safe-area-x relative z-20 flex items-center justify-between pb-4 [--app-safe-area-padding-top:1rem] [--app-safe-area-padding-x:1.5rem] transition-opacity duration-500",
           immersive && !controlsVisible && "pointer-events-none opacity-0",
         )}
       >
@@ -905,7 +905,7 @@ export function FullScreenPlayer({
           {/* Overlay: track info + controls — fade on idle */}
           <div
             className={cn(
-              "absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-8 pb-6 pt-24 transition-opacity duration-500",
+              "app-safe-area-bottom app-safe-area-x absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-24 [--app-safe-area-padding-bottom:1.5rem] [--app-safe-area-padding-x:2rem] transition-opacity duration-500",
               controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none",
             )}
           >
@@ -1035,7 +1035,7 @@ export function FullScreenPlayer({
           </div>
 
           {/* Footer: seek bar + controls */}
-          <div className="pointer-events-auto relative z-10 flex flex-col items-center gap-4 px-8 pb-8 lg:px-16">
+          <div className="app-safe-area-bottom app-safe-area-x pointer-events-auto relative z-10 flex flex-col items-center gap-4 [--app-safe-area-padding-bottom:2rem] [--app-safe-area-padding-x:2rem] lg:[--app-safe-area-padding-x:4rem]">
             {/* Track info shown in footer when narrow */}
             {isNarrow && (
               <div className="w-full max-w-2xl text-center">

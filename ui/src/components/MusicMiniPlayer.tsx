@@ -1,5 +1,5 @@
 import { posterThumbUrl } from "@tokimo/sdk";
-import { cn, Tooltip } from "@tokimo/ui";
+import { cn, cssVar, TOKEN, Tooltip } from "@tokimo/ui";
 import {
   Disc3,
   ListMusic,
@@ -281,8 +281,8 @@ export function MusicMiniPlayer() {
   return (
     <>
       <div
-        className="flex shrink-0 flex-col border-t border-border-base bg-[var(--color-surface-overlay)] backdrop-blur-md select-none"
-        style={{ height: `${MUSIC_MINI_PLAYER_HEIGHT_PX}px` }}
+        className="app-safe-area-bottom flex shrink-0 flex-col border-t border-border-base bg-[var(--color-surface-overlay)] backdrop-blur-md select-none"
+        style={{ height: `calc(${MUSIC_MINI_PLAYER_HEIGHT_PX}px + ${cssVar(TOKEN.appSafeAreaBottom)})` }}
       >
         {/* Top progress bar */}
         <LiveProgressBar

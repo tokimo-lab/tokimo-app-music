@@ -126,7 +126,7 @@ export default function MusicApp() {
         onToggleCollapse={onToggleCollapse}
       />
       <div
-        className={`relative min-w-0 flex-1 overflow-auto bg-[var(--color-surface-content)]${isDetailPage ? " px-3 py-3 lg:px-4 lg:py-4" : ""}`}
+        className={`relative min-w-0 flex-1 overflow-auto bg-[var(--color-surface-content)]${isDetailPage ? " app-safe-area [--app-safe-area-padding:0.75rem] lg:[--app-safe-area-padding:1rem]" : " app-safe-area-top app-safe-area-x"}`}
       >
         {isDetailPage && LazyViewComponent ? (
           <Suspense fallback={LoadingFallback}>
