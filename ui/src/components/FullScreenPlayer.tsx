@@ -14,6 +14,7 @@ import { useUiPreference } from "../shared/hooks/hooks";
 import { useMusicPlayer } from "../shell/hooks";
 import { NowPlayingPanel } from "./NowPlayingPanel";
 import { FullScreenLyrics } from "./playback/FullScreenLyrics";
+import { MusicQualityMenu } from "./playback/MusicQualityMenu";
 import { PlaybackControls } from "./playback/PlaybackControls";
 import { PlaybackDebug } from "./playback/PlaybackDebug";
 import { PlaybackSeekBar } from "./playback/PlaybackSeekBar";
@@ -332,6 +333,7 @@ export function FullScreenPlayer({
                     />
                   </div>
                   <PlaybackControls />
+                  <MusicQualityMenu />
                   <PlaybackVolumeControl />
                 </div>
               </div>
@@ -418,6 +420,7 @@ export function FullScreenPlayer({
                     />
                   </div>
                   <PlaybackControls />
+                  <MusicQualityMenu />
                   <PlaybackVolumeControl />
                 </div>
               </div>

@@ -130,7 +130,10 @@ async fn run_server() -> anyhow::Result<()> {
     let client_slot: Arc<OnceLock<Arc<BusClient>>> = Arc::new(OnceLock::new());
     let storage = services::storage::create_storage_from_bus(Arc::clone(&client_slot), "music");
     let sources = Arc::new(SourceRegistry::new(Arc::clone(&client_slot)));
+    let hls = Arc::new(tokimo_package_hls::HlsSessionManager::new());
+    hls.start_cleanup_task();
     let context = Arc::new(ctx::AppCtx {
+        hls,
         db: db.clone(),
         client: Arc::clone(&client_slot),
         sources,

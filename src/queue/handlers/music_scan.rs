@@ -195,9 +195,9 @@ async fn probe_metadata(
             .round()
             .to_i32()
             .filter(|&d| d > 0),
-        bitrate: tag_get(tags, "bitrate")
-            .and_then(|s| s.parse().ok())
-            .or_else(|| probe.format.bit_rate.parse().ok()),
+        bitrate: audio_stream
+            .and_then(crate::services::quality::stream_audio_bitrate)
+            .and_then(|rate| i32::try_from(rate).ok()),
         sample_rate: audio_stream
             .and_then(|s| s.audio.as_ref())
             .and_then(|a| a.sample_rate.parse().ok()),

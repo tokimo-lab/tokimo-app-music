@@ -14,6 +14,11 @@ import {
 import { lazy, useCallback, useEffect, useMemo } from "react";
 import { useAppCtx } from "../AppContext";
 import type { MusicTrackOutput, RepeatMode } from "../lib/types";
+import {
+  commitMusicAudio,
+  reportMusicPlaybackError,
+  resolveMusicAudio,
+} from "./music-quality";
 
 export type { MenuBarConfig, RepeatMode };
 
@@ -169,7 +174,8 @@ export function useMusicProvider() {
     if (!registration) {
       const handle: MediaProviderHandle = {
         displayName: "Tokimo Music",
-        resolveAudioUrl: (track) => `/api/apps/music/files/${track.id}/stream`,
+        resolveAudioUrl: (track) => resolveMusicAudio(track.id),
+        onTrackChanged: (track) => commitMusicAudio(track.id),
       };
       registration = {
         owners: 0,
@@ -207,11 +213,18 @@ export function useMusicPlayer() {
   const playTracks = useCallback(
     (tracks: MusicTrackOutput[], startIndex = 0) => {
       if (!media || tracks.length === 0) return;
-      void media.play({
-        providerId: PROVIDER_ID,
-        queue: tracks.map(toMediaTrack),
-        startIndex,
-      });
+      void media
+        .play({
+          providerId: PROVIDER_ID,
+          queue: tracks.map(toMediaTrack),
+          startIndex,
+        })
+        .catch((error: unknown) =>
+          reportMusicPlaybackError(
+            error,
+            tracks[startIndex]?.fileId ?? tracks[startIndex]?.id ?? "",
+          ),
+        );
     },
     [media],
   );
@@ -230,11 +243,15 @@ export function useMusicPlayer() {
         ...tracks.map(toMediaTrack),
       ];
       if (!snap || snap.providerId !== PROVIDER_ID) {
-        void media.play({
-          providerId: PROVIDER_ID,
-          queue: next,
-          startIndex: 0,
-        });
+        void media
+          .play({
+            providerId: PROVIDER_ID,
+            queue: next,
+            startIndex: 0,
+          })
+          .catch((error: unknown) =>
+            reportMusicPlaybackError(error, next[0]?.id ?? ""),
+          );
       } else {
         media.setQueue(next, snap.currentIndex);
         media.updateProviderSnapshot(PROVIDER_ID, {

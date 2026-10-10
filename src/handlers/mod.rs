@@ -1,3 +1,4 @@
+pub mod playback;
 pub mod browse;
 pub mod crud;
 pub mod stream;
@@ -13,6 +14,7 @@ use crate::db::entities::vfs;
 use crate::db::repos::MusicRepo;
 use crate::error::AppError;
 
+pub use playback::*;
 pub use browse::*;
 pub use crud::*;
 pub use stream::stream_music_file;

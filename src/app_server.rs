@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use axum::{
     Router, middleware,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use tokimo_bus_protocol::{BusListener, DataPlaneSocket};
 use tracing::{error, info};
@@ -30,6 +30,10 @@ pub async fn spawn(service: &str, ctx: Arc<AppCtx>) -> anyhow::Result<DataPlaneS
 
 fn build_router(ctx: Arc<AppCtx>) -> Router {
     Router::new()
+        .route("/files/{file_id}/qualities", get(handlers::file_qualities))
+        .route("/files/{file_id}/playback", post(handlers::create_playback))
+        .route("/playback/{id}", delete(handlers::stop_playback))
+        .route("/hls/{id}/{segment}", get(handlers::audio_segment))
         .route("/files/{file_id}/stream", get(handlers::stream_music_file))
         .route("/", get(handlers::list_musics).post(handlers::create_music))
         .route("/reorder", post(handlers::reorder_musics))

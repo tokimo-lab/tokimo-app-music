@@ -9,6 +9,7 @@ use crate::services::source::SourceRegistry;
 use crate::services::storage::StorageProvider;
 
 pub struct AppCtx {
+    pub hls: Arc<tokimo_package_hls::HlsSessionManager>,
     pub db: DatabaseConnection,
     pub client: Arc<OnceLock<Arc<BusClient>>>,
     pub sources: Arc<SourceRegistry>,

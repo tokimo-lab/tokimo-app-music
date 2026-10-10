@@ -839,3 +839,56 @@ export interface UpdateLibraryInput {
   sourceType?: string;
   settings?: Record<string, unknown> | null;
 }
+
+export type MusicQualityProfile =
+  | "original"
+  | "aac-128"
+  | "aac-192"
+  | "aac-320";
+
+export interface MusicAudioSourceInfo {
+  codec: string;
+  bitrate: number | null;
+  sampleRate: number | null;
+  channels: number | null;
+  lossless: boolean;
+}
+
+export interface MusicQualityOption {
+  id: MusicQualityProfile;
+  label: string;
+  bitrate: number | null;
+}
+
+export interface MusicFileQualities {
+  source: MusicAudioSourceInfo;
+  options: MusicQualityOption[];
+}
+
+export interface MusicPlaybackSource extends MusicFileQualities {
+  url: string;
+  kind: "direct" | "hls";
+  sessionId: string | null;
+  effectiveProfile: MusicQualityProfile;
+}
+
+export const musicPlaybackApi = {
+  qualities: (fileId: string) =>
+    apiFetch<MusicFileQualities>(
+      `${API_BASE}/files/${encodeURIComponent(fileId)}/qualities`,
+    ),
+  create: (fileId: string, profileId: MusicQualityProfile) =>
+    apiFetch<MusicPlaybackSource>(
+      `${API_BASE}/files/${encodeURIComponent(fileId)}/playback`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId }),
+      },
+    ),
+  stop: (sessionId: string) =>
+    apiFetch<void>(`${API_BASE}/playback/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+      keepalive: true,
+    }),
+};

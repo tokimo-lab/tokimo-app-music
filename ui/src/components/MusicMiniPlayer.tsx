@@ -19,6 +19,7 @@ import { type RepeatMode, useMusicPlayer } from "../shell/hooks";
 import { FullScreenPlayer } from "./FullScreenPlayer";
 import { NowPlayingPanel } from "./NowPlayingPanel";
 import { MiniPlaybackLyrics } from "./playback/MiniPlaybackLyrics";
+import { MusicQualityMenu } from "./playback/MusicQualityMenu";
 import { PlaybackSeekBar } from "./playback/PlaybackSeekBar";
 
 export const MUSIC_MINI_PLAYER_HEIGHT_PX = 76;
@@ -242,6 +243,8 @@ export function MusicMiniPlayer() {
               getCurrentTime={getCurrentTime}
             />
           )}
+
+          <MusicQualityMenu />
 
           {/* Playback controls */}
           <div className="flex items-center gap-1">
