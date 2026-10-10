@@ -25,6 +25,7 @@ struct AudioMeta {
     artist: Option<String>,
     album: Option<String>,
     title: Option<String>,
+    year: Option<i32>,
     duration: Option<i32>,
     bitrate: Option<i32>,
     sample_rate: Option<i32>,
@@ -82,26 +83,15 @@ pub async fn handle(
         meta,
     };
 
+    let parsed = resolve_track(&file);
     let txn = db.begin().await?;
-    let album_id = process_audio_file(&txn, music_id, &file).await?;
+    let album_id = process_audio_file(&txn, music_id, &file, &parsed).await?;
     txn.commit().await?;
 
     // Scrape metadata inline (MusicBrainz + cover art) before notifying frontend.
     // This ensures the UI never shows "unknown artist" or missing covers.
-    let album_title = file
-        .meta
-        .as_ref()
-        .and_then(|m| m.album.as_deref())
-        .unwrap_or("Unknown Album");
-
-    // Use artist from file metadata or filename parsing
-    let fallback = parse_track(&file.path, file.source_root.as_deref());
-    let effective_artist = file
-        .meta
-        .as_ref()
-        .and_then(|m| m.artist.as_deref())
-        .or(fallback.artist.as_deref())
-        .unwrap_or("Unknown Artist");
+    let album_title = &parsed.album;
+    let effective_artist = parsed.artist.as_deref().unwrap_or("Unknown Artist");
 
     // Only scrape if album hasn't been scraped yet
     let album = music_albums::Entity::find_by_id(album_id).one(db).await?;
@@ -196,6 +186,9 @@ async fn probe_metadata(
         artist: tag_get(tags, "artist").or_else(|| tag_get(tags, "album_artist")),
         album: tag_get(tags, "album"),
         title: tag_get(tags, "title"),
+        year: tag_get(tags, "date")
+            .and_then(|date| date.get(..4)?.parse::<i32>().ok())
+            .filter(|year| (1000..=9999).contains(year)),
         duration: probe
             .format
             .duration_secs()
@@ -213,9 +206,11 @@ async fn probe_metadata(
 }
 
 fn tag_get(tags: &BTreeMap<String, String>, key: &str) -> Option<String> {
-    tags.get(key)
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+    tags.iter()
+        .filter(|(name, _)| name.eq_ignore_ascii_case(key))
+        .map(|(_, value)| value.trim())
+        .find(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 trait RoundToInt32 {
@@ -248,11 +243,7 @@ struct ParsedTrack {
     album: String,
 }
 
-async fn process_audio_file<C: ConnectionTrait>(
-    db: &C,
-    music_id: Uuid,
-    file: &AudioFile,
-) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
+fn resolve_track(file: &AudioFile) -> ParsedTrack {
     let fallback = parse_track(&file.path, file.source_root.as_deref());
 
     // Merge: ffprobe tags take priority, filename parsing as fallback
@@ -293,12 +284,26 @@ async fn process_audio_file<C: ConnectionTrait>(
         "music_scan: resolved track metadata"
     );
 
+    ParsedTrack {
+        title,
+        artist,
+        album,
+    }
+}
+
+async fn process_audio_file<C: ConnectionTrait>(
+    db: &C,
+    music_id: Uuid,
+    file: &AudioFile,
+    parsed: &ParsedTrack,
+) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
     let now = Utc::now().fixed_offset();
-    let artist_id = match artist.as_deref() {
+    let artist_id = match parsed.artist.as_deref() {
         Some(artist) => Some(find_or_create_artist(db, artist, now).await?),
         None => None,
     };
-    let album_id = find_or_create_album(db, music_id, &album, now).await?;
+    let year = file.meta.as_ref().and_then(|meta| meta.year);
+    let album_id = find_or_create_album(db, music_id, &parsed.album, year, now).await?;
     if let Some(artist_id) = artist_id {
         ensure_album_artist(db, album_id, artist_id).await?;
     }
@@ -321,12 +326,6 @@ async fn process_audio_file<C: ConnectionTrait>(
         .one(db)
         .await?;
 
-    let parsed = ParsedTrack {
-        title,
-        artist,
-        album,
-    };
-
     let track_id = match existing_file.as_ref().and_then(|f| f.track_id) {
         Some(track_id) => {
             if let Some(track) = music_tracks::Entity::find_by_id(track_id).one(db).await? {
@@ -343,10 +342,10 @@ async fn process_audio_file<C: ConnectionTrait>(
                 active.update(db).await?;
                 track_id
             } else {
-                insert_track(db, album_id, &parsed, &file.path, file.meta.as_ref()).await?
+                insert_track(db, album_id, parsed, &file.path, file.meta.as_ref()).await?
             }
         }
-        None => insert_track(db, album_id, &parsed, &file.path, file.meta.as_ref()).await?,
+        None => insert_track(db, album_id, parsed, &file.path, file.meta.as_ref()).await?,
     };
 
     if let Some(existing) = existing_file {
@@ -449,6 +448,7 @@ async fn find_or_create_album<C: ConnectionTrait>(
     db: &C,
     music_id: Uuid,
     title: &str,
+    year: Option<i32>,
     now: chrono::DateTime<chrono::FixedOffset>,
 ) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
     if let Some(model) = music_albums::Entity::find()
@@ -457,7 +457,14 @@ async fn find_or_create_album<C: ConnectionTrait>(
         .one(db)
         .await?
     {
-        return Ok(model.id);
+        let id = model.id;
+        if model.year.is_none() && year.is_some() {
+            let mut active: music_albums::ActiveModel = model.into();
+            active.year = Set(year);
+            active.updated_at = Set(Some(now));
+            active.update(db).await?;
+        }
+        return Ok(id);
     }
     let id = Uuid::new_v4();
     music_albums::Entity::insert(music_albums::ActiveModel {
@@ -465,7 +472,7 @@ async fn find_or_create_album<C: ConnectionTrait>(
         music_id: Set(music_id),
         title: Set(title.to_string()),
         sort_title: Set(Some(sort_title(title))),
-        year: Set(None),
+        year: Set(year),
         release_date: Set(None),
         album_type: Set(None),
         mb_album_id: Set(None),

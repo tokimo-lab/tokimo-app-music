@@ -365,7 +365,7 @@ impl MusicScrapeService {
         };
 
         let genres = detail.genres.clone().unwrap_or_default();
-        let year = detail.year;
+        let year = detail.year.or(album.year);
         let now = Utc::now().fixed_offset();
 
         // Download cover from metadata source
