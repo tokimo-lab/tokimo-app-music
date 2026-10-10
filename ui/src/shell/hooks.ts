@@ -155,18 +155,42 @@ function isMusicTrackOutput(value: unknown): value is MusicTrackOutput {
   );
 }
 
-export function useMusicPlayer() {
+// All windows in this document share the host's single MediaCenter store.
+let musicProvider: { owners: number; dispose: () => void } | null = null;
+
+/** The stable app layout owns registration; player consumers only subscribe. */
+export function useMusicProvider() {
   const ctx = useAppCtx();
-  const { snapshot, api: media } = useMediaCenter(ctx);
+  const { api: media } = useMediaCenter(ctx);
 
   useEffect(() => {
     if (!media) return;
-    const handle: MediaProviderHandle = {
-      displayName: "Tokimo Music",
-      resolveAudioUrl: (track) => `/api/apps/music/files/${track.id}/stream`,
+    let registration = musicProvider;
+    if (!registration) {
+      const handle: MediaProviderHandle = {
+        displayName: "Tokimo Music",
+        resolveAudioUrl: (track) => `/api/apps/music/files/${track.id}/stream`,
+      };
+      registration = {
+        owners: 0,
+        dispose: media.registerProvider(PROVIDER_ID, handle),
+      };
+      musicProvider = registration;
+    }
+    registration.owners += 1;
+    return () => {
+      registration.owners -= 1;
+      if (registration.owners === 0) {
+        registration.dispose();
+        musicProvider = null;
+      }
     };
-    return media.registerProvider(PROVIDER_ID, handle);
   }, [media]);
+}
+
+export function useMusicPlayer() {
+  const ctx = useAppCtx();
+  const { snapshot, api: media } = useMediaCenter(ctx);
 
   const isActive = snapshot?.providerId === PROVIDER_ID;
   const queue = useMemo<MusicTrackOutput[]>(() => {
@@ -213,6 +237,9 @@ export function useMusicPlayer() {
         });
       } else {
         media.setQueue(next, snap.currentIndex);
+        media.updateProviderSnapshot(PROVIDER_ID, {
+          currentIndex: snap.currentIndex,
+        });
       }
     },
     [media],
@@ -223,12 +250,41 @@ export function useMusicPlayer() {
       if (!media) return;
       const snap = media.getSnapshot();
       if (!snap || snap.providerId !== PROVIDER_ID) return;
+      if (index < 0 || index >= snap.queue.length) return;
       const next = snap.queue.filter((_, i) => i !== index);
       if (next.length === 0) {
-        media.pause();
+        media.clearQueue();
         return;
       }
-      media.setQueue(next, Math.min(snap.currentIndex, next.length - 1));
+      if (index === snap.currentIndex) {
+        const nextIndex = Math.min(index, next.length - 1);
+        void media
+          .play({
+            providerId: PROVIDER_ID,
+            queue: next,
+            startIndex: nextIndex,
+          })
+          .then(() => {
+            const current = media.getSnapshot();
+            if (
+              !snap.isPlaying &&
+              current?.providerId === PROVIDER_ID &&
+              current.currentIndex === nextIndex &&
+              current.queue.length === next.length &&
+              current.queue.every((track, i) => track === next[i])
+            ) {
+              media.pause();
+            }
+          })
+          .catch((error: unknown) =>
+            console.error("[Music] Failed to replace current track", error),
+          );
+        return;
+      }
+      const nextIndex =
+        index < snap.currentIndex ? snap.currentIndex - 1 : snap.currentIndex;
+      media.setQueue(next, nextIndex);
+      media.updateProviderSnapshot(PROVIDER_ID, { currentIndex: nextIndex });
     },
     [media],
   );
@@ -255,7 +311,9 @@ export function useMusicPlayer() {
     addToQueue,
     playNext: addToQueue,
     removeFromQueue,
-    clearQueue: () => media?.pause(),
+    clearQueue: () => {
+      if (media?.getSnapshot()?.providerId === PROVIDER_ID) media.clearQueue();
+    },
     skipToIndex: (index: number) => media?.skipToIndex(index),
     next: () => media?.next(),
     previous: () => media?.previous(),

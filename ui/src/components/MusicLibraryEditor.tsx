@@ -98,10 +98,8 @@ export default function MusicLibraryEditor({
   // Pre-fill form
   useEffect(() => {
     if (music) {
-      const settings = (music as Record<string, unknown>).settings as Record<
-        string,
-        unknown
-      > | null;
+      const settings = (music as unknown as Record<string, unknown>)
+        .settings as Record<string, unknown> | null;
       const metadata = settings?.metadata as Record<string, unknown> | null;
       form.setFieldsValue({
         type: music.type,
@@ -158,6 +156,7 @@ export default function MusicLibraryEditor({
   });
 
   const handleSave = useCallback(async () => {
+    if (createMutation.isPending || updateMutation.isPending) return;
     const values = await form.validateFields();
     const rawBindings =
       (form.getFieldValue("bindings") as VideoBinding[] | undefined) ?? [];
@@ -204,20 +203,25 @@ export default function MusicLibraryEditor({
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="@container/music-editor flex h-full flex-col overflow-hidden">
       <Form
         form={form as FormInstance}
         layout="vertical"
         autoComplete="off"
-        className="flex min-h-0 flex-1 flex-col"
+        className="!space-y-0 flex min-h-0 flex-1 flex-col"
+        onFinish={() =>
+          void handleSave().catch((error: unknown) =>
+            console.error("[Music] Save failed", error),
+          )
+        }
       >
         <ScrollArea
           direction="vertical"
           className="min-h-0 flex-1"
-          innerClassName="space-y-5 px-5 py-5"
+          innerClassName="space-y-4 px-3 py-3 @min-[640px]/music-editor:space-y-5 @min-[640px]/music-editor:px-5 @min-[640px]/music-editor:py-5"
         >
           {/* 基本信息 */}
-          <div className="rounded-lg border border-border-base p-5">
+          <div className="rounded-lg border border-border-base p-3 @min-[640px]/music-editor:p-5">
             <h4 className="mb-4 text-sm font-semibold text-fg-primary">
               基本信息
             </h4>
@@ -254,8 +258,8 @@ export default function MusicLibraryEditor({
             </Form.Item>
           </div>
 
-          {/* 路径配置 */}
-          <div className="rounded-lg border border-border-base p-5">
+          {/* 路径配置 — StorageBindingsField already supplies its own container */}
+          <div>
             <h4 className="mb-4 text-sm font-semibold text-fg-primary">
               路径配置
             </h4>
@@ -268,7 +272,7 @@ export default function MusicLibraryEditor({
           </div>
 
           {/* 元数据设置 */}
-          <div className="rounded-lg border border-border-base p-5">
+          <div className="rounded-lg border border-border-base p-3 @min-[640px]/music-editor:p-5">
             <h4 className="mb-4 text-sm font-semibold text-fg-primary">
               元数据设置
             </h4>
@@ -331,20 +335,33 @@ export default function MusicLibraryEditor({
         </ScrollArea>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-border-base px-5 py-3">
+        <div className="app-safe-area-bottom flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border-base px-3 py-3 @min-[640px]/music-editor:px-5">
           <div>
             {music && (
-              <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+              <Button
+                className="min-h-11 @min-[640px]/music-editor:min-h-8"
+                variant="danger"
+                onClick={() => setDeleteOpen(true)}
+              >
                 <Trash2 size={14} className="mr-1" />
                 删除
               </Button>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="default" onClick={onCancel}>
+            <Button
+              className="min-h-11 @min-[640px]/music-editor:min-h-8"
+              variant="default"
+              onClick={onCancel}
+            >
               取消
             </Button>
-            <Button loading={isPending} onClick={() => void handleSave()}>
+            <Button
+              className="min-h-11 @min-[640px]/music-editor:min-h-8"
+              variant="primary"
+              loading={isPending}
+              htmlType="submit"
+            >
               {music ? "保存" : "创建"}
             </Button>
           </div>
@@ -405,10 +422,15 @@ function DeleteConfirmModal({
           }}
         />
         <div className="flex justify-end gap-2">
-          <Button variant="default" onClick={onCancel}>
+          <Button
+            className="min-h-11 @min-[640px]/music-editor:min-h-8"
+            variant="default"
+            onClick={onCancel}
+          >
             取消
           </Button>
           <Button
+            className="min-h-11 @min-[640px]/music-editor:min-h-8"
             variant="danger"
             disabled={deleteInput !== music.name}
             loading={loading}

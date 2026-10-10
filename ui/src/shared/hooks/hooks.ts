@@ -1,30 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export function useContainerWidth(): [
-  React.RefObject<HTMLDivElement | null>,
+  React.RefCallback<HTMLDivElement>,
   number,
 ] {
-  const ref = useRef<HTMLDivElement>(null);
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
-    if (!ref.current) return;
-    const obs = new ResizeObserver((entries) => {
-      if (entries[0]) {
-        setWidth(entries[0].contentRect.width);
-      }
+    if (!element) return;
+    const initialWidth = element.getBoundingClientRect().width;
+    if (initialWidth > 0) setWidth(initialWidth);
+    const observer = new ResizeObserver((entries) => {
+      const measuredWidth = entries[0]?.contentRect.width;
+      if (measuredWidth && measuredWidth > 0) setWidth(measuredWidth);
     });
-    obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, []);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
 
-  return [ref, width];
+  return [setElement, width];
 }
 
-export function useSidebarCollapsed(
-  scopeId: string,
-  autoCollapse: boolean,
-): { collapsed: boolean; onToggleCollapse: () => void } {
+export function useSidebarCollapsed(scopeId: string): {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+} {
   const storageKey = `music-app:sidebar-collapsed:${scopeId}`;
 
   const [manuallyCollapsed, setManuallyCollapsed] = useState<boolean>(() => {
@@ -44,11 +45,13 @@ export function useSidebarCollapsed(
     }
   }, [manuallyCollapsed, storageKey]);
 
-  const collapsed = autoCollapse || manuallyCollapsed;
+  const collapsed = manuallyCollapsed;
 
   return {
     collapsed,
-    onToggleCollapse: () => setManuallyCollapsed(!collapsed),
+    onToggleCollapse: () => {
+      setManuallyCollapsed(!collapsed);
+    },
   };
 }
 
@@ -66,18 +69,24 @@ export function useInfiniteScroll<T>({
   enabled = true,
 }: InfiniteScrollInput<T>) {
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const [items, setItems] = useState<T[]>([]);
+  const [pages, setPages] = useState<Record<number, T[]>>({});
+  const items = useMemo(
+    () =>
+      Object.entries(pages)
+        .sort(([left], [right]) => Number(left) - Number(right))
+        .flatMap(([, pageItems]) => pageItems),
+    [pages],
+  );
 
   const total = queryData?.total ?? 0;
   const hasMore = items.length < total;
 
   useEffect(() => {
     if (!queryData) return;
-    setItems((prev) =>
-      queryData.page <= 1
-        ? (queryData.items ?? [])
-        : [...prev, ...(queryData.items ?? [])],
-    );
+    setPages((previous) => ({
+      ...(queryData.page <= 1 ? {} : previous),
+      [queryData.page]: queryData.items ?? [],
+    }));
   }, [queryData]);
 
   useEffect(() => {
@@ -89,7 +98,7 @@ export function useInfiniteScroll<T>({
     return () => obs.disconnect();
   }, [enabled, hasMore, isFetching, onLoadMore]);
 
-  const reset = useCallback(() => setItems([]), []);
+  const reset = useCallback(() => setPages({}), []);
 
   return useMemo(
     () => ({ items, total, hasMore, sentinelRef, reset }),

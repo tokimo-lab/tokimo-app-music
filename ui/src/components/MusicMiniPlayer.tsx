@@ -15,10 +15,11 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLyrics } from "../hooks/useLyrics";
 import { type RepeatMode, useMusicPlayer } from "../shell/hooks";
 import { FullScreenPlayer } from "./FullScreenPlayer";
 import { NowPlayingPanel } from "./NowPlayingPanel";
+import { MiniPlaybackLyrics } from "./playback/MiniPlaybackLyrics";
+import { PlaybackSeekBar } from "./playback/PlaybackSeekBar";
 
 export const MUSIC_MINI_PLAYER_HEIGHT_PX = 76;
 
@@ -35,117 +36,6 @@ function getCoverUrl(coverPath: string | null | undefined): string | null {
   return posterThumbUrl(coverPath, 300) ?? null;
 }
 
-// ── Karaoke text for mini player — reads progressRef via RAF ─────────────────
-
-function MiniKaraokeText({
-  text,
-  progressRef,
-}: {
-  text: string;
-  progressRef: React.RefObject<number>;
-}) {
-  const clipRef = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    let raf: number;
-    const tick = () => {
-      if (clipRef.current) {
-        const p = progressRef.current ?? 0;
-        clipRef.current.style.clipPath = `inset(0 ${(1 - p) * 100}% 0 0)`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [progressRef]);
-
-  return (
-    <span className="relative inline-block max-w-full truncate text-sm text-[var(--color-fg-muted)]">
-      <span aria-hidden className="invisible">
-        {text}
-      </span>
-      <span className="absolute inset-0 truncate text-[var(--color-fg-muted)]">
-        {text}
-      </span>
-      <span
-        ref={clipRef}
-        className="absolute inset-0 truncate text-[var(--color-accent)]"
-      >
-        {text}
-      </span>
-    </span>
-  );
-}
-
-// ── Sub-components ───────────────────────────────────────────────────────────
-
-function LiveProgressBar({
-  getCurrentTime,
-  getDuration,
-  onSeek,
-}: {
-  getCurrentTime: () => number;
-  getDuration: () => number;
-  onSeek(time: number): void;
-}) {
-  const barRef = useRef<HTMLDivElement>(null);
-  const fillRef = useRef<HTMLDivElement>(null);
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const rect = barRef.current?.getBoundingClientRect();
-      const d = getDuration();
-      if (!rect || d <= 0) return;
-      const ratio = Math.max(
-        0,
-        Math.min(1, (e.clientX - rect.left) / rect.width),
-      );
-      onSeek(ratio * d);
-    },
-    [getDuration, onSeek],
-  );
-
-  useEffect(() => {
-    let raf: number;
-    const tick = () => {
-      const d = getDuration();
-      const t = getCurrentTime();
-      const pct = d > 0 ? (t / d) * 100 : 0;
-      if (fillRef.current) fillRef.current.style.width = `${pct}%`;
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [getCurrentTime, getDuration]);
-
-  return (
-    <div
-      ref={barRef}
-      role="slider"
-      tabIndex={0}
-      aria-valuenow={0}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      className="group/progress relative h-1 w-full cursor-pointer bg-[var(--color-fill-tertiary)] transition-[height] hover:h-1.5"
-      onClick={handleClick}
-      onKeyDown={(e) => {
-        const d = getDuration();
-        if (d <= 0) return;
-        const step = d * 0.02;
-        const t = getCurrentTime();
-        if (e.key === "ArrowRight") onSeek(Math.min(d, t + step));
-        else if (e.key === "ArrowLeft") onSeek(Math.max(0, t - step));
-      }}
-    >
-      <div
-        ref={fillRef}
-        className="absolute inset-y-0 left-0 bg-[var(--color-accent)]"
-        style={{ width: "0%" }}
-      />
-    </div>
-  );
-}
-
 function LiveTimeDisplay({
   getCurrentTime,
   getDuration,
@@ -157,16 +47,15 @@ function LiveTimeDisplay({
   const totalRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    let raf: number;
     const tick = () => {
       if (elapsedRef.current)
         elapsedRef.current.textContent = formatTime(getCurrentTime());
       if (totalRef.current)
         totalRef.current.textContent = formatTime(getDuration());
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
   }, [getCurrentTime, getDuration]);
 
   return (
@@ -206,7 +95,7 @@ function VolumeControl({
         <button
           type="button"
           onClick={toggleMute}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:text-[var(--color-fg-primary)]"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:text-[var(--color-fg-primary)]"
         >
           {volume > 0 ? (
             <Volume2 className="h-4 w-4" />
@@ -256,15 +145,26 @@ export function MusicMiniPlayer() {
 
   const [queueOpen, setQueueOpen] = useState(false);
   const [fullScreen, setFullScreen] = useState(false);
+  useEffect(() => {
+    if (!currentTrack) {
+      setQueueOpen(false);
+      setFullScreen(false);
+    }
+  }, [currentTrack]);
 
-  const { lines, currentIdx, progressRef, plainText } = useLyrics(
-    currentTrack?.id,
-    getCurrentTime,
-  );
-  // Show synced lyrics line if available, otherwise show first line of plain lyrics
-  const syncedLine = currentIdx >= 0 ? lines[currentIdx]?.text : null;
-  const plainLine = plainText?.split("\n").find((l) => l.trim()) ?? null;
-  const lyricText = syncedLine ?? plainLine;
+  const miniRef = useRef<HTMLDivElement>(null);
+  const [playerWidth, setPlayerWidth] = useState(0);
+  useEffect(() => {
+    const mini = miniRef.current;
+    if (!mini || !currentTrack) return;
+    const update = () => setPlayerWidth(mini.clientWidth);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(mini);
+    return () => observer.disconnect();
+  }, [currentTrack]);
+  const compact = playerWidth < 640;
+  const expanded = playerWidth >= 1024;
 
   const cycleRepeat = useCallback(() => {
     const modes: RepeatMode[] = ["off", "all", "one"];
@@ -281,26 +181,32 @@ export function MusicMiniPlayer() {
   return (
     <>
       <div
-        className="app-safe-area-bottom flex shrink-0 flex-col border-t border-border-base bg-[var(--color-surface-overlay)] backdrop-blur-md select-none"
-        style={{ height: `calc(${MUSIC_MINI_PLAYER_HEIGHT_PX}px + ${cssVar(TOKEN.appSafeAreaBottom)})` }}
+        ref={miniRef}
+        className="app-safe-area-bottom relative flex shrink-0 flex-col border-t border-border-base bg-[var(--color-surface-overlay)] backdrop-blur-md select-none"
+        style={{
+          height: `calc(${MUSIC_MINI_PLAYER_HEIGHT_PX}px + ${cssVar(TOKEN.appSafeAreaBottom)})`,
+        }}
       >
         {/* Top progress bar */}
-        <LiveProgressBar
+        <PlaybackSeekBar
+          compact
+          interactive={!compact}
+          playing={isPlaying}
           getCurrentTime={getCurrentTime}
           getDuration={getDuration}
           onSeek={seek}
         />
 
         {/* Controls row */}
-        <div className="flex flex-1 items-center gap-2 px-3 lg:px-4">
+        <div className="flex flex-1 items-center gap-2 px-3 pt-1 lg:px-4">
           {/* Album art (click to open full-screen) + track info */}
-          <div className="flex min-w-0 flex-1 items-center gap-3 lg:flex-[2]">
-            <button
-              type="button"
-              onClick={() => setFullScreen(true)}
-              className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-[var(--color-fill-tertiary)] transition-transform hover:scale-105"
-              title="全屏播放器"
-            >
+          <button
+            type="button"
+            onClick={() => setFullScreen(true)}
+            aria-label={`打开播放器：${currentTrack.title}`}
+            className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-3 text-left lg:flex-[2]"
+          >
+            <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-fill-tertiary">
               {coverUrl ? (
                 <img
                   src={coverUrl}
@@ -319,22 +225,22 @@ export function MusicMiniPlayer() {
                   )}
                 />
               )}
-            </button>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-[var(--color-fg-primary)]">
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-[var(--color-fg-primary)]">
                 {currentTrack.title}
-              </p>
-              <p className="truncate text-xs text-[var(--color-fg-muted)]">
+              </span>
+              <span className="block truncate text-xs text-[var(--color-fg-muted)]">
                 {currentTrack.artistName ?? "未知艺术家"}
-              </p>
-            </div>
-          </div>
+              </span>
+            </span>
+          </button>
 
-          {/* Center: single-line lyrics with karaoke progress */}
-          {lyricText && (
-            <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden">
-              <MiniKaraokeText text={lyricText} progressRef={progressRef} />
-            </div>
+          {expanded && !fullScreen && (
+            <MiniPlaybackLyrics
+              trackId={currentTrack.id}
+              getCurrentTime={getCurrentTime}
+            />
           )}
 
           {/* Playback controls */}
@@ -343,7 +249,11 @@ export function MusicMiniPlayer() {
               <button
                 type="button"
                 onClick={previous}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-fg-secondary)] hover:text-[var(--color-fg-primary)]"
+                aria-label="上一首"
+                className={cn(
+                  "h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-secondary hover:text-fg-primary",
+                  compact ? "hidden" : "flex",
+                )}
               >
                 <SkipBack className="h-4 w-4" />
               </button>
@@ -357,9 +267,11 @@ export function MusicMiniPlayer() {
               <button
                 type="button"
                 onClick={togglePlay}
+                aria-label={isPlaying ? "暂停" : "播放"}
                 disabled={isLoading}
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-full text-white",
+                  "flex cursor-pointer items-center justify-center rounded-full text-fg-on-accent",
+                  compact ? "h-11 w-11" : "h-9 w-9",
                   isLoading
                     ? "bg-[var(--color-fg-muted)]"
                     : "bg-[var(--color-accent)] hover:opacity-90",
@@ -377,7 +289,11 @@ export function MusicMiniPlayer() {
               <button
                 type="button"
                 onClick={next}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-fg-secondary)] hover:text-[var(--color-fg-primary)]"
+                aria-label="下一首"
+                className={cn(
+                  "h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-secondary hover:text-fg-primary",
+                  compact ? "hidden" : "flex",
+                )}
               >
                 <SkipForward className="h-4 w-4" />
               </button>
@@ -385,13 +301,17 @@ export function MusicMiniPlayer() {
           </div>
 
           {/* Time display (hidden on small screens) */}
-          <LiveTimeDisplay
-            getCurrentTime={getCurrentTime}
-            getDuration={getDuration}
-          />
+          {!compact && (
+            <LiveTimeDisplay
+              getCurrentTime={getCurrentTime}
+              getDuration={getDuration}
+            />
+          )}
 
           {/* Right side controls */}
-          <div className="hidden items-center gap-0.5 lg:flex">
+          <div
+            className={cn("items-center gap-0.5", expanded ? "flex" : "hidden")}
+          >
             <VolumeControl volume={volume} onVolumeChange={setVolume} />
 
             <Tooltip
@@ -403,7 +323,7 @@ export function MusicMiniPlayer() {
                 type="button"
                 onClick={toggleShuffle}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full",
+                  "flex h-8 w-8 cursor-pointer items-center justify-center rounded-full",
                   shuffleEnabled
                     ? "text-[var(--color-accent)]"
                     : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg-secondary)]",
@@ -428,7 +348,7 @@ export function MusicMiniPlayer() {
                 type="button"
                 onClick={cycleRepeat}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full",
+                  "flex h-8 w-8 cursor-pointer items-center justify-center rounded-full",
                   repeatMode !== "off"
                     ? "text-[var(--color-accent)]"
                     : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg-secondary)]",
@@ -437,29 +357,35 @@ export function MusicMiniPlayer() {
                 <RepeatIcon className="h-4 w-4" />
               </button>
             </Tooltip>
-
-            <Tooltip title="播放队列" mouseEnterDelay={0} mouseLeaveDelay={0}>
-              <button
-                type="button"
-                onClick={() => setQueueOpen((v) => !v)}
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full",
-                  queueOpen
-                    ? "text-[var(--color-accent)]"
-                    : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg-secondary)]",
-                )}
-              >
-                <ListMusic className="h-4 w-4" />
-              </button>
-            </Tooltip>
           </div>
 
+          <Tooltip title="播放队列" mouseEnterDelay={0} mouseLeaveDelay={0}>
+            <button
+              type="button"
+              onClick={() => setQueueOpen((v) => !v)}
+              aria-label="播放队列"
+              aria-expanded={queueOpen}
+              className={cn(
+                "flex cursor-pointer items-center justify-center rounded-full",
+                compact ? "h-11 w-11" : "h-8 w-8",
+                queueOpen
+                  ? "text-[var(--color-accent)]"
+                  : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg-secondary)]",
+              )}
+            >
+              <ListMusic className="h-4 w-4" />
+            </button>
+          </Tooltip>
           {/* Close button */}
           <Tooltip title="关闭" mouseEnterDelay={0} mouseLeaveDelay={0}>
             <button
               type="button"
               onClick={clearQueue}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:bg-red-500/10 hover:text-red-500"
+              aria-label="停止播放并清空队列"
+              className={cn(
+                "h-8 w-8 cursor-pointer items-center justify-center rounded-full text-fg-muted hover:bg-state-danger-base hover:text-state-danger-text",
+                compact ? "hidden" : "flex",
+              )}
             >
               <X className="h-4 w-4" />
             </button>

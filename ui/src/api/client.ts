@@ -625,7 +625,7 @@ export const api = {
         options?: QueryOptions<MusicArtistOutput>,
       ) =>
         useQuery<MusicArtistOutput>({
-          queryKey: ["music", "artist", params.id],
+          queryKey: ["music", "artist", params.id, params.musicId],
           queryFn: async () => {
             const qs = params.musicId ? `?musicId=${params.musicId}` : "";
             // API returns flat artist object with albums embedded

@@ -19,11 +19,15 @@ import {
   Star,
   Wand2,
   Waves,
+  X,
 } from "lucide-react";
-import { useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { PlayerVisualMode } from "../../lib/types";
 import { PLAYER_VISUAL_MODES } from "../../lib/types";
+import {
+  trapPlaybackFocus,
+  usePlaybackFocus,
+} from "../playback/usePlaybackOverlay";
 
 const MODE_ICONS: Record<PlayerVisualMode, React.FC<{ className?: string }>> = {
   vinyl: Disc3,
@@ -94,27 +98,16 @@ export function VisualizationPicker({
   onClose,
   container,
 }: VisualizationPickerProps) {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    },
-    [onClose],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, handleKeyDown]);
+  const panelRef = usePlaybackFocus(open, container ?? document.body);
 
   if (!open) return null;
 
   return createPortal(
-    <div className="absolute inset-0 z-[1100] pointer-events-auto">
+    <div className="app-safe-area absolute inset-0 z-[1100] flex items-start justify-end pointer-events-auto [--app-safe-area-padding:1rem]">
       {/* Backdrop */}
       <button
         type="button"
-        className="absolute inset-0 bg-black/30"
+        className="absolute inset-0 cursor-pointer bg-black/30"
         onClick={onClose}
         aria-label="关闭可视化选择"
         tabIndex={-1}
@@ -122,11 +115,34 @@ export function VisualizationPicker({
 
       {/* Panel */}
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="选择可视化效果"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            onClose();
+          } else trapPlaybackFocus(event);
+        }}
         className={cn(
-          "absolute right-4 top-4 w-[320px] origin-top-right rounded-2xl bg-black/80 p-4 shadow-2xl backdrop-blur-xl sm:w-[400px]",
+          "relative w-full max-w-[400px] max-h-full overflow-y-auto overscroll-contain origin-top-right rounded-2xl bg-surface-overlay text-fg-primary p-4 shadow-2xl backdrop-blur-xl",
           "animate-[picker-in_200ms_ease-out_forwards]",
         )}
       >
+        <div className="sticky -top-4 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between bg-surface-overlay px-4 py-2">
+          <h2 className="text-sm font-semibold">可视化效果</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭可视化选择"
+            className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-fg-secondary hover:bg-fill-tertiary"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {PLAYER_VISUAL_MODES.map((entry) => {
             const mode = entry.value;
@@ -137,24 +153,27 @@ export function VisualizationPicker({
                 key={mode}
                 type="button"
                 onClick={() => onSelect(mode)}
+                aria-pressed={isSelected}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 rounded-xl p-3 transition-colors",
+                  "flex min-h-11 cursor-pointer flex-col items-center gap-1.5 rounded-xl p-3 transition-colors",
                   "backdrop-blur-sm",
                   isSelected
-                    ? "bg-white/20 ring-2 ring-[var(--color-accent)]"
-                    : "bg-white/10 hover:bg-white/15",
+                    ? "bg-accent-subtle ring-2 ring-accent"
+                    : "bg-fill-secondary hover:bg-fill-tertiary",
                 )}
               >
                 <Icon
                   className={cn(
                     "h-6 w-6",
-                    isSelected ? "text-[var(--color-accent)]" : "text-white/60",
+                    isSelected
+                      ? "text-[var(--color-accent)]"
+                      : "text-fg-secondary",
                   )}
                 />
                 <span
                   className={cn(
                     "text-xs",
-                    isSelected ? "text-white" : "text-white/70",
+                    isSelected ? "text-fg-primary" : "text-fg-secondary",
                   )}
                 >
                   {MODE_LABELS[mode]}
@@ -165,33 +184,36 @@ export function VisualizationPicker({
         </div>
 
         {/* Cover background toggle */}
-        <div className="mt-3 border-t border-white/10 pt-3">
+        <div className="mt-3 border-t border-base pt-3">
           <button
             type="button"
             onClick={onToggleCoverBg}
+            aria-pressed={coverBgEnabled}
             className={cn(
-              "flex w-full items-center gap-3 rounded-xl p-3 transition-colors",
+              "flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors",
               coverBgEnabled
-                ? "bg-white/20 ring-2 ring-[var(--color-accent)]"
-                : "bg-white/10 hover:bg-white/15",
+                ? "bg-accent-subtle ring-2 ring-accent"
+                : "bg-fill-secondary hover:bg-fill-tertiary",
             )}
           >
             <ImageIcon
               className={cn(
                 "h-5 w-5",
-                coverBgEnabled ? "text-[var(--color-accent)]" : "text-white/60",
+                coverBgEnabled
+                  ? "text-[var(--color-accent)]"
+                  : "text-fg-secondary",
               )}
             />
             <div className="flex flex-col items-start">
               <span
                 className={cn(
                   "text-xs font-medium",
-                  coverBgEnabled ? "text-white" : "text-white/70",
+                  coverBgEnabled ? "text-fg-primary" : "text-fg-secondary",
                 )}
               >
                 封面氛围背景
               </span>
-              <span className="text-[10px] text-white/40">
+              <span className="text-[10px] text-fg-muted">
                 将专辑封面虚化为毛玻璃背景
               </span>
             </div>
@@ -202,11 +224,12 @@ export function VisualizationPicker({
             <button
               type="button"
               onClick={onToggleAlchemyAmbient}
+              aria-pressed={alchemyAmbientEnabled}
               className={cn(
-                "mt-2 flex w-full items-center gap-3 rounded-xl p-3 transition-colors",
+                "mt-2 flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors",
                 alchemyAmbientEnabled
-                  ? "bg-white/20 ring-2 ring-[var(--color-accent)]"
-                  : "bg-white/10 hover:bg-white/15",
+                  ? "bg-accent-subtle ring-2 ring-accent"
+                  : "bg-fill-secondary hover:bg-fill-tertiary",
               )}
             >
               <Sparkles
@@ -214,19 +237,21 @@ export function VisualizationPicker({
                   "h-5 w-5",
                   alchemyAmbientEnabled
                     ? "text-[var(--color-accent)]"
-                    : "text-white/60",
+                    : "text-fg-secondary",
                 )}
               />
               <div className="flex flex-col items-start">
                 <span
                   className={cn(
                     "text-xs font-medium",
-                    alchemyAmbientEnabled ? "text-white" : "text-white/70",
+                    alchemyAmbientEnabled
+                      ? "text-fg-primary"
+                      : "text-fg-secondary",
                   )}
                 >
                   炼金氛围光效
                 </span>
-                <span className="text-[10px] text-white/40">
+                <span className="text-[10px] text-fg-muted">
                   在特效背景添加呼吸感氛围光球
                 </span>
               </div>

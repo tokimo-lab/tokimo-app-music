@@ -1,17 +1,6 @@
 import { useStandaloneDocumentScroll } from "@tokimo/sdk";
-import { Empty, PillTabBar, Spin, Tag } from "@tokimo/ui";
-import { motion } from "framer-motion";
-import {
-  ArrowLeft,
-  Clock,
-  Disc3,
-  ListMusic,
-  Mic2,
-  Pause,
-  Play,
-  Search,
-  X,
-} from "lucide-react";
+import { Empty, PillTabBar, Spin } from "@tokimo/ui";
+import { ArrowLeft, Disc3, ListMusic, Mic2, Search, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type {
@@ -19,9 +8,9 @@ import type {
   MusicArtistOutput,
   MusicTrackOutput,
 } from "../lib/types";
-import { AlbumCard, ArtistCard, formatDuration } from "../pages/music-shared";
-import { useInfiniteScroll } from "../shared/hooks/hooks";
+import { useContainerWidth, useInfiniteScroll } from "../shared/hooks/hooks";
 import { useMusicPlayer, useWindowNav } from "../shell/hooks";
+import { AlbumsGrid, ArtistsGrid, TracksTable } from "./MusicBrowseResults";
 import type { MusicFilters } from "./MusicFilterPanel";
 import MusicFilterPanel, { EMPTY_MUSIC_FILTERS } from "./MusicFilterPanel";
 
@@ -39,162 +28,18 @@ function parseSortValue(v: string) {
 
 const PAGE_SIZE = 60;
 
-const LAYOUT_SPRING = {
-  type: "spring" as const,
-  stiffness: 400,
-  damping: 30,
-  mass: 0.8,
-};
-
-// ── Track Row ─────────────────────────────────────────────────────────────────
-
-function TrackRow({
-  track,
-  index,
-  onPlay,
-}: {
-  track: MusicTrackOutput;
-  index: number;
-  onPlay: () => void;
-}) {
-  const { currentTrack, isPlaying, togglePlay } = useMusicPlayer();
-  const isActive = currentTrack?.id === track.id;
-
-  return (
-    <button
-      type="button"
-      className={`group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
-        isActive ? "bg-[var(--color-accent)]/10" : "hover:bg-[var(--color-fill-tertiary)]"
-      }`}
-      onClick={isActive ? togglePlay : onPlay}
-    >
-      <span className="w-8 flex-shrink-0 text-center text-sm text-[var(--color-fg-muted)]">
-        {isActive ? (
-          isPlaying ? (
-            <Pause className="mx-auto h-4 w-4 text-[var(--color-accent)]" />
-          ) : (
-            <Play
-              className="mx-auto h-4 w-4 text-[var(--color-accent)]"
-              fill="currentColor"
-            />
-          )
-        ) : (
-          <span className="group-hover:hidden">{index + 1}</span>
-        )}
-        {!isActive && (
-          <Play
-            className="mx-auto hidden h-4 w-4 group-hover:block"
-            fill="currentColor"
-          />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-sm font-medium ${isActive ? "text-[var(--color-accent)]" : "text-[var(--color-fg-primary)]"}`}
-        >
-          {track.title}
-        </p>
-      </div>
-      <span className="hidden w-[140px] flex-shrink-0 truncate text-xs text-[var(--color-fg-muted)] sm:block">
-        {track.artistName || "未知"}
-      </span>
-      <span className="hidden w-[180px] flex-shrink-0 truncate text-xs text-[var(--color-fg-muted)] md:block">
-        {track.albumTitle || ""}
-      </span>
-      <span className="w-[50px] flex-shrink-0 text-right text-xs text-[var(--color-fg-muted)]">
-        {formatDuration(track.duration)}
-      </span>
-    </button>
-  );
-}
-
-// ── Grid Components ───────────────────────────────────────────────────────────
-
-function AlbumsGrid({
-  albums,
-  onAlbumClick,
-}: {
-  albums: MusicAlbumOutput[];
-  onAlbumClick: (albumId: string, albumTitle: string) => void;
-}) {
-  if (!albums.length) return <Empty description="暂无专辑" />;
-  return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
-      {albums.map((album) => (
-        <motion.div key={album.id} layout transition={LAYOUT_SPRING}>
-          <AlbumCard
-            album={album}
-            onClick={() => onAlbumClick(album.id, album.title ?? "Album")}
-          />
-        </motion.div>
-      ))}
-    </div>
-  );
-}
-
-function ArtistsGrid({
-  artists,
-  onArtistClick,
-}: {
-  artists: MusicArtistOutput[];
-  onArtistClick: (artistId: string, artistName: string) => void;
-}) {
-  if (!artists.length) return <Empty description="暂无艺术家" />;
-  return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
-      {artists.map((artist) => (
-        <motion.div key={artist.id} layout transition={LAYOUT_SPRING}>
-          <ArtistCard
-            artist={artist}
-            onClick={() => onArtistClick(artist.id, artist.name ?? "Artist")}
-          />
-        </motion.div>
-      ))}
-    </div>
-  );
-}
-
-function TracksTable({
-  tracks,
-  onPlayTrack,
-}: {
-  tracks: MusicTrackOutput[];
-  onPlayTrack: (track: MusicTrackOutput, all: MusicTrackOutput[]) => void;
-}) {
-  if (!tracks.length) return <Empty description="暂无曲目" />;
-  return (
-    <div className="rounded-lg border border-border-base bg-[var(--color-surface-overlay)]">
-      <div className="flex items-center gap-3 border-b border-border-base px-3 py-2 text-xs font-medium text-[var(--color-fg-muted)]">
-        <span className="w-8 flex-shrink-0 text-center">#</span>
-        <span className="min-w-0 flex-1">标题</span>
-        <span className="hidden w-[140px] flex-shrink-0 sm:block">艺术家</span>
-        <span className="hidden w-[180px] flex-shrink-0 md:block">专辑</span>
-        <span className="w-[50px] flex-shrink-0 text-right">
-          <Clock className="ml-auto h-3.5 w-3.5" />
-        </span>
-      </div>
-      <div className="divide-y divide-[var(--color-border-base)]">
-        {tracks.map((track, i) => (
-          <TrackRow
-            key={track.id}
-            track={track}
-            index={i}
-            onPlay={() => onPlayTrack(track, tracks)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function MusicContent({
   musicId,
   syncing,
+  mobile,
+  visible,
 }: {
   musicId: string;
   syncing?: boolean;
+  mobile: boolean;
+  visible: boolean;
 }) {
   const { navigate } = useWindowNav();
   const documentScroll = useStandaloneDocumentScroll();
@@ -206,23 +51,39 @@ export default function MusicContent({
   const [searching, setSearching] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [containerRef, contentWidth] = useContainerWidth();
+  const scrollElement = useRef<HTMLDivElement | null>(null);
+  const scrollPosition = useRef(0);
+  const compact = mobile || (contentWidth > 0 && contentWidth < 720);
+  const compactGrid = mobile || (contentWidth > 0 && contentWidth < 540);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchValue.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [searchValue]);
+  const attachContainer = useCallback(
+    (element: HTMLDivElement | null) => {
+      containerRef(element);
+      scrollElement.current = element;
+    },
+    [containerRef],
+  );
 
-  // Reset on library change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on musicId change
   useEffect(() => {
-    setPage(1);
-    setTabRaw("albums");
-    setFilters(EMPTY_MUSIC_FILTERS);
-    setSearching(false);
-    setSearchValue("");
-  }, [musicId]);
+    if (!visible) return;
+    const frame = requestAnimationFrame(() => {
+      if (documentScroll) window.scrollTo({ top: scrollPosition.current });
+      else if (scrollElement.current)
+        scrollElement.current.scrollTop = scrollPosition.current;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [visible, documentScroll]);
+
+  useEffect(() => {
+    if (!visible || !documentScroll) return;
+    const recordScroll = () => {
+      scrollPosition.current = window.scrollY;
+    };
+    window.addEventListener("scroll", recordScroll, { passive: true });
+    return () => window.removeEventListener("scroll", recordScroll);
+  }, [visible, documentScroll]);
 
   const setTab = useCallback((t: TabKey) => {
     setTabRaw(t);
@@ -290,13 +151,31 @@ export default function MusicContent({
         | undefined,
       isFetching: activeQuery.isFetching,
       onLoadMore: () => setPage((p) => p + 1),
-      enabled: !syncing,
+      enabled: !syncing && visible,
     });
 
   const resetAll = useCallback(() => {
     reset();
     setPage(1);
   }, [reset]);
+
+  useEffect(() => {
+    const next = searchValue.trim();
+    if (next === debouncedSearch) return;
+    const timer = setTimeout(() => {
+      resetAll();
+      setDebouncedSearch(next);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchValue, debouncedSearch, resetAll]);
+
+  const openDetail = (route: string, title: string) => {
+    scrollPosition.current = documentScroll
+      ? window.scrollY
+      : (scrollElement.current?.scrollTop ?? 0);
+    navigate(route, title);
+    if (documentScroll) window.scrollTo({ top: 0 });
+  };
 
   const isLoading = activeQuery.isLoading;
 
@@ -314,10 +193,16 @@ export default function MusicContent({
 
   const handleFiltersChange = useCallback(
     (next: MusicFilters) => {
+      if (
+        next.sortBy === filters.sortBy &&
+        next.genre === filters.genre &&
+        next.favorite === filters.favorite
+      )
+        return;
       setFilters(next);
       resetAll();
     },
-    [resetAll],
+    [filters, resetAll],
   );
 
   const openSearch = useCallback(() => {
@@ -330,8 +215,8 @@ export default function MusicContent({
     setSearching(false);
     setSearchValue("");
     setDebouncedSearch("");
-    resetAll();
-  }, [resetAll]);
+    if (debouncedSearch) resetAll();
+  }, [debouncedSearch, resetAll]);
 
   const tabs: { key: TabKey; label: string; icon: typeof Disc3 }[] = [
     { key: "albums", label: "专辑", icon: Disc3 },
@@ -348,11 +233,16 @@ export default function MusicContent({
 
   return (
     <div
-      className={`flex flex-col p-4 ${documentScroll ? "overflow-visible" : "h-full overflow-y-auto"}`}
+      ref={attachContainer}
+      onScroll={(event) => {
+        if (visible && !documentScroll)
+          scrollPosition.current = event.currentTarget.scrollTop;
+      }}
+      className={`flex flex-col p-3 sm:p-4 ${documentScroll ? "overflow-visible" : "h-full overflow-y-auto"}`}
     >
       {/* Tab bar / Search bar — sticky */}
       <div
-        className={`z-10 -mx-4 -mt-4 mb-0 bg-surface-base px-4 pt-4 pb-3 ${documentScroll ? "relative" : "sticky top-0"}`}
+        className={`z-10 -mx-3 -mt-3 sm:-mx-4 sm:-mt-4 mb-0 bg-surface-base px-3 pt-3 pb-3 sm:px-4 sm:pt-4 ${documentScroll ? "relative" : "sticky top-0"}`}
       >
         {searching ? (
           /* ── Search mode: replace tab bar with search input ── */
@@ -360,7 +250,8 @@ export default function MusicContent({
             <div className="relative flex w-full max-w-[560px] items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]">
               <button
                 type="button"
-                className="cursor-pointer text-fg-muted transition-colors hover:text-fg-primary"
+                className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-fill-tertiary hover:text-fg-primary"
+                aria-label="关闭搜索"
                 onClick={closeSearch}
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -368,12 +259,12 @@ export default function MusicContent({
               <input
                 ref={searchInputRef}
                 type="text"
-                className="flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-[var(--color-fg-secondary)]"
+                className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-[var(--color-fg-secondary)]"
+                aria-label={searchPlaceholder}
                 placeholder={searchPlaceholder}
                 value={searchValue}
                 onChange={(e) => {
                   setSearchValue(e.target.value);
-                  resetAll();
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Escape") closeSearch();
@@ -382,7 +273,8 @@ export default function MusicContent({
               {searchValue && (
                 <button
                   type="button"
-                  className="cursor-pointer text-fg-muted transition-colors hover:text-fg-primary"
+                  className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-fill-tertiary hover:text-fg-primary"
+                  aria-label="清空搜索"
                   onClick={() => {
                     setSearchValue("");
                     setDebouncedSearch("");
@@ -397,41 +289,84 @@ export default function MusicContent({
           </div>
         ) : (
           /* ── Normal mode: tab bar with search button ── */
-          <PillTabBar
-            sticky={!documentScroll}
-            tabs={tabs}
-            activeTab={tab}
-            onTabChange={(t) => {
-              setTab(t);
-              setFilters(EMPTY_MUSIC_FILTERS);
-              resetAll();
-            }}
-            trailing={
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="cursor-pointer rounded-full p-1.5 text-fg-muted transition-colors hover:bg-white/10 hover:text-fg-primary"
-                  onClick={openSearch}
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              {compact ? (
+                <div
+                  role="tablist"
+                  aria-label="音乐浏览方式"
+                  className="flex min-w-0 gap-1 rounded-full bg-fill-tertiary p-1"
                 >
-                  <Search className="h-4 w-4" />
-                </button>
-                {total > 0 && <Tag>{total}</Tag>}
-              </div>
-            }
-          />
+                  {tabs.map(({ key, label, icon: Icon }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === key}
+                      onClick={() => {
+                        if (key === tab) return;
+                        setTab(key);
+                        setFilters(EMPTY_MUSIC_FILTERS);
+                        resetAll();
+                      }}
+                      className={`flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-full px-1 text-xs font-medium ${tab === key ? "bg-surface-overlay text-fg-primary shadow-sm" : "text-fg-secondary"}`}
+                    >
+                      <Icon className="size-3.5 shrink-0" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <PillTabBar
+                  sticky={false}
+                  tabs={tabs}
+                  activeTab={tab}
+                  onTabChange={(next) => {
+                    if (next === tab) return;
+                    setTab(next);
+                    setFilters(EMPTY_MUSIC_FILTERS);
+                    resetAll();
+                  }}
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label={searchPlaceholder}
+              onClick={openSearch}
+              className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-fg-muted hover:bg-fill-tertiary hover:text-fg-primary"
+            >
+              <Search className="size-5" />
+            </button>
+          </div>
         )}
       </div>
 
       {/* Filter Panel */}
-      <div className="rounded-lg border border-white/8 bg-black/20 px-4 py-3 backdrop-blur-md">
+      <div
+        className={
+          compact
+            ? ""
+            : "rounded-lg border border-base bg-surface-raised px-4 py-3"
+        }
+      >
         <MusicFilterPanel
           filters={filters}
           onChange={handleFiltersChange}
           genreOptions={genres}
           activeTab={tab}
+          mobile={compact}
         />
       </div>
 
+      <div className="mt-3 flex items-center justify-between text-xs text-fg-muted">
+        <span>
+          {total > 0
+            ? `${total} ${tab === "albums" ? "张专辑" : tab === "artists" ? "位艺术家" : "首曲目"}`
+            : ""}
+        </span>
+        {syncing && <span>正在扫描音乐库…</span>}
+      </div>
       <div className="mt-3 min-h-0 flex-1 space-y-3">
         {(isLoading || syncing) && items.length === 0 ? (
           <div className="flex h-full items-center justify-center">
@@ -448,8 +383,9 @@ export default function MusicContent({
         ) : tab === "albums" ? (
           <AlbumsGrid
             albums={items as MusicAlbumOutput[]}
+            compact={compactGrid}
             onAlbumClick={(albumId, albumTitle) =>
-              navigate(
+              openDetail(
                 `/library/${musicId}/albums/${albumId}`,
                 `TokimoMusic · ${albumTitle}`,
               )
@@ -458,8 +394,9 @@ export default function MusicContent({
         ) : tab === "artists" ? (
           <ArtistsGrid
             artists={items as MusicArtistOutput[]}
+            compact={compactGrid}
             onArtistClick={(artistId, artistName) =>
-              navigate(
+              openDetail(
                 `/library/${musicId}/artists/${artistId}`,
                 `TokimoMusic · ${artistName}`,
               )
@@ -468,6 +405,7 @@ export default function MusicContent({
         ) : (
           <TracksTable
             tracks={items as MusicTrackOutput[]}
+            compact={compact}
             onPlayTrack={handlePlayTrack}
           />
         )}
